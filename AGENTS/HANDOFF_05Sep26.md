@@ -5,7 +5,7 @@ question was resolved). Ryan is deleting that file directly.
 
 ## Branch: `feature/alt-mach-sweep` — status: merged & deleted
 
-Merged to `main` via [PR #1](https://github.com/Jhawk414/F404-pyCycle/pull/1)
+Merged to `main` via [PR #1](https://github.com/Jhawk414/F404/pull/1)
 (merge commit `576a7b9`). Both the local and remote copies of the branch
 have since been deleted — the commits below live on permanently through
 `main`'s history. What shipped, oldest to newest:
@@ -61,30 +61,30 @@ Both modes: every point with dTs ≥ 0 R converges. Failures are
 concentrated at cold (dTs < 0 R) + high-altitude + max-AB corners — these
 appear to be genuinely hard for Newton from any warm-start tried so far,
 not an artifact of the convergence-detection bugs above. Tracked as
-[issue #3](https://github.com/Jhawk414/F404-pyCycle/issues/3).
+[issue #3](https://github.com/Jhawk414/F404/issues/3).
 
 ## What happened after this branch closed
 
-1. Opened [PR #1](https://github.com/Jhawk414/F404-pyCycle/pull/1) against
+1. Opened [PR #1](https://github.com/Jhawk414/F404/pull/1) against
    `master`, with a summary + an "Approaches and alternatives" section
    pointing back at this handoff and at `improvements/single_engine_mode.md`.
 2. Filed the deferred/roadmap items as real GitHub issues instead of only
    living in `IMPROVEMENTS.md` prose (issues were enabled on the repo for
    this purpose):
-   - [#2](https://github.com/Jhawk414/F404-pyCycle/issues/2) — dry/wet
+   - [#2](https://github.com/Jhawk414/F404/issues/2) — dry/wet
      modes size two slightly different engines (~1-2% variance).
-   - [#3](https://github.com/Jhawk414/F404-pyCycle/issues/3) — OD sweep
+   - [#3](https://github.com/Jhawk414/F404/issues/3) — OD sweep
      non-convergence at cold/high-alt/max-AB corners (includes possible
      fixes: relax the fixed `RlineMap` target, widen `_OD_BOUNDS`, denser
      bridge points, per-corner solver tuning).
-   - [#4](https://github.com/Jhawk414/F404-pyCycle/issues/4) — move F404
+   - [#4](https://github.com/Jhawk414/F404/issues/4) — move F404
      app code into `/src/`. Has a follow-up comment flagging that
      `release_notes.md` still needs its planned `git mv` to `meta/`
      (staged once, never committed — the commit was lost with the branch
      cleanup below; it's back at repo root on `main`, still pending).
-   - [#5](https://github.com/Jhawk414/F404-pyCycle/issues/5) — add a
+   - [#5](https://github.com/Jhawk414/F404/issues/5) — add a
      per-module `<module>_test.py` regression/test suite convention.
-   - [#6](https://github.com/Jhawk414/F404-pyCycle/issues/6) — sync vendored
+   - [#6](https://github.com/Jhawk414/F404/issues/6) — sync vendored
      `pycycle/` against upstream `OpenMDAO/pyCycle`; concretely, this
      fork's `thermo_add.py` is missing the NumPy 2.x `.item()` fix from
      upstream [pyCycle#117](https://github.com/OpenMDAO/pyCycle/pull/117)
@@ -113,8 +113,10 @@ not an artifact of the convergence-detection bugs above. Tracked as
 
 ## Remaining loose ends
 
-- `release_notes.md` → `meta/release_notes.md` rename — still not done
-  (see issue #4 comment). One-line `git mv`.
+- ~~`release_notes.md` → `meta/release_notes.md` rename — still not done~~
+  **Resolved differently:** deleted outright instead of moved (upstream
+  `om-pycycle` release history, not F404-specific) — see the
+  `refactor/src-layout` section below.
 - `HANDOFF_22Apr26.md` — Ryan is deleting this directly.
 - Everything else from the branch's original "uncommitted/untracked items"
   list (`single_engine_mode.md`, `cycle_deck_wet.csv`, the `*_out/` sweep
@@ -140,3 +142,43 @@ not an artifact of the convergence-detection bugs above. Tracked as
 - BPR ≈ 0.75 (bounds 0.25–0.80), low-bypass mixed-flow
 - No LPC (F404 architecture); `lp_shaft` has `num_ports=2` (fan + LPT only)
 - Afterburner max T7 ≈ 3800 R (F404 historical max)
+
+## Branch: `refactor/src-layout` — status: open ([PR #11](https://github.com/Jhawk414/F404/pull/11))
+
+Picks up issue #4 (`src/` restructure), deferred since this handoff was
+written. Three commits so far:
+
+1. **`c932036`** — Moved F404 app code (`engine_model.py`, `mp_cycle.py`,
+   `sweep_utils.py`, `sweep_full_envelope.py`, `run_design_od.py`,
+   `printer.py`, `test_modes.py`) into `src/F404_pycycle/`, out of the repo
+   root, as pure `git mv` renames — no import changes needed since the
+   moved files stay siblings of each other and the entry scripts are still
+   invoked directly. Verified byte-for-byte identical `cycle_deck_wet.csv`
+   output before/after the move (diffed against the committed
+   `deck/cycle_deck_wet.csv` baseline, which matches the documented 89/132
+   wet convergence count). `test_modes.py` wasn't in the issue's file list
+   but moved along with the others since it imports `mp_cycle`/`printer`
+   and would've broken otherwise.
+2. **`b96c02e`** (a separate agent session) — Deleted `MFTF_od_CRZ.py` (the
+   pre-refactor monolith, left alone in commit 1 pending confirmation it
+   was fully superseded — confirmed, since nothing imports it anymore),
+   `release_notes.md`, `.travis.yml`, `.bumpversion.cfg`, and the
+   `test_modes` `.rtf` transcript. Moved `Unclassified_Perf_Data/` →
+   `docs/unclassified_perf_data/`.
+3. **README refresh** (this commit) — updated the repo-layout table,
+   mermaid data-flow diagram, install/usage commands, and roadmap checklist
+   to match the `src/` layout and the `meta/`/`docs/` cleanup above.
+
+**Repo renamed:** `Jhawk414/F404-pyCycle` → `Jhawk414/F404` (GitHub handles
+the redirect from the old slug, but the remote URL and all in-repo links
+have been updated to the new one going forward).
+
+Not yet merged — Ryan is re-running the full dry+wet envelope sweep
+locally to confirm the deck output is unchanged before merging PR #11.
+
+**Next up:** work through issues #2 and #3 together rather than
+sequentially — both are Newton-solver robustness problems at extreme
+corners of the state space (cold/high-alt/max-AB for #3; a near-zero
+`FAR_ab` Jacobian conditioning issue was hit previously when prototyping
+#2's Option 2, see the comment on issue #2). Then #5 (test suite, now that
+`src/` exists) and #6 (vendor sync).

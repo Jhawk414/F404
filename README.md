@@ -1,8 +1,8 @@
-[![Status: In Development](https://img.shields.io/badge/status-in%20development-orange.svg)](https://github.com/Jhawk414/F404-pyCycle#current-status)
-[![Last Commit](https://img.shields.io/github/last-commit/Jhawk414/F404-pyCycle?logo=github)](https://github.com/Jhawk414/F404-pyCycle/commits/main)
-[![Open Issues](https://img.shields.io/github/issues/Jhawk414/F404-pyCycle?logo=github)](https://github.com/Jhawk414/F404-pyCycle/issues)
+[![Status: In Development](https://img.shields.io/badge/status-in%20development-orange.svg)](https://github.com/Jhawk414/F404#current-status)
+[![Last Commit](https://img.shields.io/github/last-commit/Jhawk414/F404?logo=github)](https://github.com/Jhawk414/F404/commits/main)
+[![Open Issues](https://img.shields.io/github/issues/Jhawk414/F404?logo=github)](https://github.com/Jhawk414/F404/issues)
 
-# F404-pyCycle
+# F404
 
 A GE F404 twin-spool, low-bypass, mixed-flow, afterburning turbofan cycle model
 with design-point sizing and off-design flight sweeps, built on
@@ -34,23 +34,23 @@ F404 performance data.
 
 ## Repo layout
 
-F404 model code currently resides at the repository root alongside the vendored
-upstream `pycycle` library. Issue [#4](https://github.com/Jhawk414/F404-pyCycle/issues/4)
-tracks moving the F404 files into `src/F404_pycycle/`. Paths below reflect the
-current layout.
+F404 application code lives under `src/F404_pycycle/`, separate from the
+vendored upstream `pycycle` library at the repo root (see
+[#4](https://github.com/Jhawk414/F404/issues/4)).
 
 | Path | Role |
 |---|---|
-| `engine_model.py` | `MixedFlowTurbofan(pyc.Cycle)`: single-point thermodynamic cycle (fan, HPC, burner, HPT/LPT, mixer, afterburner, nozzle) |
-| `mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: links a DESIGN point and an off-design (OD) point, transferring map scalars and station areas |
-| `sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner`, result extraction |
-| `sweep_full_envelope.py` | CLI driver: runs the alt/dTs/throttle sweep for dry, wet, or both modes |
-| `run_design_od.py` | Single DESIGN and OD point runner for regression checking |
-| `printer.py` | Console table formatter for DESIGN/OD results |
+| `src/F404_pycycle/engine_model.py` | `MixedFlowTurbofan(pyc.Cycle)`: single-point thermodynamic cycle (fan, HPC, burner, HPT/LPT, mixer, afterburner, nozzle) |
+| `src/F404_pycycle/mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: links a DESIGN point and an off-design (OD) point, transferring map scalars and station areas |
+| `src/F404_pycycle/sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner`, result extraction |
+| `src/F404_pycycle/sweep_full_envelope.py` | CLI driver: runs the alt/dTs/throttle sweep for dry, wet, or both modes |
+| `src/F404_pycycle/run_design_od.py` | Single DESIGN and OD point runner for regression checking |
+| `src/F404_pycycle/printer.py` | Console table formatter for DESIGN/OD results |
+| `src/F404_pycycle/test_modes.py` | Smoke test exercising dry/wet DESIGN+OD in sequence |
 | `deck/` | Cycle-deck output CSVs |
-| `docs/` | System architecture diagrams (`f404_cycle.d2`, `f404_cycle.svg`) and planning docs |
+| `docs/` | System architecture diagrams (`f404_cycle.d2`, `f404_cycle.svg`), planning docs (`improvements/`), and reference PDFs (`unclassified_perf_data/`) |
 | `AGENTS/` | Session handoff notes |
-| `meta/` | Vendored-library provenance (`LICENSE.txt`, upstream `release_notes.md`) |
+| `meta/` | Vendored-library provenance (`LICENSE.txt`) |
 | `pycycle/`, `setup.py`, `pyproject.toml`, `example_cycles/` | Vendored upstream `pyCycle` library |
 
 ## Cycle architecture
@@ -69,12 +69,11 @@ Key cycle components and mechanical couplings:
 
 ## Software architecture and data flow
 
-Current data flow from CLI invocation to output CSV. This diagram reflects
-module boundaries before the planned restructure in issue #4.
+Current data flow from CLI invocation to output CSV.
 
 ```mermaid
 flowchart TD
-    subgraph Drivers["Entry-point scripts (repo root)"]
+    subgraph Drivers["Entry-point scripts (src/F404_pycycle/)"]
         A["sweep_full_envelope.py<br/>--mode dry|wet|both"]
         B["run_design_od.py<br/>single DESIGN + OD point"]
     end
@@ -115,8 +114,8 @@ This repository vendors OpenMDAO's `pyCycle` library. Install in editable mode
 from a local clone:
 
 ```bash
-git clone git@github.com:Jhawk414/F404-pyCycle.git
-cd F404-pyCycle
+git clone git@github.com:Jhawk414/F404.git
+cd F404
 pip install -e .[all]
 ```
 
@@ -127,13 +126,13 @@ Requires Python 3.9+ and OpenMDAO 3.10.0+.
 Run a single DESIGN and off-design point for verification:
 
 ```bash
-python run_design_od.py
+python src/F404_pycycle/run_design_od.py
 ```
 
 Run the altitude/dTs/throttle sweep for dry and wet modes:
 
 ```bash
-python sweep_full_envelope.py --mode both
+python src/F404_pycycle/sweep_full_envelope.py --mode both
 ```
 
 Use `--mode dry` or `--mode wet` to run an individual mode. Output files
@@ -154,7 +153,7 @@ alt ∈ {0, 2500, 5000} ft, dTs ∈ {0, ±10, ±20, ±30, ±40, ±50} R, static
 
 All points with dTs ≥ 0 R converge. Solver failures concentrate at cold
 (dTs < 0 R), high-altitude, maximum afterburning conditions, tracked in
-[issue #3](https://github.com/Jhawk414/F404-pyCycle/issues/3).
+[issue #3](https://github.com/Jhawk414/F404/issues/3).
 
 ## Roadmap
 
@@ -166,19 +165,22 @@ Done:
       warm-starting (`sweep_utils.py`)
 - [x] Dry (MIL) / wet (max-AB) mode split, with convergence-detection bugs
       fixed (bound-saturated states no longer reported as converged)
+- [x] Repo-root cleanup: removed the superseded `MFTF_od_CRZ.py` monolith
+      and unused vendor/CI cruft (`release_notes.md`, `.travis.yml`,
+      `.bumpversion.cfg`), moved reference PDFs into `docs/unclassified_perf_data/`
 
 Planned (see `docs/improvements/IMPROVEMENTS.md` for full detail):
 
-- [ ] `src/` restructure: separate F404 app code from vendored pyCycle
-      library ([#4](https://github.com/Jhawk414/F404-pyCycle/issues/4))
+- [x] `src/` restructure: separate F404 app code from vendored pyCycle
+      library ([#4](https://github.com/Jhawk414/F404/issues/4))
 - [ ] Single-engine sizing: unify dry and wet DESIGN points
-      ([#2](https://github.com/Jhawk414/F404-pyCycle/issues/2))
+      ([#2](https://github.com/Jhawk414/F404/issues/2))
 - [ ] Resolve remaining cold/high-alt/max-AB Newton convergence failures
-      ([#3](https://github.com/Jhawk414/F404-pyCycle/issues/3))
+      ([#3](https://github.com/Jhawk414/F404/issues/3))
 - [ ] Per-module test suite convention (`<module>_test.py`)
-      ([#5](https://github.com/Jhawk414/F404-pyCycle/issues/5))
+      ([#5](https://github.com/Jhawk414/F404/issues/5))
 - [ ] Sync vendored `pycycle/` against upstream
-      ([#6](https://github.com/Jhawk414/F404-pyCycle/issues/6))
+      ([#6](https://github.com/Jhawk414/F404/issues/6))
 - [ ] `deck/` as a durable, reviewed home for cycle-deck CSVs + solver logs
 - [ ] YAML-driven run configuration (`run.yml`) with pydantic validation
 - [ ] CLI entry point (`design` / `sweep` / `init-config` subcommands)
