@@ -1,7 +1,7 @@
 # Handoff: F404-pyCycle — Off-Design Sweep Convergence
 
 Supersedes `HANDOFF_22Apr26.md` (stale — written before the dry/wet mode
-question was resolved). Ryan is deleting that file directly.
+question was resolved). That file has been deleted.
 
 ## Branch: `feature/alt-mach-sweep` — status: merged & deleted
 
@@ -105,7 +105,7 @@ not an artifact of the convergence-detection bugs above. Tracked as
    `turbofan`, `jet-engine`, `propulsion`, `gas-turbine`, `thermodynamics`,
    `afterburner`, `f404`, `mdao`, `python`).
 7. Started tracking handoff docs properly: this file now lives at
-   `AGENTS/HANDOFF_05Sep26.md` (committed `bc656b1`) instead of sitting
+   `AGENTS/HANDOFF_14Sep26.md` instead of sitting
    untracked at repo root. It had been untracked long enough to almost get
    lost during the branch cleanup in step 5 — only recovered because it
    was caught in a `git stash` first. Future handoff docs should go in
@@ -117,7 +117,7 @@ not an artifact of the convergence-detection bugs above. Tracked as
   **Resolved differently:** deleted outright instead of moved (upstream
   `om-pycycle` release history, not F404-specific) — see the
   `refactor/src-layout` section below.
-- `HANDOFF_22Apr26.md` — Ryan is deleting this directly.
+- `HANDOFF_22Apr26.md` — deleted.
 - Everything else from the branch's original "uncommitted/untracked items"
   list (`single_engine_mode.md`, `cycle_deck_wet.csv`, the `*_out/` sweep
   artifact directories, the `test_modes` `.rtf` note) was resolved by the
@@ -143,10 +143,11 @@ not an artifact of the convergence-detection bugs above. Tracked as
 - No LPC (F404 architecture); `lp_shaft` has `num_ports=2` (fan + LPT only)
 - Afterburner max T7 ≈ 3800 R (F404 historical max)
 
-## Branch: `refactor/src-layout` — status: open ([PR #11](https://github.com/Jhawk414/F404/pull/11))
+## Branch: `refactor/src-layout` — status: merged & deleted ([PR #11](https://github.com/Jhawk414/F404/pull/11))
 
-Picks up issue #4 (`src/` restructure), deferred since this handoff was
-written. Three commits so far:
+Completed issue #4 (`src/` restructure), deferred since the prior handoff.
+Merged to `main` via PR #11 (merge commit `8dab15b`). Both the local and
+remote copies of the branch have since been deleted. Three commits shipped:
 
 1. **`c932036`** — Moved F404 app code (`engine_model.py`, `mp_cycle.py`,
    `sweep_utils.py`, `sweep_full_envelope.py`, `run_design_od.py`,
@@ -165,7 +166,7 @@ written. Three commits so far:
    `release_notes.md`, `.travis.yml`, `.bumpversion.cfg`, and the
    `test_modes` `.rtf` transcript. Moved `Unclassified_Perf_Data/` →
    `docs/unclassified_perf_data/`.
-3. **README refresh** (this commit) — updated the repo-layout table,
+3. **`d19b4b6` — README refresh** — updated the repo-layout table,
    mermaid data-flow diagram, install/usage commands, and roadmap checklist
    to match the `src/` layout and the `meta/`/`docs/` cleanup above.
 
@@ -173,12 +174,11 @@ written. Three commits so far:
 the redirect from the old slug, but the remote URL and all in-repo links
 have been updated to the new one going forward).
 
-Not yet merged — Ryan is re-running the full dry+wet envelope sweep
-locally to confirm the deck output is unchanged before merging PR #11.
+## Next up
 
-**Next up:** work through issues #2 and #3 together rather than
-sequentially — both are Newton-solver robustness problems at extreme
-corners of the state space (cold/high-alt/max-AB for #3; a near-zero
-`FAR_ab` Jacobian conditioning issue was hit previously when prototyping
-#2's Option 2, see the comment on issue #2). Then #5 (test suite, now that
-`src/` exists) and #6 (vendor sync).
+Work through issues #2 and #3 together rather than sequentially — both are
+Newton-solver robustness problems at extreme corners of the state space
+(cold/high-alt/max-AB for #3; a near-zero `FAR_ab` Jacobian conditioning
+issue was hit previously when prototyping #2's Option 2, see the comment on
+issue #2). Then #5 (test suite, now that `src/` exists) and #6 (vendor
+sync).
