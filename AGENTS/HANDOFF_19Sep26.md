@@ -1,3 +1,106 @@
+# Handoff: F404-pyCycle — Recommended Issue Order
+
+Supersedes `HANDOFF_14Sep26.md` (renamed to this file). The prior handoff's
+content is preserved below unchanged, under "Prior handoff (14 Sep 26)".
+
+## Session summary (19 Sep 26)
+
+No code changed this session — this was a read-only investigation to advise on
+which open issues to tackle first, given that several have logical
+dependencies. Two findings materially reshaped the ordering:
+
+1. **#6 (vendor sync) looks partly stale.** The issue's concrete example — the
+   missing NumPy 2.x `.item()` fix in
+   `pycycle/thermo/tabular/thermo_add.py` — is *already present* at
+   `thermo_add.py:120-121`. So #6 needs a quick re-scope ("is anything
+   actually out of sync with upstream today?") before it becomes real work,
+   rather than a blind rebase against upstream.
+2. **#8 is a lever on #3, not just a feature.** The comment on
+   [#8](https://github.com/Jhawk414/F404/issues/8) already shows the frozen
+   design-point A8 wiring (`pyc_connect_des_od('mixed_nozz.Throat:stat:area',
+   'balance.rhs:W')`, `mp_cycle.py:94`) is what makes
+   `mixed_nozz.staticMN.ps_resid` thrash at the wet corners — the exact
+   failures [#3](https://github.com/Jhawk414/F404/issues/3) is about. #3 and #8
+   are physically the same problem viewed from two angles: solver-tuning vs.
+   fixing the underlying frozen-A8 physics.
+
+Also confirmed: no F404-specific test suite exists yet (only `test_modes.py`,
+a smoke test with no assertions), which is why #5 is treated as a foundational
+enabler below rather than just another feature.
+
+## Open issues at a glance
+
+| # | Title | Label | Size |
+|---|---|---|---|
+| [#2](https://github.com/Jhawk414/F404/issues/2)  | Dry/wet size two different engines (~1–2%) | enhancement/question | investigate first |
+| [#3](https://github.com/Jhawk414/F404/issues/3)  | OD non-convergence at cold/high-alt/max-AB | bug | large |
+| [#5](https://github.com/Jhawk414/F404/issues/5)  | Per-module test suite convention | — | medium |
+| [#6](https://github.com/Jhawk414/F404/issues/6)  | Sync vendored `pycycle/` with upstream | housekeeping | small (re-scope) |
+| [#8](https://github.com/Jhawk414/F404/issues/8)  | PLA/T7-scheduled nozzle A8 area | enhancement | large |
+| [#10](https://github.com/Jhawk414/F404/issues/10) | Inline creep/LCF life estimation | enhancement | large/exploratory |
+| [#12](https://github.com/Jhawk414/F404/issues/12) | CSV writes full float64 precision | good first issue | trivial |
+| [#13](https://github.com/Jhawk414/F404/issues/13) | CLI-configurable sweep ranges | enhancement | medium |
+
+## Recommended order
+
+Dependency chain, condensed:
+
+**#12 → #5 (baseline) → #6 → [#2 measure] → #3 + #8 → #13 → #10**
+
+### Phase 1 — Foundation (before any solver work)
+
+1. **[#12](https://github.com/Jhawk414/F404/issues/12) — CSV precision.**
+   Trivial, isolated `float_format` change. Do it *first* because it must land
+   before #5 captures any golden CSV baseline — otherwise a later formatting
+   change invalidates the baseline. Quick win that de-risks #5.
+2. **[#5](https://github.com/Jhawk414/F404/issues/5) — test suite.** The real
+   enabler. Every hard item below (#2, #3, #8) is Newton-solver surgery, and
+   the prior handoff notes a regression test would have caught the false
+   "converged" bug immediately. Capture a golden dry/wet baseline now
+   (125/132 dry, 89/132 wet) while behavior is known-good, so the solver work
+   has a safety net.
+3. **[#6](https://github.com/Jhawk414/F404/issues/6) — vendor sync.** Cheap,
+   and worth a known-clean environment before debugging convergence (so a
+   solver "ghost" isn't actually a stale-vendor bug). **Re-scope first** given
+   the `.item()` finding above — confirm what, if anything, is actually behind
+   upstream before doing the work.
+
+### Phase 2 — Coupled solver cluster (the heart of the work)
+
+4. **[#2](https://github.com/Jhawk414/F404/issues/2) — quantify the variance.**
+   The issue itself says to start by measuring the dry-vs-wet DESIGN delta.
+   Cheap investigation; if the delta is negligible, #2 stays deferred and
+   everything downstream simplifies. Do this as measurement, not a fix.
+5. **[#3](https://github.com/Jhawk414/F404/issues/3) +
+   [#8](https://github.com/Jhawk414/F404/issues/8) together.** Treat as one
+   effort. #8's T7-scheduled A8 is likely the principled fix for a chunk of
+   #3's wet-corner failures; the cheaper #3 knobs (relax `RlineMap`, widen
+   `_OD_BOUNDS`, denser bridge points, per-corner solver tuning) cover the
+   rest. Solving #3 by tuning alone, without #8, risks fighting the frozen-A8
+   physics.
+
+### Phase 3 — Additive features (any time after Phase 1's test net)
+
+6. **[#13](https://github.com/Jhawk414/F404/issues/13) — CLI sweep ranges.**
+   Independent, but sequence it *after* #3 is healthier: opening the altitude
+   band and enabling a real Mach sweep will surface more non-convergence. Also
+   do it after #12, since both touch the CSV/CLI path in
+   `sweep_full_envelope.py`.
+7. **[#10](https://github.com/Jhawk414/F404/issues/10) — creep/LCF lifing.**
+   Purely additive to the per-point results dict, depends on nothing, but it's
+   large and exploratory. Last, and incrementally.
+
+### Non-obvious calls, restated
+
+- #12 gates #5's baseline (formatting must be final before the golden file).
+- #5 gates all the solver work (#2/#3/#8) — it's the regression net.
+- #8 is the physics fix hiding inside the #3 bug, not a separable feature.
+- #6 is smaller than filed — verify before touching it.
+
+---
+
+# Prior handoff (14 Sep 26)
+
 # Handoff: F404-pyCycle — Off-Design Sweep Convergence
 
 Supersedes `HANDOFF_22Apr26.md` (stale — written before the dry/wet mode
