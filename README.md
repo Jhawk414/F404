@@ -168,6 +168,9 @@ Done:
 - [x] Repo-root cleanup: removed the superseded `MFTF_od_CRZ.py` monolith
       and unused vendor/CI cruft (`release_notes.md`, `.travis.yml`,
       `.bumpversion.cfg`), moved reference PDFs into `docs/unclassified_perf_data/`
+- [x] Cap cycle-deck CSV precision — single `write_deck_csv()` writer with
+      per-column decimals (scientific `%.4e` for the fuel-air ratios)
+      ([#12](https://github.com/Jhawk414/F404/issues/12))
 
 Planned (see `docs/improvements/IMPROVEMENTS.md` for full detail):
 
