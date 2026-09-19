@@ -3,6 +3,39 @@
 Supersedes `HANDOFF_14Sep26.md` (renamed to this file). The prior handoff's
 content is preserved below unchanged, under "Prior handoff (14 Sep 26)".
 
+## Session summary (19 Sep 26) — #12 CSV precision (PR #14)
+
+Implemented Phase 1 item #1 below. [#12](https://github.com/Jhawk414/F404/issues/12)
+is done via [PR #14](https://github.com/Jhawk414/F404/pull/14) (branch
+`fix/csv-deck-precision`).
+
+- Consolidated the three `to_csv()` call sites (dry/wet/combined) in
+  `src/F404_pycycle/sweep_full_envelope.py` behind one `write_deck_csv()`
+  helper, then serialized each numeric column at a precision matched to how
+  it's read:
+  - **scientific `%.4e`** for the fuel-air ratios (`FAR_core`, `FAR_ab`,
+    `DECK_SCI_COLS`) — they sit around 0.03–0.04, so fixed decimals waste
+    their shown digits on leading zeros and flatten the small dTs-driven
+    fueling change; scientific keeps every shown digit significant;
+  - **4 decimals** for `MN`, `TSFC`, `W`, `BPR`, the pressure ratios and the
+    LP/HP spool speeds (`DECK_HI_PRECISION_COLS`) — the continuous quantities
+    a downstream optimizer would ingest;
+  - **2 decimals** for thrust, temperatures and flight conditions.
+  - (pandas' `float_format` is global, hence the per-column loop in the helper.)
+- Regenerated `deck/cycle_deck_wet.csv` from the full-precision original on
+  `main` — converged values unchanged (89/132 wet rows), only formatting
+  differs. NB: don't reformat an already-reduced deck to *raise* precision;
+  the discarded digits are gone. Pull the full-precision source instead.
+
+Physics note surfaced while picking the FAR format (not addressed by #12, may
+be worth its own look): across power levels `FAR_ab` moves as expected
+(0.0415→0.0374→0.0334→0.0297 as commanded T7 drops), but at a *fixed* T7 the
+dTs sweep barely perturbs `FAR_ab` (5th–6th decimal only). Real result, now
+readable in the deck.
+
+**Next per the order below:** #12 gated #5's golden baseline, so #5 (test
+suite) is now unblocked and is the recommended next pickup.
+
 ## Session summary (19 Sep 26)
 
 No code changed this session — this was a read-only investigation to advise on
@@ -50,9 +83,12 @@ Dependency chain, condensed:
 ### Phase 1 — Foundation (before any solver work)
 
 1. **[#12](https://github.com/Jhawk414/F404/issues/12) — CSV precision.**
-   Trivial, isolated `float_format` change. Do it *first* because it must land
-   before #5 captures any golden CSV baseline — otherwise a later formatting
-   change invalidates the baseline. Quick win that de-risks #5.
+   ✅ **Done — [PR #14](https://github.com/Jhawk414/F404/pull/14)** (see the
+   19 Sep 26 session summary above). Landed *first* because it had to precede
+   #5's golden CSV baseline — otherwise a later formatting change would
+   invalidate the baseline. Grew slightly past the filed "isolated
+   `float_format` change" into per-column precision (scientific FAR), but stayed
+   contained to the deck writer.
 2. **[#5](https://github.com/Jhawk414/F404/issues/5) — test suite.** The real
    enabler. Every hard item below (#2, #3, #8) is Newton-solver surgery, and
    the prior handoff notes a regression test would have caught the false

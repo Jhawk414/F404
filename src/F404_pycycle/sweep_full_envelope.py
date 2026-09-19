@@ -56,6 +56,45 @@ DSN_Tt7    = 3800.   # degR — afterburner exit at DESIGN point (wet only; max 
 DRY_DSN_FN = 11000.  # lbf  — SLS mil power (no afterburner)
 WET_DSN_FN = 17700.  # lbf  — SLS max afterburner
 
+# Columns serialized with 4 decimals rather than the 2-decimal default: rates,
+# ratios, bypass ratio, spool speeds and Mach — the continuous quantities a
+# downstream tool or optimizer would ingest, where extra resolution is cheap and
+# useful. Thrust, temperatures and flight conditions stay at 2 decimals.
+DECK_HI_PRECISION_COLS = {
+    'MN', 'TSFC', 'W', 'BPR',
+    'OPR', 'fan_PR', 'hpc_PR', 'hpt_PR', 'lpt_PR',
+    'LP_Nmech', 'HP_Nmech',
+}
+
+# Fuel-air ratios sit around 0.03–0.04, so a fixed-decimal format wastes its
+# shown digits on the leading zeros: at %.4f the small dTs-driven variation in
+# augmentor/core fueling (5th–6th decimal) flattens to a constant. Scientific
+# notation spends every shown digit on significant figures instead, so the
+# point-to-point change stays visible.
+DECK_SCI_COLS = {'FAR_core', 'FAR_ab'}
+
+
+def write_deck_csv(df, path):
+    """Write a cycle-deck DataFrame to CSV at capped precision.
+
+    The single writer for every deck (dry, wet, combined). The raw float64 repr
+    (15+ significant figures) is meaningless for engine performance data — no
+    model input or sensor is accurate to that precision — and bloats the deck as
+    sweeps scale up. pandas' float_format is global, so per-column precision is
+    applied here before writing: scientific %.4e for DECK_SCI_COLS, 4 decimals
+    for DECK_HI_PRECISION_COLS, 2 decimals otherwise.
+    """
+    out = df.copy()
+    for col in out.select_dtypes('number'):
+        if col in DECK_SCI_COLS:
+            fmt = '%.4e'
+        elif col in DECK_HI_PRECISION_COLS:
+            fmt = '%.4f'
+        else:
+            fmt = '%.2f'
+        out[col] = out[col].map(fmt.__mod__)
+    out.to_csv(path, index=False)
+
 
 def _apply_design_inputs(prob, fn_target):
     """Set design-point values and initial guesses (shared by both modes).
@@ -244,7 +283,7 @@ if __name__ == "__main__":
             max_bridge_steps=5,
         )
         df_dry['mode'] = 'dry'
-        df_dry.to_csv('cycle_deck_dry.csv', index=False)
+        write_deck_csv(df_dry, 'cycle_deck_dry.csv')
 
     # ── WET SWEEP ────────────────────────────────────────────────────────────
     if args.mode in ('wet', 'both'):
@@ -265,12 +304,12 @@ if __name__ == "__main__":
             max_bridge_steps=5,
         )
         df_wet['mode'] = 'wet'
-        df_wet.to_csv('cycle_deck_wet.csv', index=False)
+        write_deck_csv(df_wet, 'cycle_deck_wet.csv')
 
     # ── Combined CSV (only when both modes ran) ──────────────────────────────
     if df_dry is not None and df_wet is not None:
         df_all = pd.concat([df_dry, df_wet], ignore_index=True)
-        df_all.to_csv('cycle_deck_full_envelope.csv', index=False)
+        write_deck_csv(df_all, 'cycle_deck_full_envelope.csv')
 
     elapsed = time.time() - st_total
     print(f"\nSweep complete in {elapsed:.1f}s")
