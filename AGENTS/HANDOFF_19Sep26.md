@@ -133,18 +133,29 @@ deprecations into hard failures the moment anyone runs
 `pytest pycycle/...`. `testpaths` doesn't protect against this — an explicit
 path argument overrides it.
 
-### Known-red check: not ours
+### The vendored test_bleed_out failure — fixed by cherry-pick
 
-`pyCycle Tests` fails 1 of 67 —
-`pycycle/elements/test/test_bleed_out.py`, in the vendored library, with an
-ambiguous-promoted-units `ValueError` under OpenMDAO 3.45.1 (what CI
-installs; the workflow pins `OPENMDAO: 'latest'`). Does **not** reproduce on
-3.39.0. That workflow had never run before — it triggers on `main` pushes
-and PRs targeting `main`, and PR #15 is the first PR since the default
-branch rename and the trigger fix in `3caa85b`, so this has likely been
-broken for a while unobserved. Filed as
-[#18](https://github.com/Jhawk414/F404/issues/18); check upstream for a fix
-before patching locally.
+`pycycle/elements/test/test_bleed_out.py` failed on all three Baseline
+jobs with an ambiguous-promoted-units `ValueError` under OpenMDAO 3.45.1
+(what CI installs; the workflow pins `OPENMDAO: 'latest'`). It does **not**
+reproduce on 3.39.0, which is what a local checkout is likely to have —
+`BleedOut` promotes four inputs to `bleed.Fl_I:tot:T` with mismatched units
+and newer OpenMDAO refuses to guess.
+
+Upstream had already fixed it in `OpenMDAO/pyCycle@da3b5e3` ("fix tests to
+pass with more recent OM"), so the resolution was a cherry-pick of that one
+test file, taken whole so the vendored copy matches upstream byte for byte.
+Test-only; no vendored production code moved. Filed and closed as
+[#18](https://github.com/Jhawk414/F404/issues/18).
+
+**Worth noting for a future vendor sync:** that workflow had never run
+before — it triggers on `main` pushes and PRs targeting `main`, and PR #15
+is the first PR since the default-branch rename and the trigger fix in
+`3caa85b`. So this had been broken unobserved, and finding that upstream
+already had the fix is direct evidence the vendored tree is behind in ways
+nobody is currently watching. #6 was closed on the strength of one spot
+check (the NumPy 2 `.item()` fix being present); this suggests a real
+file-by-file diff against upstream is still worth doing.
 
 ### New issues filed
 
@@ -152,8 +163,6 @@ before patching locally.
   (`design` / `sweep` / `init-config`), absorbing #13's `min,max,step`
   alt/Mach/throttle flags. Either land #13 inside it or land #13 first
   against the current argparse block.
-- [#18](https://github.com/Jhawk414/F404/issues/18) — the vendored
-  `test_bleed_out` failure above.
 - [#17](https://github.com/Jhawk414/F404/issues/17) — pydantic refactor.
   Biggest prize is `_OD_BOUNDS`: a hand-maintained duplicate of
   `engine_model.py`'s declared bounds. PR #15 added a test holding the two
