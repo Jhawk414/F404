@@ -15,7 +15,16 @@ python_files = ["*_test.py"]
 markers = [
     "slow: builds and solves a full om.Problem (seconds, not milliseconds)",
 ]
+# Order matters: pytest applies these in sequence and the last match wins,
+# so the blanket ignores come first and the targeted error below overrides
+# them for the one case worth failing on.
 filterwarnings = [
+    # pyCycle's Newton iterations legitimately pass through non-physical
+    # intermediate states — negative gamma under a sqrt, bounds violations
+    # the linesearch then pulls back. Expected, and loud enough to bury real
+    # output: ~80 per run of this suite.
+    "ignore::RuntimeWarning",
+    "ignore::openmdao.utils.om_warnings.SolverWarning",
     # OpenMDAO hands back length-1 arrays; float() on them is deprecated and
     # will raise in a future NumPy. Reads go through sweep_utils._scalar —
     # promote the deprecation so a new bare float() can't slip back in.

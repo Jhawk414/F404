@@ -15,6 +15,15 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
+
+class SweepConfigurationError(Exception):
+    """The sweep is wired wrong — as distinct from a point failing to converge.
+
+    Deliberately not a RuntimeError: _run_point treats RuntimeError as a
+    failed point and carries on, which is right for a singular Jacobian and
+    wrong for a model that no longer matches the tables here.
+    """
+
 # OD BalanceComp bounds — must mirror engine_model.py off-design block.
 # Used by SweepRunner._state_at_bounds() to flag bound-clipped solutions
 # that Newton would otherwise report as "converged".
@@ -261,8 +270,21 @@ class SweepRunner:
         for key, (lo, hi) in bounds.items():
             try:
                 val = _scalar(self.prob[f'{pt}.{key}'])
-            except Exception:
-                continue
+            except Exception as err:
+                # Fail loudly rather than skipping the state. Every key in
+                # _OD_BOUNDS exists in every OD configuration (FAR_ab is added
+                # above only when it does), so an unreadable one means the
+                # table has drifted from the model — and silently skipping it
+                # would retire this guard for that state without a symptom,
+                # which is the exact false-convergence failure it exists to
+                # catch.
+                raise SweepConfigurationError(
+                    f"Cannot read OD balance state '{pt}.{key}' while checking "
+                    f"for bound saturation ({type(err).__name__}: {err}). "
+                    f"_OD_BOUNDS in sweep_utils.py mirrors the bounds declared "
+                    f"in engine_model.py's off-design block; if a balance was "
+                    f"renamed or removed there, update it here too."
+                ) from err
             if hi is not None:
                 tol = _BOUND_TOL_FRAC * (hi - lo)
                 if val > hi - tol or val < lo + tol:
@@ -314,7 +336,8 @@ class SweepRunner:
         newton.options['err_on_non_converge'] = False
         try:
             self.prob.run_model()
-        except Exception:
+        except (om.AnalysisError, RuntimeError) as err:
+            log.warning("Bridge point failed (%s): %s", type(err).__name__, err)
             return False
         finally:
             newton.options['err_on_non_converge'] = True
@@ -338,11 +361,21 @@ class SweepRunner:
         singular or rank-deficient Jacobian. That is still just one bad point;
         letting it propagate would abandon an entire multi-hundred-point sweep
         over a corner the deck is expected to lose anyway.
+
+        Only those two. Everything else propagates: a mistyped variable or a
+        drifted bounds table raises KeyError, TypeError or
+        SweepConfigurationError, none of which describe a point that merely
+        failed to converge, and all of which should stop the run rather than
+        be recorded as 264 unexplained failures.
         """
         try:
             self.prob.run_model()
         except (om.AnalysisError, RuntimeError) as err:
-            log.debug("Point failed: %s: %s", type(err).__name__, err)
+            # Warning, not debug: this is the only record that a point failed
+            # for a reason other than "Newton ran out of iterations", and a
+            # burst of them across every point is the signature of a real
+            # problem rather than a hard corner.
+            log.warning("Point failed (%s): %s", type(err).__name__, err)
             return False
         if self._state_at_bounds():
             return False

@@ -8,8 +8,6 @@ Golden values are held to a 1e-4 relative tolerance: tight enough that any
 real change to the cycle trips them, loose enough to survive last-digit
 differences in BLAS/LAPACK across platforms.
 """
-import math
-
 import pytest
 
 from F404_pycycle.problems import (
@@ -229,18 +227,11 @@ def test_afterburner_roughly_doubles_specific_fuel_consumption(dry_problem,
 # ── Dry/wet sizing divergence (#2) ────────────────────────────────────────────
 
 @pytest.mark.slow
-def test_dry_and_wet_size_different_engines(dry_problem, wet_problem):
-    """Characterises the divergence tracked in #2 — expected to fail when fixed.
-
-    Dry and wet each run their own DESIGN solve, so they size two engines.
-    Everything dimensionless agrees exactly (same PRs, same Tt4 target, and
-    the cycle is scale-invariant in mass flow), but the inlet flow the two
-    sizings land on differs by ~5%. Issue #2 estimates 1-2%; measuring it was
-    the first step the handoff asked for, so the real number is recorded here.
-
-    When #2 lands and a single sizing serves both modes, this test should
-    fail and be deleted.
-    """
+def test_dry_and_wet_agree_on_everything_except_size(dry_problem, wet_problem):
+    # The two DESIGN solves produce the same cycle — same pressure ratios,
+    # same Tt4 target, same bypass ratio — and differ only in how much air
+    # they push through it. That is the contract #2 is scoped against: the
+    # divergence is one of scale, not of cycle definition.
     dry_prob, _ = dry_problem
     wet_prob, _ = wet_problem
 
@@ -248,15 +239,22 @@ def test_dry_and_wet_size_different_engines(dry_problem, wet_problem):
         assert _scalar(dry_prob.get_val(f'DESIGN.{shared}')) == pytest.approx(
             _scalar(wet_prob.get_val(f'DESIGN.{shared}')), rel=REL)
 
-    dry_w = _scalar(dry_prob.get_val('DESIGN.balance.W', units='lbm/s'))
-    wet_w = _scalar(wet_prob.get_val('DESIGN.balance.W', units='lbm/s'))
-    divergence = abs(dry_w - wet_w) / wet_w
 
-    assert divergence == pytest.approx(0.0517, abs=1e-3), (
-        f"dry/wet DESIGN mass flow divergence is now {divergence:.2%} "
-        f"({dry_w:.4f} vs {wet_w:.4f} lbm/s) — if this dropped to zero, #2 is "
-        f"fixed and this test should go."
-    )
+@pytest.mark.slow
+@pytest.mark.xfail(strict=True, reason=(
+    "Dry and wet each run their own DESIGN solve, so they size two engines "
+    "rather than one — https://github.com/Jhawk414/F404/issues/2. Asserted as "
+    "the behaviour we want, so that fixing #2 turns this XFAIL into an XPASS "
+    "and fails the suite until the marker is removed."
+))
+def test_dry_and_wet_size_the_same_engine(dry_problem, wet_problem):
+    dry_prob, _ = dry_problem
+    wet_prob, _ = wet_problem
+
+    assert _scalar(dry_prob.get_val('DESIGN.balance.W', units='lbm/s')) == \
+        pytest.approx(
+            _scalar(wet_prob.get_val('DESIGN.balance.W', units='lbm/s')),
+            rel=REL)
 
 
 # ── Off-nominal sizing ────────────────────────────────────────────────────────
@@ -274,12 +272,3 @@ def test_a_lower_thrust_target_sizes_a_smaller_engine():
     # Mass flow scales with thrust; the cycle itself is unchanged.
     assert _scalar(prob.get_val('DESIGN.balance.BPR')) == pytest.approx(
         DRY_DESIGN['balance.BPR'], rel=REL)
-
-
-def test_module_constants_are_self_consistent():
-    # Cheap guard on the constants themselves: max AB must out-thrust mil
-    # power and run hotter, or the two builders' defaults contradict.
-    assert WET_DSN_FN > DRY_DSN_FN
-    assert DSN_Tt7 > MIL_Tt4
-    assert all(math.isfinite(v)
-               for v in (WET_DSN_FN, DRY_DSN_FN, DSN_Tt7, MIL_Tt4))

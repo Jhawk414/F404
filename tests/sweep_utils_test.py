@@ -11,6 +11,7 @@ import pytest
 
 from F404_pycycle.problems import build_dry_problem
 from F404_pycycle.sweep_utils import (
+    SweepConfigurationError,
     _BOUND_TOL_FRAC,
     _OD_BOUNDS,
     _OD_FAR_AB_BOUNDS,
@@ -40,9 +41,11 @@ class StubProblem:
     """Stand-in for ``om.Problem`` over the read-only API the guards use.
 
     ``SweepRunner._state_at_bounds`` indexes the problem directly and
-    ``_target_met`` calls ``get_val``; both swallow lookup failures, so a
-    missing key must raise rather than return a default for the
-    "variable absent" paths to be tested honestly.
+    ``_target_met`` calls ``get_val``. A missing key raises rather than
+    returning a default, so the two guards' different responses to an
+    unreadable variable are exercised honestly: ``_state_at_bounds`` raises
+    (fail closed on a drifted bounds table), ``_target_met`` rejects the
+    point (fail closed on an unverifiable target).
     """
 
     def __init__(self, values):
@@ -212,10 +215,25 @@ def test_far_ab_saturation_is_ignored_in_dry_mode():
     assert runner(state, afterburn=False)._state_at_bounds() is False
 
 
-def test_missing_state_is_skipped_rather_than_failing_the_point():
+def test_an_unreadable_state_is_an_error_not_a_free_pass():
+    # If _OD_BOUNDS drifts from the balances engine_model.py declares, the
+    # affected state must stop being checked *loudly*. Skipping it would
+    # retire this guard for that state with no symptom — a bound-clipped
+    # solution would sail through as converged, which is the precise failure
+    # the guard exists to catch.
     state = {k: v for k, v in CLEAN_STATE.items() if 'LP_Nmech' not in k}
 
-    assert runner(state)._state_at_bounds() is False
+    with pytest.raises(SweepConfigurationError, match='LP_Nmech'):
+        runner(state)._state_at_bounds()
+
+
+def test_the_unreadable_state_error_says_where_to_look():
+    with pytest.raises(SweepConfigurationError) as excinfo:
+        runner({})._state_at_bounds()
+
+    message = str(excinfo.value)
+    assert '_OD_BOUNDS' in message
+    assert 'engine_model.py' in message
 
 
 def test_bound_tolerance_is_a_fraction_of_the_bound_width():
@@ -360,3 +378,45 @@ def test_a_failed_point_does_not_abandon_the_rest_of_the_sweep():
 
     assert len(deck) == 2
     assert list(deck['dTs']) == [0., 10.]
+
+
+@pytest.mark.slow
+def test_an_unexpected_error_aborts_the_sweep_rather_than_failing_a_point():
+    """Only solver failures are absorbed; everything else must surface.
+
+    _run_point swallows AnalysisError and RuntimeError so that one hard
+    corner can't cost a multi-hour sweep. That tolerance must not extend to
+    the error types a mistake produces — a typo'd variable or a drifted
+    bounds table reaching the caller as "264 points failed" would hide the
+    cause completely.
+    """
+    prob, mp = build_dry_problem(verbose=False)
+    prob.set_solver_print(level=-1)
+    runner = SweepRunner(prob, od_pt=mp.od_pt, mach=0.001, afterburn=False)
+
+    def exploding_run_model():
+        raise KeyError("OD.balance.typo")
+
+    prob.run_model = exploding_run_model
+
+    with pytest.raises(KeyError, match='typo'):
+        runner.run_sweep(build_snake_sweep([0.], [0.], [3100.]))
+
+
+@pytest.mark.slow
+def test_a_drifted_bounds_table_aborts_the_sweep():
+    # SweepConfigurationError is deliberately not a RuntimeError, so it
+    # travels through _run_point's except clause instead of being recorded
+    # as an ordinary failed point.
+    prob, mp = build_dry_problem(verbose=False)
+    prob.set_solver_print(level=-1)
+    runner = SweepRunner(prob, od_pt=mp.od_pt, mach=0.001, afterburn=False)
+
+    with pytest.raises(SweepConfigurationError, match='balance.nonexistent'):
+        with_drift = dict(_OD_BOUNDS, **{'balance.nonexistent': (0., 1.)})
+        import F404_pycycle.sweep_utils as su
+        original, su._OD_BOUNDS = su._OD_BOUNDS, with_drift
+        try:
+            runner.run_sweep(build_snake_sweep([0.], [0.], [3100.]))
+        finally:
+            su._OD_BOUNDS = original
