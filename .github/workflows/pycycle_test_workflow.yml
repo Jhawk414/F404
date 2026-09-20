@@ -2,11 +2,25 @@
 name: pyCycle Tests
 
 on:
-  # Trigger on push or pull request events for the main branch
+  # Trigger on push or pull request events for the main branch, but only when
+  # the vendored library itself changes. This suite takes 4-6 minutes across
+  # its four jobs and tests upstream code that F404 work never touches, so
+  # running it on every F404 PR is pure latency. F404 application code is
+  # covered by f404_test_workflow.yml instead.
+  #
+  # Deliberately not listed: setup.py. A packaging change can in principle
+  # break the pycycle install without touching pycycle/ — run this manually
+  # from the Actions tab (workflow_dispatch, below) when changing it.
   push:
     branches: [ main ]
+    paths:
+      - 'pycycle/**'
+      - '.github/workflows/pycycle_test_workflow.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'pycycle/**'
+      - '.github/workflows/pycycle_test_workflow.yml'
 
   # Allow running the workflow manually from the Actions tab
   workflow_dispatch:
