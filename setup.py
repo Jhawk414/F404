@@ -16,6 +16,7 @@ optional_dependencies = {
         'testflo>=1.3.6',
         'parameterized',
         'pytest>=7.0',
+        'pytest-cov',
     ]
 }
 
