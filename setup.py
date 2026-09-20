@@ -55,6 +55,12 @@ setup(name='om-pycycle',
       ],
       install_requires=[
         'openmdao>=3.10.0',
+        # numpy arrives transitively via openmdao, but F404_pycycle imports it
+        # directly, so it is declared rather than relied on.
+        'numpy',
+        # F404_pycycle only: SweepRunner collects results into a DataFrame and
+        # write_deck_csv serialises the cycle deck from it.
+        'pandas',
       ],
     package_dir={'F404_pycycle': 'src/F404_pycycle'},
     package_data={
