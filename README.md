@@ -27,6 +27,7 @@ F404 performance data.
 - [Software architecture and data flow](#software-architecture-and-data-flow)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Testing](#testing)
 - [Current status](#current-status)
 - [Roadmap](#roadmap)
 - [Acknowledgments](#acknowledgments)
@@ -42,6 +43,7 @@ vendored upstream `pycycle` library at the repo root (see
 |---|---|
 | `src/F404_pycycle/engine_model.py` | `MixedFlowTurbofan(pyc.Cycle)`: single-point thermodynamic cycle (fan, HPC, burner, HPT/LPT, mixer, afterburner, nozzle) |
 | `src/F404_pycycle/mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: links a DESIGN point and an off-design (OD) point, transferring map scalars and station areas |
+| `src/F404_pycycle/problems.py` | `build_dry_problem()` / `build_wet_problem()`: design targets, initial guesses and input validation for each afterburner mode |
 | `src/F404_pycycle/sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner`, result extraction |
 | `src/F404_pycycle/sweep_full_envelope.py` | CLI driver: runs the alt/dTs/throttle sweep for dry, wet, or both modes |
 | `src/F404_pycycle/printer.py` | Console table formatter for DESIGN/OD results |
@@ -72,12 +74,12 @@ Current data flow from CLI invocation to output CSV.
 
 ```mermaid
 flowchart TD
-    subgraph Drivers["Entry-point scripts (src/F404_pycycle/)"]
+    subgraph Drivers["Entry point (src/F404_pycycle/)"]
         A["sweep_full_envelope.py<br/>--mode dry|wet|both"]
-        B["run_design_od.py<br/>single DESIGN + OD point"]
     end
 
     subgraph Model["Cycle model"]
+        B["problems.py<br/>build_dry_problem · build_wet_problem<br/>targets, guesses, validation"]
         C["mp_cycle.py<br/>MPMixedFlowTurbofan(pyc.MPCycle)<br/>wires DESIGN + OD points"]
         D["engine_model.py<br/>MixedFlowTurbofan(pyc.Cycle)<br/>single-point thermodynamic cycle"]
     end
@@ -91,14 +93,13 @@ flowchart TD
         G["deck/*.csv<br/>cycle_deck_dry / _wet / _full_envelope"]
     end
 
-    A --> C
+    A --> B
     B --> C
     C --> D
+    B --> F
     A --> E
     E --> C
     E --> G
-    A --> F
-    B --> F
 ```
 
 `mp_cycle.py` instantiates `MixedFlowTurbofan` twice: once with `design=True`
@@ -136,9 +137,27 @@ Use `--mode dry` or `--mode wet` to run an individual mode. Output files
 are written to the working directory. Moving output generation to `deck/` is
 tracked in [Roadmap](#roadmap).
 
+## Testing
+
+```bash
+pytest tests                    # full suite, ~25 s
+pytest tests -m "not slow"      # structural and unit tests only, ~6 s
+```
+
+One `tests/<module>_test.py` per module ([#5](https://github.com/Jhawk414/F404/issues/5)).
+Tests marked `slow` build and solve a full `om.Problem`; the rest either use
+pure functions or build a model without solving it. `pytest` needs no prior
+install — `pythonpath` in `pyproject.toml` puts `src/` on the path — and runs
+in CI on Ubuntu (3.9, 3.12) and macOS (3.12).
+
+Coverage is 86% of `src/F404_pycycle`. The bulk of the remainder is
+`sweep_full_envelope.py`'s `if __name__ == "__main__"` block, which can't be
+imported; extracting it behind a real entry point is tracked in
+[#16](https://github.com/Jhawk414/F404/issues/16).
+
 ## Current status
 
-Latest full-envelope sweep (`sweep_full_envelope.py --mode both`) at
+Latest full-envelope sweep (`--mode both`) at
 alt ∈ {0, 2500, 5000} ft, dTs ∈ {0, ±10, ±20, ±30, ±40, ±50} R, static
 (MN ≈ 0.001), 4 throttle levels per mode:
 
@@ -167,6 +186,9 @@ Done:
 - [x] Cap cycle-deck CSV precision — single `write_deck_csv()` writer with
       per-column decimals (scientific `%.4e` for the fuel-air ratios)
       ([#12](https://github.com/Jhawk414/F404/issues/12))
+- [x] Per-module test suite (`tests/<module>_test.py`), 86% coverage, with
+      golden DESIGN/OD baselines and regression cover on the
+      false-convergence guards ([#5](https://github.com/Jhawk414/F404/issues/5))
 
 Planned (see `docs/improvements/IMPROVEMENTS.md` for full detail):
 
@@ -176,13 +198,16 @@ Planned (see `docs/improvements/IMPROVEMENTS.md` for full detail):
       ([#2](https://github.com/Jhawk414/F404/issues/2))
 - [ ] Resolve remaining cold/high-alt/max-AB Newton convergence failures
       ([#3](https://github.com/Jhawk414/F404/issues/3))
-- [ ] Per-module test suite convention (`<module>_test.py`)
-      ([#5](https://github.com/Jhawk414/F404/issues/5))
 - [ ] Sync vendored `pycycle/` against upstream
       ([#6](https://github.com/Jhawk414/F404/issues/6))
+- [ ] CLI entry point (`design` / `sweep` / `init-config` subcommands), with
+      `min,max,step` range flags ([#16](https://github.com/Jhawk414/F404/issues/16),
+      [#13](https://github.com/Jhawk414/F404/issues/13))
+- [ ] Pydantic models for design-point inputs, sweep points and the
+      duplicated OD bounds table ([#17](https://github.com/Jhawk414/F404/issues/17))
 - [ ] `deck/` as a durable, reviewed home for cycle-deck CSVs + solver logs
-- [ ] YAML-driven run configuration (`run.yml`) with pydantic validation
-- [ ] CLI entry point (`design` / `sweep` / `init-config` subcommands)
+- [ ] YAML-driven run configuration (`run.yml`), on top of
+      [#17](https://github.com/Jhawk414/F404/issues/17)'s models
 - [ ] Auto-generated sweep-envelope coverage plot
 
 ## Acknowledgments
