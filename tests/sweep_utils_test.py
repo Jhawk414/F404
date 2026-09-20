@@ -9,6 +9,7 @@ to call converged.
 """
 import pytest
 
+from F404_pycycle.problems import build_dry_problem
 from F404_pycycle.sweep_utils import (
     _BOUND_TOL_FRAC,
     _OD_BOUNDS,
@@ -290,3 +291,51 @@ def test_od_bounds_table_matches_the_bounds_the_model_declares(wet_problem):
             f"{key}: engine_model.py declares ({declared_lo}, {declared_hi}) "
             f"but sweep_utils._OD_BOUNDS says ({lo}, {hi})"
         )
+
+
+# ── End to end ────────────────────────────────────────────────────────────────
+
+@pytest.mark.slow
+def test_a_short_dry_sweep_converges_and_returns_a_deck_frame():
+    """Drives the real loop — solve, guard, extract, collect — on 3 points.
+
+    Builds its own problem because running a sweep mutates OD solver state.
+    Three points at conditions the deck already covers (SLS, dTs >= 0), so
+    this asserts the machinery works, not that the hard corners converge —
+    those are #3.
+    """
+    prob, mp = build_dry_problem(verbose=False)
+    prob.set_solver_print(level=-1)
+    points = build_snake_sweep([0.], [0., 10., 20.], [3100.])
+
+    runner = SweepRunner(prob, od_pt=mp.od_pt, mach=0.001, afterburn=False)
+    deck = runner.run_sweep(points)
+
+    assert len(deck) == len(points), "a nominal SLS sweep should fully converge"
+    assert list(deck['dTs']) == [0., 10., 20.]
+    # Every row carries the full schema, and the guards passed on each.
+    assert set(deck.columns) == set(
+        extract_od_results(prob, mp.od_pt, afterburn=False))
+    assert (deck['T4'] - 3100.).abs().max() <= _TARGET_TOL_DEGR
+    # A hotter day thins the air, so the sized engine swallows less of it.
+    assert deck['W'].is_monotonic_decreasing
+    assert deck['Fn'].is_monotonic_decreasing
+
+
+@pytest.mark.slow
+def test_a_sweep_point_that_cannot_converge_is_dropped_not_reported():
+    """An unreachable power target must shrink the deck, not corrupt it.
+
+    The bug class this suite exists for: the sweep used to return a row for
+    a point like this, filled with whatever state Newton stalled in.
+    """
+    prob, mp = build_dry_problem(verbose=False)
+    prob.set_solver_print(level=-1)
+    # 800 degR is below the compressor discharge temperature, so the burner
+    # would have to remove heat — FAR_core pins at its 1e-4 floor.
+    points = build_snake_sweep([0.], [0.], [800.])
+
+    deck = SweepRunner(prob, od_pt=mp.od_pt, mach=0.001,
+                       afterburn=False).run_sweep(points)
+
+    assert len(deck) == 0
