@@ -1,0 +1,54 @@
+# Run the F404 application test suite.
+#
+# Separate from pycycle_test_workflow.yml, which runs the vendored upstream
+# library's own suite under testflo. This one covers src/F404_pycycle/ only.
+name: F404 Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+
+  tests:
+
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest and newest supported interpreters. The suite asserts on
+        # converged solver output, so it is worth knowing early if a NumPy or
+        # SciPy version moves the numbers.
+        include:
+          - OS: ubuntu-latest
+            PY: '3.9'
+          - OS: ubuntu-latest
+            PY: '3.12'
+          - OS: macos-latest
+            PY: '3.12'
+
+    runs-on: ${{ matrix.OS }}
+
+    name: F404 ${{ matrix.OS }} py${{ matrix.PY }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.PY }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[all]
+
+      - name: Run tests
+        run: |
+          pytest tests --cov=F404_pycycle --cov-report=term-missing -v

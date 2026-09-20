@@ -3,6 +3,177 @@
 Supersedes `HANDOFF_14Sep26.md` (renamed to this file). The prior handoff's
 content is preserved below unchanged, under "Prior handoff (14 Sep 26)".
 
+## Session summary (19 Sep 26) — #5 test suite (PR #15)
+
+Implemented Phase 1 item #2 below. [#5](https://github.com/Jhawk414/F404/issues/5)
+is done via [PR #15](https://github.com/Jhawk414/F404/pull/15) (branch
+`test/module-test-suite`). **102 tests, ~35 s, 87% coverage.**
+
+### Restructuring the suite required first
+
+Three things made a test suite impossible to write, all fixed in the PR:
+
+1. **The package wasn't importable.** Modules imported each other by bare
+   name (`from mp_cycle import ...`), which only resolves when the
+   interpreter's cwd is `src/F404_pycycle/` — i.e. only when a file in it
+   runs as a script. Now absolute imports, with `F404_pycycle` registered in
+   `setup.py` (`package_dir` mapping, sharing the vendored distribution
+   rather than carrying a second `setup.py`). **Entry points are now invoked
+   as `python -m F404_pycycle.sweep_full_envelope`.**
+2. **`test_modes.py` would have detonated on collection** — 181 lines, zero
+   assertions, a 4-point solve at import time, and named such that pytest
+   collects it. Deleted, along with `run_design_od.py`, whose docstring
+   pinned it to the `MFTF_od_CRZ.py` monolith deleted back in `b96c02e`.
+3. **Problem setup existed in three near-identical copies.** Consolidated
+   into `problems.py` as `build_dry_problem()` / `build_wet_problem()`, which
+   also buys `verbose=False`, parameterised targets, and a home for
+   fail-fast validation. Also dropped a redundant second `run_model()` per
+   builder — the "verify OD at design conditions" block re-set values that
+   were already set and re-solved an already-converged point purely to print
+   it.
+
+### Two findings
+
+- **#2's divergence is 5.17%, not the 1–2% the issue estimates.** Dry and
+  wet agree *exactly* on everything dimensionless — same PRs, same Tt4, same
+  BPR 0.7528 — but land on different DESIGN mass flows (144.1825 vs 137.0927
+  lbm/s). The handoff below lists measuring this as #2's first step; it is
+  recorded on the issue, and encoded in the suite as an
+  `xfail(strict=True)` asserting the *desired* behaviour (equal sizing) — so
+  fixing #2 turns it into an XPASS that fails until the marker is removed,
+  rather than a test that breaks when the product improves.
+- **A latent NumPy 2 break in `sweep_utils.py`.** `float()` on OpenMDAO's
+  length-1 arrays, ~18 times per sweep point, deprecated since NumPy 1.25
+  and slated to raise. The nasty part: in `_state_at_bounds` and
+  `_target_met` the surrounding `except Exception` would swallow the eventual
+  `TypeError` and silently report *every* point as unconverged. Fixed via a
+  `_scalar()` helper; pytest now promotes that deprecation to an error. Note
+  the CI's existing `ruff --select NPY201` gate does **not** catch this
+  pattern.
+
+### Golden baseline (captured at 1e-4 relative tolerance)
+
+| | Fn (lbf) | W (lbm/s) | BPR | TSFC |
+|---|---|---|---|---|
+| dry DESIGN | 11,000 | 144.1825 | 0.7528 | 0.6201 |
+| wet DESIGN | 17,700 | 137.0927 | 0.7528 | 1.5245 |
+
+Wet also: FAR_ab 0.0415, T7 3800 R. Both OD points reproduce their DESIGN
+solve exactly at design conditions.
+
+### Decisions worth knowing
+
+- **Tests live in top-level `tests/`, not as `src/` siblings.** #5 and
+  `IMPROVEMENTS.md` item 2 specified siblings; the naming convention is kept
+  but the location isn't, so `src/` stays model code only.
+- **No pydantic in this branch.** `IMPROVEMENTS.md` item 3 already scoped it
+  as its own branch. Filed as
+  [#17](https://github.com/Jhawk414/F404/issues/17); PR #15's three
+  hand-written checks in `problems._validate_design_targets()` are a stopgap
+  that #17 should absorb and delete.
+- **Connection assertions match on prefix+suffix, not exact path.** OpenMDAO
+  resolves `pyc_connect_des_od` down to pyCycle-internal subcomponents
+  (`DESIGN.fan.map.scalars.s_PR`); pinning to those would break on an
+  upstream refactor that changed nothing here.
+- **`printer.py` gained a `file` parameter.** pyCycle's `print_*` helpers
+  bind `sys.stdout` as a *default argument*, evaluated at import, so their
+  output escapes both `capsys` and `capfd`. Untestable without threading
+  `file` through.
+
+### Coverage, and where the ceiling is
+
+| Module | | |
+|---|---|---|
+| `mp_cycle.py` | 100% | |
+| `printer.py` | 100% | |
+| `engine_model.py` | 98% | dead `USE_TABULAR=False` branch |
+| `problems.py` | 93% | verbose print path |
+| `sweep_utils.py` | 83% | |
+| `sweep_full_envelope.py` | 37% | **all of it inside `if __name__ == "__main__"`** |
+
+That last row caps the total. An uncallable `__main__` block can't be
+tested — extracting it behind a real entry point is
+[#16](https://github.com/Jhawk414/F404/issues/16).
+
+### Three more bugs, surfaced by CI
+
+The new workflow was the first thing to install this repo from scratch
+*and* import the application code, and the first to run it on a platform
+other than the author's. All three are pre-existing; none were test bugs.
+
+1. **`pandas` was never a declared dependency.** `install_requires` has
+   only ever listed `openmdao`, while `sweep_utils.py` has always imported
+   pandas directly. A clean `pip install -e .[all]` has therefore never
+   produced a working sweep — it only ever worked because pandas happened to
+   be in the environment already. `numpy` is now declared too (it resolved
+   transitively through openmdao).
+2. **One bad point could abort an entire sweep.** `_run_point` caught only
+   `om.AnalysisError`. A sufficiently degenerate point doesn't fail in Newton
+   at all — it fails underneath it, where `DirectSolver` raises
+   `RuntimeError: Jacobian in 'OD' is not full rank`, which propagated
+   straight out of `run_sweep`. Platform-dependent: locally the same point
+   fails cleanly through Newton, so this only appeared on CI.
+3. **A failure before the first success poisoned everything after it.** With
+   (2) fixed the sweep survived but every later point failed —
+   `_last_good_state` is only populated after a point *converges*, so an
+   early failure had nothing to restore from and subsequent points
+   warm-started from the state Newton abandoned. `run_sweep` now seeds the
+   fallback from the state it is handed (OD converged at design conditions).
+
+**(3) is latent, not theoretical.** It stays hidden only because the first
+point of both the dry and wet grids happens to converge. Reorder the grid,
+or widen the envelope via #16/#13, and it presents as a near-empty deck with
+no obvious cause — it looks like "the model broke", not "point 1 failed".
+Worth remembering when #3/#8 start changing which corners converge.
+
+Neither (2) nor (3) was reachable before a test deliberately failed a point.
+
+Also note: the `filterwarnings` rule promoting NumPy's scalar-conversion
+deprecation to an error must stay **scoped to `F404_pycycle.*`**. Unscoped,
+it applies to the whole pytest session and turns the vendored library's own
+deprecations into hard failures the moment anyone runs
+`pytest pycycle/...`. `testpaths` doesn't protect against this — an explicit
+path argument overrides it.
+
+### The vendored test_bleed_out failure — fixed by cherry-pick
+
+`pycycle/elements/test/test_bleed_out.py` failed on all three Baseline
+jobs with an ambiguous-promoted-units `ValueError` under OpenMDAO 3.45.1
+(what CI installs; the workflow pins `OPENMDAO: 'latest'`). It does **not**
+reproduce on 3.39.0, which is what a local checkout is likely to have —
+`BleedOut` promotes four inputs to `bleed.Fl_I:tot:T` with mismatched units
+and newer OpenMDAO refuses to guess.
+
+Upstream had already fixed it in `OpenMDAO/pyCycle@da3b5e3` ("fix tests to
+pass with more recent OM"), so the resolution was a cherry-pick of that one
+test file, taken whole so the vendored copy matches upstream byte for byte.
+Test-only; no vendored production code moved. Filed and closed as
+[#18](https://github.com/Jhawk414/F404/issues/18).
+
+**Worth noting for a future vendor sync:** that workflow had never run
+before — it triggers on `main` pushes and PRs targeting `main`, and PR #15
+is the first PR since the default-branch rename and the trigger fix in
+`3caa85b`. So this had been broken unobserved, and finding that upstream
+already had the fix is direct evidence the vendored tree is behind in ways
+nobody is currently watching. #6 was closed on the strength of one spot
+check (the NumPy 2 `.item()` fix being present); this suggests a real
+file-by-file diff against upstream is still worth doing.
+
+### New issues filed
+
+- [#16](https://github.com/Jhawk414/F404/issues/16) — proper CLI entry point
+  (`design` / `sweep` / `init-config`), absorbing #13's `min,max,step`
+  alt/Mach/throttle flags. Either land #13 inside it or land #13 first
+  against the current argparse block.
+- [#17](https://github.com/Jhawk414/F404/issues/17) — pydantic refactor.
+  Biggest prize is `_OD_BOUNDS`: a hand-maintained duplicate of
+  `engine_model.py`'s declared bounds. PR #15 added a test holding the two
+  together, but a structure that can't drift beats a test that detects drift.
+
+**Next per the order below:** #5 is done, so #6 (vendor sync, re-scope
+first) is next in Phase 1 — then the #2 measurement is already in hand
+above, leaving the #3 + #8 solver cluster, now with a regression net.
+
 ## Session summary (19 Sep 26) — #12 CSV precision (PR #14)
 
 Implemented Phase 1 item #1 below. [#12](https://github.com/Jhawk414/F404/issues/12)
@@ -67,18 +238,20 @@ enabler below rather than just another feature.
 |---|---|---|---|
 | [#2](https://github.com/Jhawk414/F404/issues/2)  | Dry/wet size two different engines (~1–2%) | enhancement/question | investigate first |
 | [#3](https://github.com/Jhawk414/F404/issues/3)  | OD non-convergence at cold/high-alt/max-AB | bug | large |
-| [#5](https://github.com/Jhawk414/F404/issues/5)  | Per-module test suite convention | — | medium |
+| [#5](https://github.com/Jhawk414/F404/issues/5)  | Per-module test suite convention | — | ✅ done (PR #15) |
 | [#6](https://github.com/Jhawk414/F404/issues/6)  | Sync vendored `pycycle/` with upstream | housekeeping | small (re-scope) |
 | [#8](https://github.com/Jhawk414/F404/issues/8)  | PLA/T7-scheduled nozzle A8 area | enhancement | large |
 | [#10](https://github.com/Jhawk414/F404/issues/10) | Inline creep/LCF life estimation | enhancement | large/exploratory |
-| [#12](https://github.com/Jhawk414/F404/issues/12) | CSV writes full float64 precision | good first issue | trivial |
+| [#12](https://github.com/Jhawk414/F404/issues/12) | CSV writes full float64 precision | good first issue | ✅ done (PR #14) |
 | [#13](https://github.com/Jhawk414/F404/issues/13) | CLI-configurable sweep ranges | enhancement | medium |
+| [#16](https://github.com/Jhawk414/F404/issues/16) | Proper CLI entry point (absorbs #13) | enhancement | medium |
+| [#17](https://github.com/Jhawk414/F404/issues/17) | Pydantic models for validated inputs | enhancement | medium |
 
 ## Recommended order
 
 Dependency chain, condensed:
 
-**#12 → #5 (baseline) → #6 → [#2 measure] → #3 + #8 → #13 → #10**
+**#12 ✅ → #5 ✅ (baseline) → #6 → [#2 measure ✅] → #3 + #8 → #17 → #16/#13 → #10**
 
 ### Phase 1 — Foundation (before any solver work)
 
@@ -89,8 +262,9 @@ Dependency chain, condensed:
    invalidate the baseline. Grew slightly past the filed "isolated
    `float_format` change" into per-column precision (scientific FAR), but stayed
    contained to the deck writer.
-2. **[#5](https://github.com/Jhawk414/F404/issues/5) — test suite.** The real
-   enabler. Every hard item below (#2, #3, #8) is Newton-solver surgery, and
+2. **[#5](https://github.com/Jhawk414/F404/issues/5) — test suite.**
+   ✅ **Done — [PR #15](https://github.com/Jhawk414/F404/pull/15)** (see the
+   session summary above). The real enabler. Every hard item below (#2, #3, #8) is Newton-solver surgery, and
    the prior handoff notes a regression test would have caught the false
    "converged" bug immediately. Capture a golden dry/wet baseline now
    (125/132 dry, 89/132 wet) while behavior is known-good, so the solver work

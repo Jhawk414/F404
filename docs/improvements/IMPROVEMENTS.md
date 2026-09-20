@@ -36,6 +36,13 @@ convergence log" note under item 5.
 
 ## 2. Test suite convention
 
+> **Status: done** — implemented as [#5](https://github.com/Jhawk414/F404/issues/5)
+> / [PR #15](https://github.com/Jhawk414/F404/pull/15). One deviation from the
+> plan below: tests live in a top-level `tests/` directory rather than as
+> `src/` siblings, so the package stays model code only. The
+> `<module>_test.py` naming is kept. A fresh dry/wet baseline was captured,
+> superseding the historical numbers in the table below. Coverage is 87%.
+
 For every module under `src/`, add a sibling `<module>_test.py`. Coverage
 should include, per module, as applicable:
 
@@ -77,6 +84,12 @@ should include, per module, as applicable:
   rounds of debugging.
 
 ## 3. Pydantic models for validated inputs (larger refactor, not urgent)
+
+> **Status: filed** as [#17](https://github.com/Jhawk414/F404/issues/17), with
+> all three candidates below carried over. The preconditions this section set
+> — a stable `src/` layout and settled module boundaries — are now met (#4,
+> #5). PR #15 added the three most urgent design-target checks by hand in
+> `problems._validate_design_targets()`; #17 absorbs and replaces them.
 
 Candidates for `pydantic` models once the src/ layout exists:
 - Design-point input sets (`fn_target`, `Tt4`, `Tt7`, PR/eff guesses) —
@@ -260,6 +273,12 @@ in a sweep. Sequence this alongside/after item 3 and after item 1's `src/`
 layout exists.
 
 ## 8. CLI entry point + service layer
+
+> **Status: filed** as [#16](https://github.com/Jhawk414/F404/issues/16),
+> which also absorbs the `min,max,step` range flags from
+> [#13](https://github.com/Jhawk414/F404/issues/13). Note that
+> `run_design_od.py` and `test_modes.py` were deleted in PR #15;
+> `sweep_full_envelope.py` is the only remaining entry point.
 
 There is currently no CLI. `sweep_full_envelope.py`, `run_design_od.py`,
 and `test_modes.py` are standalone scripts meant to be run directly — none

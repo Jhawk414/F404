@@ -15,6 +15,15 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
+
+class SweepConfigurationError(Exception):
+    """The sweep is wired wrong — as distinct from a point failing to converge.
+
+    Deliberately not a RuntimeError: _run_point treats RuntimeError as a
+    failed point and carries on, which is right for a singular Jacobian and
+    wrong for a model that no longer matches the tables here.
+    """
+
 # OD BalanceComp bounds — must mirror engine_model.py off-design block.
 # Used by SweepRunner._state_at_bounds() to flag bound-clipped solutions
 # that Newton would otherwise report as "converged".
@@ -33,6 +42,18 @@ _BOUND_TOL_FRAC = 0.01
 # Burner/afterburner exit temperature must be within this many degR of the
 # requested target for the run to count as a real solution.
 _TARGET_TOL_DEGR = 5.0
+
+
+def _scalar(value):
+    """Collapse an OpenMDAO value to a plain Python float.
+
+    ``prob.get_val()`` and ``prob[...]`` return length-1 ``ndarray``s, and
+    ``float()`` on an array with ``ndim > 0`` has been deprecated since NumPy
+    1.25 and is slated to raise. Every read in this module goes through here
+    so the deck stays plain floats without accumulating that deprecation
+    across ~18 columns per sweep point.
+    """
+    return float(np.asarray(value).item())
 
 
 def build_snake_sweep(alts, dTs_values, powers):
@@ -124,25 +145,25 @@ def extract_od_results(prob, pt, afterburn=True):
         Performance results.
     """
     return {
-        'alt':       float(prob.get_val(f'{pt}.fc.alt', units='ft')),
-        'dTs':       float(prob.get_val(f'{pt}.fc.dTs', units='degR')),
-        'MN':        float(prob.get_val(f'{pt}.fc.MN')),
-        'Fn':        float(prob.get_val(f'{pt}.perf.Fn', units='lbf')),
-        'Fg':        float(prob.get_val(f'{pt}.perf.Fg', units='lbf')),
-        'TSFC':      float(prob.get_val(f'{pt}.perf.TSFC')),
-        'W':         float(prob.get_val(f'{pt}.balance.W', units='lbm/s')),
-        'BPR':       float(prob.get_val(f'{pt}.balance.BPR')),
-        'FAR_core':  float(prob.get_val(f'{pt}.balance.FAR_core')),
-        'FAR_ab':    float(prob.get_val(f'{pt}.balance.FAR_ab')) if afterburn else 0.0,
-        'OPR':       float(prob[f'{pt}.fan.PR'] * prob[f'{pt}.hpc.PR']),
-        'fan_PR':    float(prob[f'{pt}.fan.PR']),
-        'hpc_PR':    float(prob[f'{pt}.hpc.PR']),
-        'hpt_PR':    float(prob[f'{pt}.hpt.PR']),
-        'lpt_PR':    float(prob[f'{pt}.lpt.PR']),
-        'T4':        float(prob.get_val(f'{pt}.burner.Fl_O:tot:T', units='degR')),
-        'T7':        float(prob.get_val(f'{pt}.afterburner.Fl_O:tot:T', units='degR')),
-        'LP_Nmech':  float(prob.get_val(f'{pt}.balance.LP_Nmech', units='rpm')),
-        'HP_Nmech':  float(prob.get_val(f'{pt}.balance.HP_Nmech', units='rpm')),
+        'alt':       _scalar(prob.get_val(f'{pt}.fc.alt', units='ft')),
+        'dTs':       _scalar(prob.get_val(f'{pt}.fc.dTs', units='degR')),
+        'MN':        _scalar(prob.get_val(f'{pt}.fc.MN')),
+        'Fn':        _scalar(prob.get_val(f'{pt}.perf.Fn', units='lbf')),
+        'Fg':        _scalar(prob.get_val(f'{pt}.perf.Fg', units='lbf')),
+        'TSFC':      _scalar(prob.get_val(f'{pt}.perf.TSFC')),
+        'W':         _scalar(prob.get_val(f'{pt}.balance.W', units='lbm/s')),
+        'BPR':       _scalar(prob.get_val(f'{pt}.balance.BPR')),
+        'FAR_core':  _scalar(prob.get_val(f'{pt}.balance.FAR_core')),
+        'FAR_ab':    _scalar(prob.get_val(f'{pt}.balance.FAR_ab')) if afterburn else 0.0,
+        'OPR':       _scalar(prob[f'{pt}.fan.PR'] * prob[f'{pt}.hpc.PR']),
+        'fan_PR':    _scalar(prob[f'{pt}.fan.PR']),
+        'hpc_PR':    _scalar(prob[f'{pt}.hpc.PR']),
+        'hpt_PR':    _scalar(prob[f'{pt}.hpt.PR']),
+        'lpt_PR':    _scalar(prob[f'{pt}.lpt.PR']),
+        'T4':        _scalar(prob.get_val(f'{pt}.burner.Fl_O:tot:T', units='degR')),
+        'T7':        _scalar(prob.get_val(f'{pt}.afterburner.Fl_O:tot:T', units='degR')),
+        'LP_Nmech':  _scalar(prob.get_val(f'{pt}.balance.LP_Nmech', units='rpm')),
+        'HP_Nmech':  _scalar(prob.get_val(f'{pt}.balance.HP_Nmech', units='rpm')),
     }
 
 
@@ -248,9 +269,22 @@ class SweepRunner:
             bounds['balance.FAR_ab'] = _OD_FAR_AB_BOUNDS
         for key, (lo, hi) in bounds.items():
             try:
-                val = float(self.prob[f'{pt}.{key}'])
-            except Exception:
-                continue
+                val = _scalar(self.prob[f'{pt}.{key}'])
+            except Exception as err:
+                # Fail loudly rather than skipping the state. Every key in
+                # _OD_BOUNDS exists in every OD configuration (FAR_ab is added
+                # above only when it does), so an unreadable one means the
+                # table has drifted from the model — and silently skipping it
+                # would retire this guard for that state without a symptom,
+                # which is the exact false-convergence failure it exists to
+                # catch.
+                raise SweepConfigurationError(
+                    f"Cannot read OD balance state '{pt}.{key}' while checking "
+                    f"for bound saturation ({type(err).__name__}: {err}). "
+                    f"_OD_BOUNDS in sweep_utils.py mirrors the bounds declared "
+                    f"in engine_model.py's off-design block; if a balance was "
+                    f"renamed or removed there, update it here too."
+                ) from err
             if hi is not None:
                 tol = _BOUND_TOL_FRAC * (hi - lo)
                 if val > hi - tol or val < lo + tol:
@@ -270,15 +304,16 @@ class SweepRunner:
         """
         pt = self.od_pt
         try:
-            t4 = float(self.prob.get_val(f'{pt}.burner.Fl_O:tot:T', units='degR'))
+            t4 = _scalar(self.prob.get_val(f'{pt}.burner.Fl_O:tot:T',
+                                           units='degR'))
         except Exception:
             return False
         if self.afterburn:
             if abs(t4 - self.mil_Tt4) > _TARGET_TOL_DEGR:
                 return False
             try:
-                t7 = float(self.prob.get_val(f'{pt}.afterburner.Fl_O:tot:T',
-                                             units='degR'))
+                t7 = _scalar(self.prob.get_val(f'{pt}.afterburner.Fl_O:tot:T',
+                                               units='degR'))
             except Exception:
                 return False
             return abs(t7 - power) <= _TARGET_TOL_DEGR
@@ -301,7 +336,8 @@ class SweepRunner:
         newton.options['err_on_non_converge'] = False
         try:
             self.prob.run_model()
-        except Exception:
+        except (om.AnalysisError, RuntimeError) as err:
+            log.warning("Bridge point failed (%s): %s", type(err).__name__, err)
             return False
         finally:
             newton.options['err_on_non_converge'] = True
@@ -311,17 +347,35 @@ class SweepRunner:
         """Run the model. Return True only if Newton actually converged.
 
         Three independent checks must pass:
-          1. prob.run_model() didn't raise AnalysisError (Newton hit atol/rtol).
+          1. prob.run_model() didn't raise (Newton hit atol/rtol).
           2. No BalanceComp state is clipped at its lower/upper bound.
           3. The burner/AB exit temps match the requested power target.
 
         `power` may be None — in that case the target check is skipped (used
         when re-verifying state after a bridge restore, where power doesn't
         correspond to the most recently set conditions).
+
+        RuntimeError is caught alongside AnalysisError because a sufficiently
+        degenerate point doesn't fail in Newton at all — it fails underneath
+        it, in the linear solve, where DirectSolver raises RuntimeError for a
+        singular or rank-deficient Jacobian. That is still just one bad point;
+        letting it propagate would abandon an entire multi-hundred-point sweep
+        over a corner the deck is expected to lose anyway.
+
+        Only those two. Everything else propagates: a mistyped variable or a
+        drifted bounds table raises KeyError, TypeError or
+        SweepConfigurationError, none of which describe a point that merely
+        failed to converge, and all of which should stop the run rather than
+        be recorded as 264 unexplained failures.
         """
         try:
             self.prob.run_model()
-        except om.AnalysisError:
+        except (om.AnalysisError, RuntimeError) as err:
+            # Warning, not debug: this is the only record that a point failed
+            # for a reason other than "Newton ran out of iterations", and a
+            # burst of them across every point is the signature of a real
+            # problem rather than a hard corner.
+            log.warning("Point failed (%s): %s", type(err).__name__, err)
             return False
         if self._state_at_bounds():
             return False
@@ -357,6 +411,17 @@ class SweepRunner:
         prev_pt = None
         power_label = "Tt7" if self.afterburn else "Tt4"
         n_total = len(sweep_points)
+
+        if self._last_good_state is None:
+            # Anchor the fallback on the state we were handed. The problem
+            # arrives with OD converged at design conditions (see
+            # problems.build_dry_problem / build_wet_problem), which is a
+            # perfectly good warm start. Without this, a failure before the
+            # first success has nothing to restore from, so the model stays in
+            # whatever state Newton abandoned and every later point
+            # warm-starts from it — one bad point at the head of the sweep
+            # takes the entire deck with it.
+            self._last_good_state = self._snapshot_state()
 
         for i, pt_cond in enumerate(sweep_points):
             # Check if bridge points are needed

@@ -36,6 +36,9 @@ class BleedOutTestCase(unittest.TestCase):
         cycle.set_input_defaults('T', 500., units='degR')
         cycle.set_input_defaults('flow_start.W', 500., units='lbm/s')
 
+        cycle.set_input_defaults('bleed.Fl_I:tot:T', units='degR')
+        cycle.set_input_defaults('bleed.Fl_I:tot:P', units='psi')
+
         self.prob.setup(check=False, force_alloc_complex=True)
         self.prob.set_solver_print(level=-1)
 
@@ -46,7 +49,7 @@ class BleedOutTestCase(unittest.TestCase):
         Tt_in = self.prob.get_val('bleed.Fl_I:tot:T', units='degR')
         Pt_in = self.prob.get_val('bleed.Fl_I:tot:P', units='psi')
         W_in = self.prob['bleed.Fl_I:stat:W']
-        
+
         assert_near_equal(self.prob['bleed.Fl_O:tot:T'], Tt_in, tol)
         assert_near_equal(self.prob['bleed.bld1:tot:T'], Tt_in, tol)
         assert_near_equal(self.prob['bleed.bld2:tot:T'], Tt_in, tol)
@@ -59,7 +62,7 @@ class BleedOutTestCase(unittest.TestCase):
         assert_near_equal(self.prob['bleed.bld1:stat:W'], W_in*0.1, tol)
         assert_near_equal(self.prob['bleed.bld2:stat:W'], W_in*0.1, tol)
 
-        partial_data = self.prob.check_partials(out_stream=None, method='cs', 
+        partial_data = self.prob.check_partials(out_stream=None, method='cs',
                                                 includes=['bleed.*'], excludes=['*.base_thermo.*',])
         assert_check_partials(partial_data, atol=1e-8, rtol=1e-8)
 

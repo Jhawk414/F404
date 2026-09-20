@@ -1,3 +1,38 @@
 [build-system]
 build-backend = "setuptools.build_meta"
 requires = ["setuptools"]
+
+[tool.pytest.ini_options]
+# Tests import the F404 application code as the `F404_pycycle` package. Putting
+# src/ on the path here means `pytest` works from a fresh clone without an
+# editable install first, and keeps CI from depending on install mode.
+pythonpath = ["src"]
+# Scope collection to tests/ — the repo root also contains the vendored
+# pycycle/ library and its own upstream test suite, which is run by testflo.
+testpaths = ["tests"]
+# Per-module convention from issue #5: tests/<module>_test.py.
+python_files = ["*_test.py"]
+markers = [
+    "slow: builds and solves a full om.Problem (seconds, not milliseconds)",
+]
+# Order matters: pytest applies these in sequence and the last match wins,
+# so the blanket ignores come first and the targeted error below overrides
+# them for the one case worth failing on.
+filterwarnings = [
+    # pyCycle's Newton iterations legitimately pass through non-physical
+    # intermediate states — negative gamma under a sqrt, bounds violations
+    # the linesearch then pulls back. Expected, and loud enough to bury real
+    # output: ~80 per run of this suite.
+    "ignore::RuntimeWarning",
+    "ignore::openmdao.utils.om_warnings.SolverWarning",
+    # OpenMDAO hands back length-1 arrays; float() on them is deprecated and
+    # will raise in a future NumPy. Reads go through sweep_utils._scalar —
+    # promote the deprecation so a new bare float() can't slip back in.
+    #
+    # Scoped to F404_pycycle by the trailing module pattern. The vendored
+    # pycycle/ library triggers the same deprecation in its own numerics, and
+    # an unscoped rule turns those into hard failures the moment anyone points
+    # pytest at pycycle/ — upstream's warnings are #6's problem, not this
+    # suite's to enforce.
+    "error:Conversion of an array with ndim > 0 to a scalar:DeprecationWarning:F404_pycycle.*",
+]
