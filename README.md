@@ -140,7 +140,7 @@ tracked in [Roadmap](#roadmap).
 ## Testing
 
 ```bash
-pytest tests                    # full suite, ~25 s
+pytest tests                    # full suite, ~35 s
 pytest tests -m "not slow"      # structural and unit tests only, ~6 s
 ```
 
@@ -150,7 +150,9 @@ pure functions or build a model without solving it. `pytest` needs no prior
 install — `pythonpath` in `pyproject.toml` puts `src/` on the path — and runs
 in CI on Ubuntu (3.9, 3.12) and macOS (3.12).
 
-Coverage is 86% of `src/F404_pycycle`. The bulk of the remainder is
+102 tests (one an expected failure tracking
+[#2](https://github.com/Jhawk414/F404/issues/2)), 87% coverage. The bulk of
+the uncovered remainder is
 `sweep_full_envelope.py`'s `if __name__ == "__main__"` block, which can't be
 imported; extracting it behind a real entry point is tracked in
 [#16](https://github.com/Jhawk414/F404/issues/16).
@@ -186,7 +188,7 @@ Done:
 - [x] Cap cycle-deck CSV precision — single `write_deck_csv()` writer with
       per-column decimals (scientific `%.4e` for the fuel-air ratios)
       ([#12](https://github.com/Jhawk414/F404/issues/12))
-- [x] Per-module test suite (`tests/<module>_test.py`), 86% coverage, with
+- [x] Per-module test suite (`tests/<module>_test.py`), 87% coverage, with
       golden DESIGN/OD baselines and regression cover on the
       false-convergence guards ([#5](https://github.com/Jhawk414/F404/issues/5))
 

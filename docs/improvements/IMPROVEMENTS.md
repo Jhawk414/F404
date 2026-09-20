@@ -41,7 +41,7 @@ convergence log" note under item 5.
 > plan below: tests live in a top-level `tests/` directory rather than as
 > `src/` siblings, so the package stays model code only. The
 > `<module>_test.py` naming is kept. A fresh dry/wet baseline was captured,
-> superseding the historical numbers in the table below. Coverage is 86%.
+> superseding the historical numbers in the table below. Coverage is 87%.
 
 For every module under `src/`, add a sibling `<module>_test.py`. Coverage
 should include, per module, as applicable:

@@ -7,7 +7,7 @@ content is preserved below unchanged, under "Prior handoff (14 Sep 26)".
 
 Implemented Phase 1 item #2 below. [#5](https://github.com/Jhawk414/F404/issues/5)
 is done via [PR #15](https://github.com/Jhawk414/F404/pull/15) (branch
-`test/module-test-suite`). **98 tests, ~25 s, 86% coverage.**
+`test/module-test-suite`). **102 tests, ~35 s, 87% coverage.**
 
 ### Restructuring the suite required first
 
@@ -38,8 +38,10 @@ Three things made a test suite impossible to write, all fixed in the PR:
   wet agree *exactly* on everything dimensionless — same PRs, same Tt4, same
   BPR 0.7528 — but land on different DESIGN mass flows (144.1825 vs 137.0927
   lbm/s). The handoff below lists measuring this as #2's first step; it is
-  now a labelled characterisation test that should fail and be deleted when
-  a single sizing serves both modes.
+  recorded on the issue, and encoded in the suite as an
+  `xfail(strict=True)` asserting the *desired* behaviour (equal sizing) — so
+  fixing #2 turns it into an XPASS that fails until the marker is removed,
+  rather than a test that breaks when the product improves.
 - **A latent NumPy 2 break in `sweep_utils.py`.** `float()` on OpenMDAO's
   length-1 arrays, ~18 times per sweep point, deprecated since NumPy 1.25
   and slated to raise. The nasty part: in `_state_at_bounds` and
