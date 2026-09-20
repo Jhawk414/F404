@@ -20,6 +20,7 @@ from F404_pycycle.problems import (
     build_dry_problem,
     build_wet_problem,
 )
+from F404_pycycle.sweep_utils import _scalar
 
 REL = 1e-4
 
@@ -50,7 +51,7 @@ DSN_HP_NMECH = 14000.  # rpm
 
 def assert_matches_baseline(prob, point, baseline):
     for var, expected in baseline.items():
-        actual = float(prob.get_val(f'{point}.{var}'))
+        actual = _scalar(prob.get_val(f'{point}.{var}'))
         assert actual == pytest.approx(expected, rel=REL), (
             f"{point}.{var} drifted: {actual:.8f} vs baseline {expected:.8f}"
         )
@@ -106,7 +107,7 @@ def test_validation_errors_name_the_offending_value_and_the_expected_range():
 def test_dry_design_meets_its_thrust_target(dry_problem):
     prob, _ = dry_problem
 
-    assert float(prob.get_val('DESIGN.perf.Fn', units='lbf')) == pytest.approx(
+    assert _scalar(prob.get_val('DESIGN.perf.Fn', units='lbf')) == pytest.approx(
         DRY_DSN_FN, rel=1e-6)
 
 
@@ -121,7 +122,7 @@ def test_dry_design_matches_baseline(dry_problem):
 def test_dry_design_holds_the_commanded_burner_exit_temperature(dry_problem):
     prob, _ = dry_problem
 
-    assert float(prob.get_val('DESIGN.burner.Fl_O:tot:T', units='degR')) == \
+    assert _scalar(prob.get_val('DESIGN.burner.Fl_O:tot:T', units='degR')) == \
         pytest.approx(MIL_Tt4, rel=1e-6)
 
 
@@ -132,7 +133,7 @@ def test_mixer_streams_are_pressure_matched_at_design(dry_problem):
     # off 1.0 means that balance did not actually close.
     prob, _ = dry_problem
 
-    assert float(prob.get_val('DESIGN.mixer.ER')) == pytest.approx(1.0, rel=1e-6)
+    assert _scalar(prob.get_val('DESIGN.mixer.ER')) == pytest.approx(1.0, rel=1e-6)
 
 
 # ── Off-design consistency ────────────────────────────────────────────────────
@@ -150,8 +151,8 @@ def test_off_design_reproduces_the_design_point(point_fixture, request):
 
     for var in ('perf.Fn', 'perf.TSFC', 'balance.W', 'balance.BPR',
                 'balance.FAR_core'):
-        design = float(prob.get_val(f'DESIGN.{var}'))
-        off_design = float(prob.get_val(f'{mp.od_pt}.{var}'))
+        design = _scalar(prob.get_val(f'DESIGN.{var}'))
+        off_design = _scalar(prob.get_val(f'{mp.od_pt}.{var}'))
         assert off_design == pytest.approx(design, rel=REL), (
             f"{var}: OD {off_design:.8f} != DESIGN {design:.8f} at identical "
             f"conditions"
@@ -166,9 +167,9 @@ def test_off_design_spools_return_to_their_design_speeds(point_fixture, request)
     # rather than a restatement of the point above.
     prob, mp = request.getfixturevalue(point_fixture)
 
-    assert float(prob.get_val(f'{mp.od_pt}.balance.LP_Nmech', units='rpm')) == \
+    assert _scalar(prob.get_val(f'{mp.od_pt}.balance.LP_Nmech', units='rpm')) == \
         pytest.approx(DSN_LP_NMECH, rel=REL)
-    assert float(prob.get_val(f'{mp.od_pt}.balance.HP_Nmech', units='rpm')) == \
+    assert _scalar(prob.get_val(f'{mp.od_pt}.balance.HP_Nmech', units='rpm')) == \
         pytest.approx(DSN_HP_NMECH, rel=REL)
 
 
@@ -178,7 +179,7 @@ def test_off_design_spools_return_to_their_design_speeds(point_fixture, request)
 def test_wet_design_meets_its_thrust_target(wet_problem):
     prob, _ = wet_problem
 
-    assert float(prob.get_val('DESIGN.perf.Fn', units='lbf')) == pytest.approx(
+    assert _scalar(prob.get_val('DESIGN.perf.Fn', units='lbf')) == pytest.approx(
         WET_DSN_FN, rel=1e-6)
 
 
@@ -195,7 +196,7 @@ def test_wet_design_is_anchored_at_max_augmentor_temperature(wet_problem):
     # the wet DESIGN exists; a drifted T7 here silently resizes the engine.
     prob, _ = wet_problem
 
-    assert float(prob.get_val('DESIGN.afterburner.Fl_O:tot:T', units='degR')) \
+    assert _scalar(prob.get_val('DESIGN.afterburner.Fl_O:tot:T', units='degR')) \
         == pytest.approx(DSN_Tt7, rel=1e-6)
 
 
@@ -204,7 +205,7 @@ def test_augmentor_burns_fuel_only_in_wet_mode(dry_problem, wet_problem):
     dry_prob, _ = dry_problem
     wet_prob, _ = wet_problem
 
-    assert float(wet_prob.get_val('DESIGN.balance.FAR_ab')) > 0.
+    assert _scalar(wet_prob.get_val('DESIGN.balance.FAR_ab')) > 0.
     # Dry mode replaces the Combustor with a Duct, so the balance is absent
     # entirely rather than present and zeroed.
     with pytest.raises(Exception):
@@ -219,8 +220,8 @@ def test_afterburner_roughly_doubles_specific_fuel_consumption(dry_problem,
     dry_prob, _ = dry_problem
     wet_prob, _ = wet_problem
 
-    dry_tsfc = float(dry_prob.get_val('DESIGN.perf.TSFC'))
-    wet_tsfc = float(wet_prob.get_val('DESIGN.perf.TSFC'))
+    dry_tsfc = _scalar(dry_prob.get_val('DESIGN.perf.TSFC'))
+    wet_tsfc = _scalar(wet_prob.get_val('DESIGN.perf.TSFC'))
 
     assert wet_tsfc > 2 * dry_tsfc
 
@@ -244,11 +245,11 @@ def test_dry_and_wet_size_different_engines(dry_problem, wet_problem):
     wet_prob, _ = wet_problem
 
     for shared in ('balance.BPR', 'balance.FAR_core', 'fan.PR', 'hpc.PR'):
-        assert float(dry_prob.get_val(f'DESIGN.{shared}')) == pytest.approx(
-            float(wet_prob.get_val(f'DESIGN.{shared}')), rel=REL)
+        assert _scalar(dry_prob.get_val(f'DESIGN.{shared}')) == pytest.approx(
+            _scalar(wet_prob.get_val(f'DESIGN.{shared}')), rel=REL)
 
-    dry_w = float(dry_prob.get_val('DESIGN.balance.W', units='lbm/s'))
-    wet_w = float(wet_prob.get_val('DESIGN.balance.W', units='lbm/s'))
+    dry_w = _scalar(dry_prob.get_val('DESIGN.balance.W', units='lbm/s'))
+    wet_w = _scalar(wet_prob.get_val('DESIGN.balance.W', units='lbm/s'))
     divergence = abs(dry_w - wet_w) / wet_w
 
     assert divergence == pytest.approx(0.0517, abs=1e-3), (
@@ -266,12 +267,12 @@ def test_a_lower_thrust_target_sizes_a_smaller_engine():
     # only being validated — the defaults alone can't show that.
     prob, _ = build_dry_problem(fn_target=DRY_DSN_FN * 0.8, verbose=False)
 
-    assert float(prob.get_val('DESIGN.perf.Fn', units='lbf')) == pytest.approx(
+    assert _scalar(prob.get_val('DESIGN.perf.Fn', units='lbf')) == pytest.approx(
         DRY_DSN_FN * 0.8, rel=1e-6)
-    assert float(prob.get_val('DESIGN.balance.W', units='lbm/s')) < \
+    assert _scalar(prob.get_val('DESIGN.balance.W', units='lbm/s')) < \
         DRY_DESIGN['balance.W']
     # Mass flow scales with thrust; the cycle itself is unchanged.
-    assert float(prob.get_val('DESIGN.balance.BPR')) == pytest.approx(
+    assert _scalar(prob.get_val('DESIGN.balance.BPR')) == pytest.approx(
         DRY_DESIGN['balance.BPR'], rel=REL)
 
 

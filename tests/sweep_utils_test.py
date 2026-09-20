@@ -7,7 +7,6 @@ matters because those guards are the regression surface — they are what
 distinguishes a real solution from a bound-clipped one that Newton is willing
 to call converged.
 """
-import numpy as np
 import pytest
 
 from F404_pycycle.sweep_utils import (
@@ -16,6 +15,7 @@ from F404_pycycle.sweep_utils import (
     _OD_FAR_AB_BOUNDS,
     _TARGET_TOL_DEGR,
     SweepRunner,
+    _scalar,
     build_snake_sweep,
     extract_od_results,
     generate_bridge_points,
@@ -278,7 +278,7 @@ def test_od_bounds_table_matches_the_bounds_the_model_declares(wet_problem):
 
     def scalar(bound):
         # OpenMDAO stores bounds as length-1 arrays.
-        return None if bound is None else float(np.asarray(bound).item())
+        return None if bound is None else _scalar(bound)
 
     expected = dict(_OD_BOUNDS, **{'balance.FAR_ab': _OD_FAR_AB_BOUNDS})
     for key, (lo, hi) in expected.items():

@@ -35,6 +35,18 @@ _BOUND_TOL_FRAC = 0.01
 _TARGET_TOL_DEGR = 5.0
 
 
+def _scalar(value):
+    """Collapse an OpenMDAO value to a plain Python float.
+
+    ``prob.get_val()`` and ``prob[...]`` return length-1 ``ndarray``s, and
+    ``float()`` on an array with ``ndim > 0`` has been deprecated since NumPy
+    1.25 and is slated to raise. Every read in this module goes through here
+    so the deck stays plain floats without accumulating that deprecation
+    across ~18 columns per sweep point.
+    """
+    return float(np.asarray(value).item())
+
+
 def build_snake_sweep(alts, dTs_values, powers):
     """
     Build an ordered sweep matrix using a snake (boustrophedon) pattern.
@@ -124,25 +136,25 @@ def extract_od_results(prob, pt, afterburn=True):
         Performance results.
     """
     return {
-        'alt':       float(prob.get_val(f'{pt}.fc.alt', units='ft')),
-        'dTs':       float(prob.get_val(f'{pt}.fc.dTs', units='degR')),
-        'MN':        float(prob.get_val(f'{pt}.fc.MN')),
-        'Fn':        float(prob.get_val(f'{pt}.perf.Fn', units='lbf')),
-        'Fg':        float(prob.get_val(f'{pt}.perf.Fg', units='lbf')),
-        'TSFC':      float(prob.get_val(f'{pt}.perf.TSFC')),
-        'W':         float(prob.get_val(f'{pt}.balance.W', units='lbm/s')),
-        'BPR':       float(prob.get_val(f'{pt}.balance.BPR')),
-        'FAR_core':  float(prob.get_val(f'{pt}.balance.FAR_core')),
-        'FAR_ab':    float(prob.get_val(f'{pt}.balance.FAR_ab')) if afterburn else 0.0,
-        'OPR':       float(prob[f'{pt}.fan.PR'] * prob[f'{pt}.hpc.PR']),
-        'fan_PR':    float(prob[f'{pt}.fan.PR']),
-        'hpc_PR':    float(prob[f'{pt}.hpc.PR']),
-        'hpt_PR':    float(prob[f'{pt}.hpt.PR']),
-        'lpt_PR':    float(prob[f'{pt}.lpt.PR']),
-        'T4':        float(prob.get_val(f'{pt}.burner.Fl_O:tot:T', units='degR')),
-        'T7':        float(prob.get_val(f'{pt}.afterburner.Fl_O:tot:T', units='degR')),
-        'LP_Nmech':  float(prob.get_val(f'{pt}.balance.LP_Nmech', units='rpm')),
-        'HP_Nmech':  float(prob.get_val(f'{pt}.balance.HP_Nmech', units='rpm')),
+        'alt':       _scalar(prob.get_val(f'{pt}.fc.alt', units='ft')),
+        'dTs':       _scalar(prob.get_val(f'{pt}.fc.dTs', units='degR')),
+        'MN':        _scalar(prob.get_val(f'{pt}.fc.MN')),
+        'Fn':        _scalar(prob.get_val(f'{pt}.perf.Fn', units='lbf')),
+        'Fg':        _scalar(prob.get_val(f'{pt}.perf.Fg', units='lbf')),
+        'TSFC':      _scalar(prob.get_val(f'{pt}.perf.TSFC')),
+        'W':         _scalar(prob.get_val(f'{pt}.balance.W', units='lbm/s')),
+        'BPR':       _scalar(prob.get_val(f'{pt}.balance.BPR')),
+        'FAR_core':  _scalar(prob.get_val(f'{pt}.balance.FAR_core')),
+        'FAR_ab':    _scalar(prob.get_val(f'{pt}.balance.FAR_ab')) if afterburn else 0.0,
+        'OPR':       _scalar(prob[f'{pt}.fan.PR'] * prob[f'{pt}.hpc.PR']),
+        'fan_PR':    _scalar(prob[f'{pt}.fan.PR']),
+        'hpc_PR':    _scalar(prob[f'{pt}.hpc.PR']),
+        'hpt_PR':    _scalar(prob[f'{pt}.hpt.PR']),
+        'lpt_PR':    _scalar(prob[f'{pt}.lpt.PR']),
+        'T4':        _scalar(prob.get_val(f'{pt}.burner.Fl_O:tot:T', units='degR')),
+        'T7':        _scalar(prob.get_val(f'{pt}.afterburner.Fl_O:tot:T', units='degR')),
+        'LP_Nmech':  _scalar(prob.get_val(f'{pt}.balance.LP_Nmech', units='rpm')),
+        'HP_Nmech':  _scalar(prob.get_val(f'{pt}.balance.HP_Nmech', units='rpm')),
     }
 
 
@@ -248,7 +260,7 @@ class SweepRunner:
             bounds['balance.FAR_ab'] = _OD_FAR_AB_BOUNDS
         for key, (lo, hi) in bounds.items():
             try:
-                val = float(self.prob[f'{pt}.{key}'])
+                val = _scalar(self.prob[f'{pt}.{key}'])
             except Exception:
                 continue
             if hi is not None:
@@ -270,15 +282,16 @@ class SweepRunner:
         """
         pt = self.od_pt
         try:
-            t4 = float(self.prob.get_val(f'{pt}.burner.Fl_O:tot:T', units='degR'))
+            t4 = _scalar(self.prob.get_val(f'{pt}.burner.Fl_O:tot:T',
+                                           units='degR'))
         except Exception:
             return False
         if self.afterburn:
             if abs(t4 - self.mil_Tt4) > _TARGET_TOL_DEGR:
                 return False
             try:
-                t7 = float(self.prob.get_val(f'{pt}.afterburner.Fl_O:tot:T',
-                                             units='degR'))
+                t7 = _scalar(self.prob.get_val(f'{pt}.afterburner.Fl_O:tot:T',
+                                               units='degR'))
             except Exception:
                 return False
             return abs(t7 - power) <= _TARGET_TOL_DEGR

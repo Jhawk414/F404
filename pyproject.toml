@@ -15,3 +15,9 @@ python_files = ["*_test.py"]
 markers = [
     "slow: builds and solves a full om.Problem (seconds, not milliseconds)",
 ]
+filterwarnings = [
+    # OpenMDAO hands back length-1 arrays; float() on them is deprecated and
+    # will raise in a future NumPy. Reads go through sweep_utils._scalar —
+    # promote the deprecation so a new bare float() can't slip back in.
+    "error:Conversion of an array with ndim > 0 to a scalar:DeprecationWarning",
+]
