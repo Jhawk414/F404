@@ -324,10 +324,15 @@ def test_a_short_dry_sweep_converges_and_returns_a_deck_frame():
 
 @pytest.mark.slow
 def test_a_sweep_point_that_cannot_converge_is_dropped_not_reported():
-    """An unreachable power target must shrink the deck, not corrupt it.
+    """An unreachable power target must shrink the deck, not corrupt or abort it.
 
-    The bug class this suite exists for: the sweep used to return a row for
-    a point like this, filled with whatever state Newton stalled in.
+    Two failure modes in one test. The deck must not gain a row filled with
+    whatever state Newton stalled in — the bug class this suite exists for —
+    and run_sweep must return normally rather than propagating, since a real
+    sweep is hundreds of points and losing all of them to one bad corner is
+    its own kind of failure. How the point fails is platform-dependent: it
+    may exhaust Newton (AnalysisError) or collapse the Jacobian underneath it
+    (RuntimeError from the linear solve).
     """
     prob, mp = build_dry_problem(verbose=False)
     prob.set_solver_print(level=-1)
@@ -339,3 +344,19 @@ def test_a_sweep_point_that_cannot_converge_is_dropped_not_reported():
                        afterburn=False).run_sweep(points)
 
     assert len(deck) == 0
+
+
+@pytest.mark.slow
+def test_a_failed_point_does_not_abandon_the_rest_of_the_sweep():
+    # The failure is deliberately placed first, so the two points after it
+    # only produce rows if the sweep survived it.
+    prob, mp = build_dry_problem(verbose=False)
+    prob.set_solver_print(level=-1)
+    points = (build_snake_sweep([0.], [0.], [800.])
+              + build_snake_sweep([0.], [0., 10.], [3100.]))
+
+    deck = SweepRunner(prob, od_pt=mp.od_pt, mach=0.001,
+                       afterburn=False).run_sweep(points)
+
+    assert len(deck) == 2
+    assert list(deck['dTs']) == [0., 10.]

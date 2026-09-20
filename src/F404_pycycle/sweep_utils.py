@@ -324,17 +324,25 @@ class SweepRunner:
         """Run the model. Return True only if Newton actually converged.
 
         Three independent checks must pass:
-          1. prob.run_model() didn't raise AnalysisError (Newton hit atol/rtol).
+          1. prob.run_model() didn't raise (Newton hit atol/rtol).
           2. No BalanceComp state is clipped at its lower/upper bound.
           3. The burner/AB exit temps match the requested power target.
 
         `power` may be None — in that case the target check is skipped (used
         when re-verifying state after a bridge restore, where power doesn't
         correspond to the most recently set conditions).
+
+        RuntimeError is caught alongside AnalysisError because a sufficiently
+        degenerate point doesn't fail in Newton at all — it fails underneath
+        it, in the linear solve, where DirectSolver raises RuntimeError for a
+        singular or rank-deficient Jacobian. That is still just one bad point;
+        letting it propagate would abandon an entire multi-hundred-point sweep
+        over a corner the deck is expected to lose anyway.
         """
         try:
             self.prob.run_model()
-        except om.AnalysisError:
+        except (om.AnalysisError, RuntimeError) as err:
+            log.debug("Point failed: %s: %s", type(err).__name__, err)
             return False
         if self._state_at_bounds():
             return False
@@ -370,6 +378,17 @@ class SweepRunner:
         prev_pt = None
         power_label = "Tt7" if self.afterburn else "Tt4"
         n_total = len(sweep_points)
+
+        if self._last_good_state is None:
+            # Anchor the fallback on the state we were handed. The problem
+            # arrives with OD converged at design conditions (see
+            # problems.build_dry_problem / build_wet_problem), which is a
+            # perfectly good warm start. Without this, a failure before the
+            # first success has nothing to restore from, so the model stays in
+            # whatever state Newton abandoned and every later point
+            # warm-starts from it — one bad point at the head of the sweep
+            # takes the entire deck with it.
+            self._last_good_state = self._snapshot_state()
 
         for i, pt_cond in enumerate(sweep_points):
             # Check if bridge points are needed
