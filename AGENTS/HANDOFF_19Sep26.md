@@ -93,12 +93,67 @@ That last row caps the total. An uncallable `__main__` block can't be
 tested — extracting it behind a real entry point is
 [#16](https://github.com/Jhawk414/F404/issues/16).
 
+### Three more bugs, surfaced by CI
+
+The new workflow was the first thing to install this repo from scratch
+*and* import the application code, and the first to run it on a platform
+other than the author's. All three are pre-existing; none were test bugs.
+
+1. **`pandas` was never a declared dependency.** `install_requires` has
+   only ever listed `openmdao`, while `sweep_utils.py` has always imported
+   pandas directly. A clean `pip install -e .[all]` has therefore never
+   produced a working sweep — it only ever worked because pandas happened to
+   be in the environment already. `numpy` is now declared too (it resolved
+   transitively through openmdao).
+2. **One bad point could abort an entire sweep.** `_run_point` caught only
+   `om.AnalysisError`. A sufficiently degenerate point doesn't fail in Newton
+   at all — it fails underneath it, where `DirectSolver` raises
+   `RuntimeError: Jacobian in 'OD' is not full rank`, which propagated
+   straight out of `run_sweep`. Platform-dependent: locally the same point
+   fails cleanly through Newton, so this only appeared on CI.
+3. **A failure before the first success poisoned everything after it.** With
+   (2) fixed the sweep survived but every later point failed —
+   `_last_good_state` is only populated after a point *converges*, so an
+   early failure had nothing to restore from and subsequent points
+   warm-started from the state Newton abandoned. `run_sweep` now seeds the
+   fallback from the state it is handed (OD converged at design conditions).
+
+**(3) is latent, not theoretical.** It stays hidden only because the first
+point of both the dry and wet grids happens to converge. Reorder the grid,
+or widen the envelope via #16/#13, and it presents as a near-empty deck with
+no obvious cause — it looks like "the model broke", not "point 1 failed".
+Worth remembering when #3/#8 start changing which corners converge.
+
+Neither (2) nor (3) was reachable before a test deliberately failed a point.
+
+Also note: the `filterwarnings` rule promoting NumPy's scalar-conversion
+deprecation to an error must stay **scoped to `F404_pycycle.*`**. Unscoped,
+it applies to the whole pytest session and turns the vendored library's own
+deprecations into hard failures the moment anyone runs
+`pytest pycycle/...`. `testpaths` doesn't protect against this — an explicit
+path argument overrides it.
+
+### Known-red check: not ours
+
+`pyCycle Tests` fails 1 of 67 —
+`pycycle/elements/test/test_bleed_out.py`, in the vendored library, with an
+ambiguous-promoted-units `ValueError` under OpenMDAO 3.45.1 (what CI
+installs; the workflow pins `OPENMDAO: 'latest'`). Does **not** reproduce on
+3.39.0. That workflow had never run before — it triggers on `main` pushes
+and PRs targeting `main`, and PR #15 is the first PR since the default
+branch rename and the trigger fix in `3caa85b`, so this has likely been
+broken for a while unobserved. Filed as
+[#18](https://github.com/Jhawk414/F404/issues/18); check upstream for a fix
+before patching locally.
+
 ### New issues filed
 
 - [#16](https://github.com/Jhawk414/F404/issues/16) — proper CLI entry point
   (`design` / `sweep` / `init-config`), absorbing #13's `min,max,step`
   alt/Mach/throttle flags. Either land #13 inside it or land #13 first
   against the current argparse block.
+- [#18](https://github.com/Jhawk414/F404/issues/18) — the vendored
+  `test_bleed_out` failure above.
 - [#17](https://github.com/Jhawk414/F404/issues/17) — pydantic refactor.
   Biggest prize is `_OD_BOUNDS`: a hand-maintained duplicate of
   `engine_model.py`'s declared bounds. PR #15 added a test holding the two
