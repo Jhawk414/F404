@@ -19,5 +19,11 @@ filterwarnings = [
     # OpenMDAO hands back length-1 arrays; float() on them is deprecated and
     # will raise in a future NumPy. Reads go through sweep_utils._scalar —
     # promote the deprecation so a new bare float() can't slip back in.
-    "error:Conversion of an array with ndim > 0 to a scalar:DeprecationWarning",
+    #
+    # Scoped to F404_pycycle by the trailing module pattern. The vendored
+    # pycycle/ library triggers the same deprecation in its own numerics, and
+    # an unscoped rule turns those into hard failures the moment anyone points
+    # pytest at pycycle/ — upstream's warnings are #6's problem, not this
+    # suite's to enforce.
+    "error:Conversion of an array with ndim > 0 to a scalar:DeprecationWarning:F404_pycycle.*",
 ]
