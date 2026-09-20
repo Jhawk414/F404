@@ -9,5 +9,17 @@
 *testflo_report.out
 .venv/
 __pycache__/
-/MFTF_od_CRZ_out/
-.gitignore
+
+# OpenMDAO writes a <script_name>_out/ reports directory next to whatever
+# script is run. These are per-run artifacts, never reviewed output.
+*_out/
+
+# Cycle decks are only committed once reviewed, and only under deck/.
+# Sweep runs drop them in the working directory.
+/cycle_deck_*.csv
+src/**/cycle_deck_*.csv
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
