@@ -44,9 +44,8 @@ vendored upstream `pycycle` library at the repo root (see
 | `src/F404_pycycle/mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: links a DESIGN point and an off-design (OD) point, transferring map scalars and station areas |
 | `src/F404_pycycle/sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner`, result extraction |
 | `src/F404_pycycle/sweep_full_envelope.py` | CLI driver: runs the alt/dTs/throttle sweep for dry, wet, or both modes |
-| `src/F404_pycycle/run_design_od.py` | Single DESIGN and OD point runner for regression checking |
 | `src/F404_pycycle/printer.py` | Console table formatter for DESIGN/OD results |
-| `src/F404_pycycle/test_modes.py` | Smoke test exercising dry/wet DESIGN+OD in sequence |
+| `tests/` | pytest suite, one `<module>_test.py` per module ([#5](https://github.com/Jhawk414/F404/issues/5)) |
 | `deck/` | Cycle-deck output CSVs |
 | `docs/` | System architecture diagrams (`f404_cycle.d2`, `f404_cycle.svg`), planning docs (`improvements/`), and reference PDFs (`unclassified_perf_data/`) |
 | `AGENTS/` | Session handoff notes |
@@ -123,16 +122,13 @@ Requires Python 3.9+ and OpenMDAO 3.10.0+.
 
 ## Usage
 
-Run a single DESIGN and off-design point for verification:
-
-```bash
-python src/F404_pycycle/run_design_od.py
-```
+`src/F404_pycycle/` is an importable package (installed by the editable
+install above), so entry points are run with `-m`:
 
 Run the altitude/dTs/throttle sweep for dry and wet modes:
 
 ```bash
-python src/F404_pycycle/sweep_full_envelope.py --mode both
+python -m F404_pycycle.sweep_full_envelope --mode both
 ```
 
 Use `--mode dry` or `--mode wet` to run an individual mode. Output files

@@ -1,3 +1,17 @@
 [build-system]
 build-backend = "setuptools.build_meta"
 requires = ["setuptools"]
+
+[tool.pytest.ini_options]
+# Tests import the F404 application code as the `F404_pycycle` package. Putting
+# src/ on the path here means `pytest` works from a fresh clone without an
+# editable install first, and keeps CI from depending on install mode.
+pythonpath = ["src"]
+# Scope collection to tests/ — the repo root also contains the vendored
+# pycycle/ library and its own upstream test suite, which is run by testflo.
+testpaths = ["tests"]
+# Per-module convention from issue #5: tests/<module>_test.py.
+python_files = ["*_test.py"]
+markers = [
+    "slow: builds and solves a full om.Problem (seconds, not milliseconds)",
+]

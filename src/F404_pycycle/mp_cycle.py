@@ -1,6 +1,6 @@
 import pycycle.api as pyc
 
-from engine_model import MixedFlowTurbofan
+from F404_pycycle.engine_model import MixedFlowTurbofan
 
 
 class MPMixedFlowTurbofan(pyc.MPCycle):

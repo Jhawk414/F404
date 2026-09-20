@@ -11,8 +11,11 @@ __version__ = re.findall(
 # optional dependencies, by category (currently just 'test')
 optional_dependencies = {
     'test': [
+        # testflo/parameterized drive the vendored pycycle/ suite upstream;
+        # pytest drives the F404 suite under tests/ (pythonpath ini needs 7+).
         'testflo>=1.3.6',
         'parameterized',
+        'pytest>=7.0',
     ]
 }
 
@@ -31,6 +34,10 @@ setup(name='om-pycycle',
       """,
 
       packages=[
+          # F404 application code (src/ layout). Shares this distribution with
+          # the vendored library rather than carrying a second setup.py, so a
+          # single `pip install -e .` covers the whole repo.
+          'F404_pycycle',
           'pycycle',
           'pycycle.elements',
           'pycycle.elements.test',
@@ -48,6 +55,7 @@ setup(name='om-pycycle',
       install_requires=[
         'openmdao>=3.10.0',
       ],
+    package_dir={'F404_pycycle': 'src/F404_pycycle'},
     package_data={
         'pycycle.elements.test': ['reg_data/*.csv'],
         'pycycle.thermo.test': ['*.csv'],

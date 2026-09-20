@@ -31,9 +31,9 @@ import numpy as np
 import openmdao.api as om
 import pandas as pd
 
-from mp_cycle import MPMixedFlowTurbofan
-from printer import page_viewer
-from sweep_utils import build_snake_sweep, SweepRunner
+from F404_pycycle.mp_cycle import MPMixedFlowTurbofan
+from F404_pycycle.printer import page_viewer
+from F404_pycycle.sweep_utils import build_snake_sweep, SweepRunner
 
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 try:
