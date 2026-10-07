@@ -12,7 +12,10 @@ Input is validated eagerly: a malformed flag stops the run before any model is
 built. A partial or misread range that silently swept the wrong envelope would
 only be discovered later, in a deck that doesn't match what was asked for.
 """
+import argparse
 import math
+import sys
+from pathlib import Path
 
 import numpy as np
 
@@ -119,3 +122,159 @@ def throttle_axis(text):
             f"{values[0]:g}"
         )
     return values[::-1]
+
+
+# ── argparse wiring ───────────────────────────────────────────────────────────
+
+def _axis_arg(builder):
+    """Adapt an axis builder to argparse's ``type=``.
+
+    argparse only reports a type function's message when it raises
+    ArgumentTypeError; a bare ValueError becomes a generic "invalid value".
+    """
+    def convert(text):
+        try:
+            return builder(text)
+        except RangeError as exc:
+            raise argparse.ArgumentTypeError(str(exc)) from None
+    return convert
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        prog='f404',
+        description="GE F404 mixed-flow turbofan cycle model.",
+    )
+    sub = parser.add_subparsers(dest='command', required=True, metavar='COMMAND')
+
+    sweep = sub.add_parser(
+        'sweep',
+        help="run the alt/dTs/throttle sweep and write cycle decks",
+        description="Sweep the sized engine over altitude, temperature offset "
+                    "and throttle, writing one CSV deck per mode. Each range "
+                    "flag takes min,max,step (inclusive of max), bare or "
+                    "bracketed; omitted flags keep the default grid.",
+    )
+    sweep.add_argument(
+        '--mode', choices=['dry', 'wet', 'both'], default='both',
+        help="dry (mil power and below), wet (afterburning) or both "
+             "(default: both)")
+    sweep.add_argument(
+        '--alt', type=_axis_arg(alt_axis), metavar='MIN,MAX,STEP',
+        help="altitude, ft (default: 0,5000,2500)")
+    sweep.add_argument(
+        '--dts', type=_axis_arg(dts_axis), metavar='MIN,MAX,STEP',
+        help="ISA temperature offset, degR; swept hot side first "
+             "(default: -50,50,10)")
+    sweep.add_argument(
+        '--throttle', type=_axis_arg(throttle_axis), metavar='MIN,MAX,STEP',
+        help="Tt4 in dry mode, Tt7 in wet mode, degR; swept high to low "
+             "(default: 2500,3100,200 dry / 3200,3800,200 wet). Requires "
+             "--mode dry or wet, since the two are different temperatures")
+    sweep.add_argument(
+        '--out', type=Path, default=Path('.'), metavar='DIR',
+        help="directory for the decks, created if missing (default: .)")
+    sweep.set_defaults(handler=_run_sweep_command)
+
+    design = sub.add_parser(
+        'design',
+        help="solve and print one DESIGN + OD point",
+        description="Size the engine at sea-level static and print the DESIGN "
+                    "and OD result tables, without running a sweep.",
+    )
+    design.add_argument(
+        '--mode', choices=['dry', 'wet', 'both'], default='both',
+        help="which engine to size (default: both)")
+    design.add_argument(
+        '--fn-target', type=float, metavar='LBF',
+        help="DESIGN thrust target, lbf (default: 11000 dry / 17700 wet). "
+             "Requires --mode dry or wet")
+    design.add_argument(
+        '--mil-tt4', type=float, metavar='DEGR',
+        help="core burner exit temperature, degR (default: 3100)")
+    design.add_argument(
+        '--dsn-tt7', type=float, metavar='DEGR',
+        help="wet DESIGN afterburner exit temperature, degR (default: 3800). "
+             "Wet mode only")
+    design.set_defaults(handler=_run_design_command)
+    return parser
+
+
+def _run_sweep_command(args, parser):
+    if args.throttle is not None and args.mode == 'both':
+        parser.error(
+            "--throttle is Tt4 in dry mode and Tt7 in wet mode, so one range "
+            "can't serve --mode both. Run --mode dry and --mode wet separately.")
+    if args.out.exists() and not args.out.is_dir():
+        parser.error(f"--out {args.out} exists and is not a directory")
+
+    # Imported here, not at module level, so that --help and every argument
+    # error above return immediately instead of after loading OpenMDAO.
+    from F404_pycycle.problems import MIL_Tt4
+    from F404_pycycle import sweep_full_envelope as sfe
+
+    if args.throttle is not None and args.mode == 'wet' and min(args.throttle) <= MIL_Tt4:
+        parser.error(
+            f"--throttle for wet mode is Tt7 and must exceed the fixed core "
+            f"Tt4 of {MIL_Tt4:g} degR (the afterburner only adds heat), got a "
+            f"minimum of {min(args.throttle):g}")
+
+    throttle = {'dry': sfe.DEFAULT_DRY_POWERS, 'wet': sfe.DEFAULT_WET_POWERS}
+    if args.throttle is not None:
+        throttle[args.mode] = args.throttle
+
+    sfe.configure_runtime()
+    sfe.run_sweeps(
+        args.mode,
+        alts=args.alt if args.alt is not None else sfe.DEFAULT_ALTS,
+        dTs_vals=args.dts if args.dts is not None else sfe.DEFAULT_DTS,
+        dry_powers=throttle['dry'],
+        wet_powers=throttle['wet'],
+        out_dir=args.out,
+    )
+    return 0
+
+
+def _run_design_command(args, parser):
+    if args.fn_target is not None and args.mode == 'both':
+        parser.error(
+            "--fn-target is a thrust target for one engine, and dry and wet "
+            "are sized to different thrusts. Use --mode dry or --mode wet.")
+    if args.dsn_tt7 is not None and args.mode == 'dry':
+        parser.error("--dsn-tt7 only applies to the wet (afterburning) design")
+
+    import openmdao.api as om
+    from F404_pycycle.problems import build_dry_problem, build_wet_problem
+
+    common = {}
+    if args.mil_tt4 is not None:
+        common['mil_Tt4'] = args.mil_tt4
+    if args.fn_target is not None:
+        common['fn_target'] = args.fn_target
+
+    try:
+        if args.mode in ('dry', 'both'):
+            build_dry_problem(**common)
+        if args.mode in ('wet', 'both'):
+            wet = dict(common)
+            if args.dsn_tt7 is not None:
+                wet['dsn_Tt7'] = args.dsn_tt7
+            build_wet_problem(**wet)
+    except ValueError as exc:
+        parser.error(str(exc))
+    except om.AnalysisError as exc:
+        print(f"f404 design: the DESIGN solve did not converge: {exc}",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
+def main(argv=None):
+    """Run the CLI and return its exit status."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return args.handler(args, parser)
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -17,12 +17,11 @@ Wet sweep
   - DESIGN anchor: Tt7=3800 degR (max AB), Fn=17,700 lbf — correct sizing point
   - Sweep covers partial-AB range (3200–3800 degR); thrust is an output, not a target
 
-Usage:
-    python -m F404_pycycle.sweep_full_envelope              # both (default)
-    python -m F404_pycycle.sweep_full_envelope --mode dry   # dry sweep only
-    python -m F404_pycycle.sweep_full_envelope --mode wet   # wet sweep only
+Usage (see F404_pycycle.cli for the full flag set):
+    f404 sweep                       # both modes, default grid
+    f404 sweep --mode dry            # dry sweep only
+    f404 sweep --mode wet --alt 0,10000,1000 --out decks/run1
 """
-import argparse
 import logging
 import time
 import warnings
@@ -188,16 +187,9 @@ def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
     return results
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__.split('\n', 1)[0])
-    parser.add_argument('--mode', choices=['dry', 'wet', 'both'], default='both',
-                        help="Sweep mode (default: both). Use 'dry' or 'wet' "
-                             "to run only one mode without re-running the other.")
-    args = parser.parse_args(argv)
-
-    configure_runtime()
-    run_sweeps(args.mode)
-
-
 if __name__ == "__main__":
-    main()
+    # Kept so `python -m F404_pycycle.sweep_full_envelope [--mode ...]` still
+    # works; it is the same as `f404 sweep`.
+    import sys
+    from F404_pycycle.cli import main
+    sys.exit(main(['sweep', *sys.argv[1:]]))

@@ -4,8 +4,12 @@ The range flags are the contract: a malformed one must stop the run before a
 model is built, because the alternative is a deck that quietly covers a
 different envelope than the one requested.
 """
+import importlib
+
+import pandas as pd
 import pytest
 
+from F404_pycycle import cli, sweep_full_envelope as sfe
 from F404_pycycle.cli import (
     RangeError,
     alt_axis,
@@ -14,6 +18,7 @@ from F404_pycycle.cli import (
     parse_range,
     throttle_axis,
 )
+from F404_pycycle.problems import MIL_Tt4
 from F404_pycycle.sweep_full_envelope import (
     DEFAULT_ALTS,
     DEFAULT_DRY_POWERS,
@@ -117,3 +122,121 @@ def test_dts_axis_of_cold_only_range_walks_away_from_zero():
 def test_throttle_axis_rejects_non_positive_temperatures():
     with pytest.raises(RangeError, match="positive degR"):
         throttle_axis('0,100,50')
+
+
+# ── command line ──────────────────────────────────────────────────────────────
+# Handlers are exercised with run_sweeps stubbed out, so these check what the
+# CLI asks the driver to do without building a model.
+
+@pytest.fixture
+def recorded(monkeypatch):
+    """Capture the arguments `f404 sweep` hands to run_sweeps."""
+    calls = []
+    monkeypatch.setattr(sfe, 'run_sweeps', lambda *a, **k: calls.append((a, k)))
+    monkeypatch.setattr(sfe, 'configure_runtime', lambda: None)
+    return calls
+
+
+def test_sweep_with_no_flags_uses_the_default_grid(recorded):
+    assert cli.main(['sweep']) == 0
+
+    (mode,), kw = recorded[0]
+    assert mode == 'both'
+    assert list(kw['alts']) == list(DEFAULT_ALTS)
+    assert kw['dTs_vals'] == DEFAULT_DTS
+    assert kw['dry_powers'] == DEFAULT_DRY_POWERS
+    assert kw['wet_powers'] == DEFAULT_WET_POWERS
+    assert kw['out_dir'].as_posix() == '.'
+
+
+def test_sweep_flags_override_only_what_they_name(recorded):
+    cli.main(['sweep', '--mode', 'dry', '--alt', '[0,2000,1000]',
+              '--throttle', '2900,3100,100', '--out', 'somewhere'])
+
+    (mode,), kw = recorded[0]
+    assert mode == 'dry'
+    assert kw['alts'] == [0., 1000., 2000.]
+    assert kw['dry_powers'] == [3100., 3000., 2900.]
+    assert kw['wet_powers'] == DEFAULT_WET_POWERS
+    assert kw['dTs_vals'] == DEFAULT_DTS
+    assert kw['out_dir'].as_posix() == 'somewhere'
+
+
+def test_a_wet_throttle_range_feeds_the_wet_powers(recorded):
+    cli.main(['sweep', '--mode', 'wet', '--throttle', '3300,3500,100'])
+
+    _, kw = recorded[0]
+    assert kw['wet_powers'] == [3500., 3400., 3300.]
+    assert kw['dry_powers'] == DEFAULT_DRY_POWERS
+
+
+def fails(capsys, argv, fragment):
+    """Assert argv exits with usage error 2 and a message containing fragment."""
+    with pytest.raises(SystemExit) as exc:
+        cli.main(argv)
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert fragment in err, err
+
+
+@pytest.mark.parametrize('argv, fragment', [
+    (['sweep', '--alt', '0,10000'], 'exactly 3 values'),
+    (['sweep', '--dts', '0,ten,5'], 'must all be numbers'),
+    (['sweep', '--throttle', '3100,2500,200', '--mode', 'dry'], 'must not exceed max'),
+    (['sweep', '--throttle', '2500,3100,200'], 'can\'t serve --mode both'),
+    (['sweep', '--mode', 'wet', '--throttle', f'{MIL_Tt4 - 100:g},3800,100'],
+     'must exceed the fixed core'),
+    (['sweep', '--mode', 'hot'], 'invalid choice'),
+])
+def test_bad_sweep_arguments_fail_before_any_model_is_built(
+        recorded, capsys, argv, fragment):
+    fails(capsys, argv, fragment)
+    assert recorded == []
+
+
+def test_out_pointing_at_a_file_is_rejected(recorded, capsys, tmp_path):
+    a_file = tmp_path / 'deck.csv'
+    a_file.write_text('x')
+
+    fails(capsys, ['sweep', '--out', str(a_file)], 'not a directory')
+    assert recorded == []
+
+
+def test_a_command_is_required(capsys):
+    with pytest.raises(SystemExit) as exc:
+        cli.main([])
+    assert exc.value.code == 2
+
+
+@pytest.mark.parametrize('argv, fragment', [
+    (['design', '--fn-target', '9000'], 'Use --mode dry or --mode wet'),
+    (['design', '--mode', 'dry', '--dsn-tt7', '3800'], 'wet (afterburning)'),
+    (['design', '--mode', 'dry', '--fn-target', '-5'], 'fn_target must be a positive'),
+    (['design', '--mode', 'dry', '--mil-tt4', 'nan'], 'must be a finite number'),
+    (['design', '--mode', 'wet', '--dsn-tt7', '3000'], 'must exceed mil_Tt4'),
+])
+def test_bad_design_arguments_fail_before_any_solve(capsys, argv, fragment):
+    fails(capsys, argv, fragment)
+
+
+@pytest.mark.slow
+def test_sweep_end_to_end_writes_the_requested_deck(tmp_path, capsys):
+    out = tmp_path / 'nested' / 'run'
+
+    status = cli.main(['sweep', '--mode', 'dry', '--alt', '0,0,1',
+                       '--dts', '0,0,1', '--throttle', '3100,3100,1',
+                       '--out', str(out)])
+
+    deck = pd.read_csv(out / 'cycle_deck_dry.csv')
+    assert status == 0
+    assert len(deck) == 1
+    assert deck['alt'].iloc[0] == 0 and deck['dTs'].iloc[0] == 0
+    assert deck['T4'].iloc[0] == pytest.approx(3100.0, abs=0.01)
+
+
+@pytest.mark.slow
+def test_design_prints_the_requested_engine(capsys):
+    assert cli.main(['design', '--mode', 'dry']) == 0
+
+    out = capsys.readouterr().out
+    assert 'DRY' in out and 'WET' not in out
