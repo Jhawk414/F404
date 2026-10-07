@@ -29,8 +29,12 @@ def print_perf(prob, ptName, file=None):
     print('LPT PR ', prob[ptName+'.lpt.PR'], file=file)
 
 
-def page_viewer(prob, point, file=None):
-    """Print the full station/component table set for one point."""
+def page_viewer(prob, point, file=None, afterburn=True):
+    """Print the full station/component table set for one point.
+
+    ``afterburn=False`` is for dry problems, where the afterburner is a
+    ``pyc.Duct`` with no fuel flow and so has no burner table to print.
+    """
     file = sys.stdout if file is None else file
 
     flow_stations = ['fc.Fl_O', 'inlet.Fl_O', 'inlet_duct.Fl_O', 'fan.Fl_O', 'bypass_duct.Fl_O',
@@ -40,7 +44,7 @@ def page_viewer(prob, point, file=None):
                      'mixer.Fl_O', 'mixer_duct.Fl_O', 'afterburner.Fl_O', 'mixed_nozz.Fl_O']
 
     compressors = ['fan', 'hpc'] #OG: lpc after hpc
-    burners = ['burner', 'afterburner']
+    burners = ['burner', 'afterburner'] if afterburn else ['burner']
     turbines = ['hpt', 'lpt']
     shafts = ['hp_shaft', 'lp_shaft']
 
