@@ -12,6 +12,12 @@ import pytest
 from F404_pycycle.sweep_full_envelope import (
     DECK_HI_PRECISION_COLS,
     DECK_SCI_COLS,
+    DEFAULT_ALTS,
+    DEFAULT_DRY_POWERS,
+    DEFAULT_DTS,
+    DEFAULT_WET_POWERS,
+    run_mode_sweep,
+    run_sweeps,
     write_deck_csv,
 )
 
@@ -116,3 +122,36 @@ def test_written_values_round_trip_within_their_stated_precision(tmp_path):
         assert reread[column] == pytest.approx(original, rel=tolerance), (
             f"{column} lost more precision than intended"
         )
+
+
+# ── Driver ────────────────────────────────────────────────────────────────────
+
+def test_default_grid_is_the_committed_envelope():
+    # The committed decks were generated from this grid. Changing it silently
+    # changes every deck, so it is pinned here rather than inferred.
+    assert list(DEFAULT_ALTS) == [0, 2500, 5000]
+    assert DEFAULT_DTS == [0., 10., 20., 30., 40., 50.,
+                           -10., -20., -30., -40., -50.]
+    assert DEFAULT_DRY_POWERS == [3100., 2900., 2700., 2500.]
+    assert DEFAULT_WET_POWERS == [3800., 3600., 3400., 3200.]
+
+
+@pytest.mark.parametrize('call', [
+    lambda: run_sweeps('hot'),
+    lambda: run_mode_sweep('both', [0.], [0.], [3100.]),
+])
+def test_unknown_mode_is_rejected_before_any_work(call):
+    with pytest.raises(ValueError, match="mode must be"):
+        call()
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize('mode, power', [('dry', 3100.), ('wet', 3800.)])
+def test_run_mode_sweep_writes_a_deck_for_the_requested_grid(tmp_path, mode, power):
+    df, attempted = run_mode_sweep(mode, [0.], [0.], [power], out_dir=tmp_path)
+
+    deck = pd.read_csv(tmp_path / f'cycle_deck_{mode}.csv')
+    assert attempted == 1
+    assert len(df) == len(deck) == 1
+    assert deck['mode'].iloc[0] == mode
+    assert deck['alt'].iloc[0] == 0.0
