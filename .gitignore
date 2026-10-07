@@ -23,3 +23,6 @@ src/**/cycle_deck_*.csv
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Keynote files (binary; kept outside the repo)
+*.key
