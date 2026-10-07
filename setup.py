@@ -69,4 +69,7 @@ setup(name='om-pycycle',
         'pycycle.thermo.tabular': ['*.pkl'],
     },
     extras_require=optional_dependencies,
+    entry_points={
+        'console_scripts': ['f404=F404_pycycle.cli:main'],
+    },
 )

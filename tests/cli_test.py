@@ -219,6 +219,12 @@ def test_bad_design_arguments_fail_before_any_solve(capsys, argv, fragment):
     fails(capsys, argv, fragment)
 
 
+def test_python_dash_m_and_the_console_script_share_one_entry_point():
+    # setup.py registers f404=F404_pycycle.cli:main; __main__ calls the same.
+    assert importlib.import_module('F404_pycycle.cli').main is cli.main
+    assert "f404=F404_pycycle.cli:main" in open('setup.py').read()
+
+
 @pytest.mark.slow
 def test_sweep_end_to_end_writes_the_requested_deck(tmp_path, capsys):
     out = tmp_path / 'nested' / 'run'
