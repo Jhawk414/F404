@@ -51,7 +51,7 @@ vendored upstream `pycycle` library at the repo root (see
 | `src/F404_pycycle/printer.py` | Console table formatter for DESIGN/OD results |
 | `tests/` | pytest suite, one `<module>_test.py` per module ([#5](https://github.com/Jhawk414/F404/issues/5)) |
 | `deck/` | Cycle-deck output CSVs |
-| `docs/` | System architecture diagrams (`f404_cycle.d2`, `f404_cycle.svg`), planning docs (`improvements/`), and reference PDFs (`unclassified_perf_data/`) |
+| `docs/` | System architecture diagrams (`f404_cycle.typ`, `f404_cycle.svg`), planning docs (`improvements/`), and reference PDFs (`unclassified_perf_data/`) |
 | `AGENTS/` | Session handoff notes |
 | `meta/` | Vendored-library provenance (`LICENSE.txt`) |
 | `pycycle/`, `setup.py`, `pyproject.toml`, `example_cycles/` | Vendored upstream `pyCycle` library |
@@ -62,7 +62,7 @@ The thermodynamic cycle model in `engine_model.py` (`MixedFlowTurbofan`) represe
 
 ![F404 Turbofan Cycle Architecture](docs/f404_cycle.svg)
 
-*Diagram source maintained in [`docs/f404_cycle.d2`](docs/f404_cycle.d2).*
+*Diagram source maintained in [`docs/f404_cycle.typ`](docs/f404_cycle.typ).*
 
 Key cycle components and mechanical couplings:
 - **Low Pressure (LP) Spool**: 3-stage fan driven by the single-stage LP turbine via `lp_shaft` (10,000 rpm).
