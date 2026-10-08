@@ -18,9 +18,9 @@ TABLE_HEADINGS = ('FLOW STATION', 'COMPRESSOR', 'BURNER', 'TURBINE',
                   'MIXER', 'NOZZLE', 'SHAFT', 'BLEED')
 
 
-def rendered(render, *args):
+def rendered(render, *args, **kwargs):
     out = io.StringIO()
-    render(*args, file=out)
+    render(*args, file=out, **kwargs)
     return out.getvalue()
 
 
@@ -29,7 +29,7 @@ def rendered(render, *args):
 def test_page_viewer_renders_every_table_in_dry_mode(dry_problem, point):
     prob, _ = dry_problem
 
-    out = rendered(page_viewer, prob, point)
+    out = rendered(page_viewer, prob, point, afterburn=False)
 
     assert point in out
     for heading in TABLE_HEADINGS:

@@ -272,3 +272,17 @@ def test_a_lower_thrust_target_sizes_a_smaller_engine():
     # Mass flow scales with thrust; the cycle itself is unchanged.
     assert _scalar(prob.get_val('DESIGN.balance.BPR')) == pytest.approx(
         DRY_DESIGN['balance.BPR'], rel=REL)
+
+
+# ── Verbose path ──────────────────────────────────────────────────────────────
+
+@pytest.mark.slow
+@pytest.mark.parametrize('build', [build_dry_problem, build_wet_problem])
+def test_verbose_build_prints_both_result_pages(build, capsys):
+    # verbose=True is the default and what `f404 design` relies on. Every other
+    # test passes verbose=False, so without this the print path — which asks
+    # the dry afterburner (a Duct) for a burner table — went unexercised.
+    build()
+
+    out = capsys.readouterr().out
+    assert 'DESIGN' in out and 'OD' in out

@@ -15,8 +15,9 @@ at sea-level-static conditions and sweeps altitude, ambient temperature offset,
 and throttle to generate a converged off-design performance deck.
 
 **Status:** In development. Single-engine model with separate dry (military
-power) and wet (afterburning) design points and altitude/dTs/throttle sweep
-infrastructure. See [Current status](#current-status) for convergence coverage
+power) and wet (afterburning) design points, altitude/dTs/throttle sweep
+infrastructure, and an `f404` command line for sweeps and single design
+points. See [Current status](#current-status) for convergence coverage
 and [Roadmap](#roadmap) for planned work. Not yet validated against public
 F404 performance data.
 
@@ -45,7 +46,8 @@ vendored upstream `pycycle` library at the repo root (see
 | `src/F404_pycycle/mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: links a DESIGN point and an off-design (OD) point, transferring map scalars and station areas |
 | `src/F404_pycycle/problems.py` | `build_dry_problem()` / `build_wet_problem()`: design targets, initial guesses and input validation for each afterburner mode |
 | `src/F404_pycycle/sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner`, result extraction |
-| `src/F404_pycycle/sweep_full_envelope.py` | CLI driver: runs the alt/dTs/throttle sweep for dry, wet, or both modes |
+| `src/F404_pycycle/cli.py` | `f404` command line: `sweep` and `design` subcommands, `min,max,step` range parsing and validation |
+| `src/F404_pycycle/sweep_full_envelope.py` | Sweep driver: default grid, `run_sweeps()` for dry, wet, or both modes, and the cycle-deck CSV writer |
 | `src/F404_pycycle/printer.py` | Console table formatter for DESIGN/OD results |
 | `tests/` | pytest suite, one `<module>_test.py` per module ([#5](https://github.com/Jhawk414/F404/issues/5)) |
 | `deck/` | Cycle-deck output CSVs |
@@ -75,7 +77,8 @@ Current data flow from CLI invocation to output CSV.
 ```mermaid
 flowchart TD
     subgraph Drivers["Entry point (src/F404_pycycle/)"]
-        A["sweep_full_envelope.py<br/>--mode dry|wet|both"]
+        CLI["cli.py  (f404)<br/>sweep · design<br/>--mode · --alt · --dts · --throttle · --out"]
+        A["sweep_full_envelope.py<br/>run_sweeps · write_deck_csv"]
     end
 
     subgraph Model["Cycle model"]
@@ -93,6 +96,8 @@ flowchart TD
         G["deck/*.csv<br/>cycle_deck_dry / _wet / _full_envelope"]
     end
 
+    CLI --> A
+    CLI --> B
     A --> B
     B --> C
     C --> D
@@ -123,24 +128,68 @@ Requires Python 3.9+ and OpenMDAO 3.10.0+.
 
 ## Usage
 
-`src/F404_pycycle/` is an importable package (installed by the editable
-install above), so entry points are run with `-m`:
-
-Run the altitude/dTs/throttle sweep for dry and wet modes:
+`pip install -e .[all]` installs an `f404` command (re-run it in an existing
+checkout to pick up the entry point). `python -m F404_pycycle` is equivalent
+and needs no install beyond the package being importable.
 
 ```bash
-python -m F404_pycycle.sweep_full_envelope --mode both
+f404 sweep                      # dry + wet, default grid, decks in the cwd
+f404 sweep --mode wet           # one mode only
+f404 design --mode dry          # solve and print one DESIGN + OD point
+f404 --help                     # and `f404 sweep --help`, `f404 design --help`
+                                # (rich panels; plain argparse text for usage errors)
 ```
 
-Use `--mode dry` or `--mode wet` to run an individual mode. Output files
-(`cycle_deck_dry.csv`, `cycle_deck_wet.csv`, or `cycle_deck_full_envelope.csv`)
-are written to the working directory. Moving output generation to `deck/` is
-tracked in [Roadmap](#roadmap).
+### `f404 sweep`
+
+Sweeps the sized engine over altitude, temperature offset and throttle, and
+writes `cycle_deck_dry.csv` / `cycle_deck_wet.csv` (plus
+`cycle_deck_full_envelope.csv` for `--mode both`). With no range flags the
+grid is the default one below, so the output matches earlier decks.
+
+| Flag | Meaning | Default |
+|---|---|---|
+| `--mode {dry,wet,both}` | afterburner mode | `both` |
+| `--alt MIN,MAX,STEP` | altitude, ft | `0,5000,2500` |
+| `--dts MIN,MAX,STEP` | ISA temperature offset, R | `-50,50,10` |
+| `--throttle MIN,MAX,STEP` | Tt4 (dry) or Tt7 (wet), R | `2500,3100,200` dry, `3200,3800,200` wet |
+| `--out DIR` | deck directory, created if missing | `.` |
+
+```bash
+f404 sweep --mode wet --alt 0,10000,2500 --dts 0,20,10 --out /tmp/run1
+```
+
+- Each range is one `min,max,step` triple, inclusive of `max`, bare or
+  bracketed (`--alt [0,10000,1000]`). The order is fixed.
+- Axes are walked in the order the solver's warm-starting expects, whatever
+  the flag order: `--dts` hot side first (0, +10 … then −10 …), `--throttle`
+  high power to low.
+- `--throttle` needs `--mode dry` or `--mode wet`: it is a different
+  temperature in each.
+- There is no `--mach` yet; Mach is pinned at 0.001 until a Mach sweep
+  dimension exists in `sweep_utils.py`
+  ([#13](https://github.com/Jhawk414/F404/issues/13)).
+
+A malformed flag stops the run before any model is built, with a message
+naming the problem: a range that isn't exactly three finite numbers, a
+non-positive step, `min` above `max`, a step that doesn't divide `max − min`
+evenly (so the sweep would silently stop short of `max`), an unusable
+`--throttle` or `--out`. Exit status 2 for bad arguments.
+
+### `f404 design`
+
+Solves one DESIGN + OD point at sea-level static and prints the result
+tables, without sweeping. `--mode` picks the engine; `--fn-target`,
+`--mil-tt4` and `--dsn-tt7` override the design targets. A non-converging
+solve exits 1 with the solver's message.
+
+`python -m F404_pycycle.sweep_full_envelope [--mode ...]` still works and is
+the same as `f404 sweep`.
 
 ## Testing
 
 ```bash
-pytest tests                    # full suite, ~35 s
+pytest tests                    # full suite, ~1 min
 pytest tests -m "not slow"      # structural and unit tests only, ~6 s
 ```
 
@@ -150,12 +199,10 @@ pure functions or build a model without solving it. `pytest` needs no prior
 install — `pythonpath` in `pyproject.toml` puts `src/` on the path — and runs
 in CI on Ubuntu (3.9, 3.12) and macOS (3.12).
 
-102 tests (one an expected failure tracking
-[#2](https://github.com/Jhawk414/F404/issues/2)), 87% coverage. The bulk of
-the uncovered remainder is
-`sweep_full_envelope.py`'s `if __name__ == "__main__"` block, which can't be
-imported; extracting it behind a real entry point is tracked in
-[#16](https://github.com/Jhawk414/F404/issues/16).
+167 tests (one an expected failure tracking
+[#2](https://github.com/Jhawk414/F404/issues/2)), 95% coverage. The driver and
+CLI are importable and covered; what remains uncovered is mostly
+`sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 
 ## Current status
 
@@ -168,7 +215,8 @@ alt ∈ {0, 2500, 5000} ft, dTs ∈ {0, ±10, ±20, ±30, ±40, ±50} R, static
 | Dry | 125 / 132 | Tt4 3100 → 2500 R |
 | Wet | 89 / 132 | Tt7 3800 → 3200 R (Tt4 fixed at 3100 R MIL) |
 
-All points with dTs ≥ 0 R converge. Solver failures concentrate at cold
+All points with dTs ≥ 0 R converge. (A local re-run on OpenMDAO 3.39.0 gave
+dry 118 / 132 and wet 89 / 132; the dry difference is not yet explained.) Solver failures concentrate at cold
 (dTs < 0 R), high-altitude, maximum afterburning conditions, tracked in
 [issue #3](https://github.com/Jhawk414/F404/issues/3).
 
@@ -202,8 +250,10 @@ Planned (see `docs/improvements/IMPROVEMENTS.md` for full detail):
       ([#3](https://github.com/Jhawk414/F404/issues/3))
 - [ ] Sync vendored `pycycle/` against upstream
       ([#6](https://github.com/Jhawk414/F404/issues/6))
-- [ ] CLI entry point (`design` / `sweep` / `init-config` subcommands), with
-      `min,max,step` range flags ([#16](https://github.com/Jhawk414/F404/issues/16),
+- [ ] CLI: `sweep` and `design` with `--alt` / `--dts` / `--throttle` ranges
+      are in; still to do are `--mach` (needs a Mach sweep dimension),
+      `init-config` and YAML configuration
+      ([#16](https://github.com/Jhawk414/F404/issues/16),
       [#13](https://github.com/Jhawk414/F404/issues/13))
 - [ ] Pydantic models for design-point inputs, sweep points and the
       duplicated OD bounds table ([#17](https://github.com/Jhawk414/F404/issues/17))

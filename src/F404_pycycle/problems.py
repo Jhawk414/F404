@@ -123,7 +123,7 @@ def _apply_od_inputs(prob, pt, mil_Tt4):
     prob[pt + '.hpc.map.RlineMap'] = 2.0
 
 
-def _solve(prob, pt, label, verbose):
+def _solve(prob, pt, label, verbose, afterburn):
     """Run the DESIGN + OD solve, optionally printing both result pages."""
     prob.set_solver_print(level=-1)
     if verbose:
@@ -135,8 +135,8 @@ def _solve(prob, pt, label, verbose):
     prob.run_model()
 
     if verbose:
-        page_viewer(prob, 'DESIGN')
-        page_viewer(prob, pt)
+        page_viewer(prob, 'DESIGN', afterburn=afterburn)
+        page_viewer(prob, pt, afterburn=afterburn)
 
 
 def build_dry_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, verbose=True):
@@ -169,7 +169,7 @@ def build_dry_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, verbose=True):
     # balance to seed. FAR propagates through from the mixer duct as-is.
     _apply_od_inputs(prob, mp.od_pt, mil_Tt4)
 
-    _solve(prob, mp.od_pt, 'DRY', verbose)
+    _solve(prob, mp.od_pt, 'DRY', verbose, afterburn=False)
     return prob, mp
 
 
@@ -209,5 +209,5 @@ def build_wet_problem(fn_target=WET_DSN_FN, mil_Tt4=MIL_Tt4, dsn_Tt7=DSN_Tt7,
     prob.set_val(pt + '.balance.rhs:FAR_ab', dsn_Tt7, units='degR')
     prob[pt + '.balance.FAR_ab'] = 0.025
 
-    _solve(prob, pt, 'WET', verbose)
+    _solve(prob, pt, 'WET', verbose, afterburn=True)
     return prob, mp

@@ -1,7 +1,98 @@
 # Handoff: F404-pyCycle — Recommended Issue Order
 
-Supersedes `HANDOFF_14Sep26.md` (renamed to this file). The prior handoff's
-content is preserved below unchanged, under "Prior handoff (14 Sep 26)".
+Supersedes `HANDOFF_19Sep26.md` (renamed to this file). Everything from that
+handoff, and from `HANDOFF_14Sep26.md` before it, is preserved below
+unchanged; the 07 Oct 26 session summary is new.
+
+## Session summary (07 Oct 26) — thin CLI (PR #19)
+
+Implemented a deliberately thin slice of
+[#16](https://github.com/Jhawk414/F404/issues/16) /
+[#13](https://github.com/Jhawk414/F404/issues/13) so that the #2 investigation
+(and its subagents) can drive narrow sweeps and single design points without
+editing source. [PR #19](https://github.com/Jhawk414/F404/pull/19), branch
+`feat/cli-entry-point`. **167 tests, 95% coverage** (was 102 / 87%).
+
+**Why this came before #2:** #2 is a trade study that needs many small
+sweeps, a one-point DESIGN probe (for the near-zero `FAR_ab` conditioning
+problem), and isolated output directories — parallel agents sharing a cwd
+would overwrite each other's `cycle_deck_*.csv`. The CLI is kept thin because
+#2 Option 2 collapses the two-problem dry/wet split; `main()` delegates to
+`run_sweeps()` / `run_mode_sweep()` so #2 changes internals, not the CLI.
+
+### What shipped
+
+- **`f404 sweep`** — `--mode {dry,wet,both}`, `--alt`, `--dts`, `--throttle`
+  (each `min,max,step`, inclusive of max, bare or bracketed), `--out DIR`.
+  Omitted flags keep the default grid.
+- **`f404 design`** — one DESIGN + OD point with the printer tables
+  (`--mode`, `--fn-target`, `--mil-tt4`, `--dsn-tt7`).
+- Entry points: `f404` console script (`setup.py`), `python -m F404_pycycle`,
+  and `python -m F404_pycycle.sweep_full_envelope` still works (delegates).
+- `--help` renders as rich panels (new dependency: `rich`, lazily imported);
+  usage errors stay plain argparse text on stderr.
+- **Proof:** `f404 sweep --mode both` decks are **byte-identical** to the
+  pre-change baseline (dry 118/132, wet 89/132, combined 207 rows), and the
+  wet deck is byte-identical to the committed `deck/cycle_deck_wet.csv`.
+
+### Behaviours worth knowing
+
+- **Axis order is fixed by the flags, not by the order given.** `--dts` walks
+  hot side first (0, +10 … then −10 …), `--throttle` goes high power to low —
+  the order the bridge-point warm-start was built around. `-50,50,10`,
+  `2500,3100,200` and `3200,3800,200` reproduce the default grids exactly
+  (pinned by tests).
+- **Fail-fast, before OpenMDAO loads:** not exactly 3 finite numbers; step
+  ≤ 0; min > max; a step that doesn't divide `max − min` (else the sweep
+  silently stops short of max); `--throttle` with `--mode both` (Tt4 vs Tt7);
+  wet `--throttle` at or below the fixed core Tt4; `--out` naming a file.
+  Exit 2 for bad arguments; a non-converging `design` exits 1.
+- **No `--mach`.** Mach is pinned at 0.001 in `SweepRunner`; a Mach sweep
+  needs work in `build_snake_sweep` / `generate_bridge_points`, not a flag.
+  No `init-config`/YAML either (needs #17).
+- `importing sweep_full_envelope` no longer sets logging or warning filters;
+  `configure_runtime()` does, from the CLI.
+
+### Findings
+
+1. **`--mode dry` / `--mode both` crashed on `main`.** `page_viewer` asked
+   the dry afterburner (a `pyc.Duct`) for a burner table → `KeyError:
+   ...afterburner.Wfuel`. Hit by every verbose dry build (the default).
+   Invisible to the suite because all fixtures use `verbose=False`, and
+   invisible on CI because OpenMDAO 3.45 tolerates it; it fails on 3.39. Fixed
+   (`page_viewer(..., afterburn=False)`), with a verbose-build test.
+2. **Dry converged 118/132 locally, not the 125/132 in the README table.**
+   The baseline and the CLI agree, so the CLI didn't cause it. Cause unknown:
+   likely OpenMDAO 3.39 (local) vs. what produced 125, or the stale
+   site-packages `pycycle` (finding 3). **Unresolved — not re-measured
+   after the venv fix.** Wet (89/132) matches the committed deck.
+3. **The local `.venv` held a stale, non-editable copy of `pycycle`** in
+   site-packages and no `F404_pycycle` registration, so it didn't match the
+   repo's vendored tree (this is the "vendored tree is behind in ways nobody
+   is watching" worry from the 19 Sep notes, seen locally). Reinstalled with
+   `pip install -e ".[all]"`; `pycycle` and `F404_pycycle` now resolve to the
+   repo. Anyone with an older checkout needs the same reinstall to get `f404`.
+4. `gh` in this checkout defaults to the upstream `OpenMDAO/pyCycle` — always
+   pass `--repo Jhawk414/F404` (a bare `gh issue view 2` returns upstream's
+   unrelated #2).
+
+### For the #2 investigation
+
+- Use `f404 design --mode dry|wet` to probe one point and `f404 sweep --out
+  <private dir> --alt/--dts/--throttle …` for narrow sweeps. Give each
+  parallel agent its own `--out`.
+- Regression net: golden baselines (1e-4) plus the strict xfail asserting
+  equal dry/wet sizing. Before/after full sweeps with the default grid should
+  stay byte-identical wherever #2 doesn't intend a change.
+- A **target-thrust off-design mode** was discussed and deferred: it adds a
+  balance to the OD solve and changes what `--throttle` means, and is more
+  meaningful once #2 gives one sized engine. If added, keep today's
+  temperature-throttle semantics (e.g. a separate flag) rather than
+  overloading `--throttle`.
+
+**Next:** merge #19, then #2 (still the fundamental one), then #3 + #8 per the
+order below. #6 (vendor sync re-scope) is still open and finding 3 is a reason
+not to forget it.
 
 ## Session summary (19 Sep 26) — #5 test suite (PR #15)
 
@@ -243,15 +334,15 @@ enabler below rather than just another feature.
 | [#8](https://github.com/Jhawk414/F404/issues/8)  | PLA/T7-scheduled nozzle A8 area | enhancement | large |
 | [#10](https://github.com/Jhawk414/F404/issues/10) | Inline creep/LCF life estimation | enhancement | large/exploratory |
 | [#12](https://github.com/Jhawk414/F404/issues/12) | CSV writes full float64 precision | good first issue | ✅ done (PR #14) |
-| [#13](https://github.com/Jhawk414/F404/issues/13) | CLI-configurable sweep ranges | enhancement | medium |
-| [#16](https://github.com/Jhawk414/F404/issues/16) | Proper CLI entry point (absorbs #13) | enhancement | medium |
+| [#13](https://github.com/Jhawk414/F404/issues/13) | CLI-configurable sweep ranges | enhancement | 🟡 partial (PR #19: alt/dTs/throttle; `--mach` open) |
+| [#16](https://github.com/Jhawk414/F404/issues/16) | Proper CLI entry point (absorbs #13) | enhancement | 🟡 partial (PR #19: `sweep`/`design`; `init-config` open) |
 | [#17](https://github.com/Jhawk414/F404/issues/17) | Pydantic models for validated inputs | enhancement | medium |
 
 ## Recommended order
 
 Dependency chain, condensed:
 
-**#12 ✅ → #5 ✅ (baseline) → #6 → [#2 measure ✅] → #3 + #8 → #17 → #16/#13 → #10**
+**#12 ✅ → #5 ✅ (baseline) → thin CLI ✅ (PR #19) → #6 → [#2 measure ✅] → #2 fix → #3 + #8 → #17 → #16/#13 remainder (`--mach`, `init-config`) → #10**
 
 ### Phase 1 — Foundation (before any solver work)
 

@@ -17,15 +17,15 @@ Wet sweep
   - DESIGN anchor: Tt7=3800 degR (max AB), Fn=17,700 lbf — correct sizing point
   - Sweep covers partial-AB range (3200–3800 degR); thrust is an output, not a target
 
-Usage:
-    python -m F404_pycycle.sweep_full_envelope              # both (default)
-    python -m F404_pycycle.sweep_full_envelope --mode dry   # dry sweep only
-    python -m F404_pycycle.sweep_full_envelope --mode wet   # wet sweep only
+Usage (see F404_pycycle.cli for the full flag set):
+    f404 sweep                       # both modes, default grid
+    f404 sweep --mode dry            # dry sweep only
+    f404 sweep --mode wet --alt 0,10000,1000 --out decks/run1
 """
-import argparse
 import logging
 import time
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -35,14 +35,23 @@ from F404_pycycle.problems import (
 )
 from F404_pycycle.sweep_utils import build_snake_sweep, SweepRunner
 
-warnings.filterwarnings('ignore', category=RuntimeWarning)
-try:
-    from openmdao.utils.om_warnings import SolverWarning
-    warnings.filterwarnings('ignore', category=SolverWarning)
-except ImportError:
-    pass
+# ── Default sweep grid (shared by both modes) ────────────────────────────────
+# Crawl-walk-run scope: low altitudes, static conditions on the runway.
+DEFAULT_ALTS = np.arange(0, 5001, 2500)        # [0, 2500, 5000] ft — 3 pts
+# dTs ordering: anchor at 0 (matches OD verification), walk hot first
+# (+10..+50), then jump to cold side (-10..-50). Bridge logic handles
+# the +50 → -10 jump within each alt level.
+DEFAULT_DTS = [0., 10., 20., 30., 40., 50.,
+               -10., -20., -30., -40., -50.]   # 11 pts, hot-first
+MACH = 0.001                                   # static (runway) conditions
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+# Dry: sweep Tt4 from mil (3100) down to part-power (2500)
+DEFAULT_DRY_POWERS = [3100., 2900., 2700., 2500.]   # Tt4, degR
+# Wet: sweep T7 from max (3800) down to min AB (3200)
+DEFAULT_WET_POWERS = [3800., 3600., 3400., 3200.]   # Tt7, degR
+
+BRIDGE_THRESHOLD = {'alt': 2000, 'dTs': 30, 'power': 100}
+MAX_BRIDGE_STEPS = 5
 
 # Columns serialized with 4 decimals rather than the 2-decimal default: rates,
 # ratios, bypass ratio, spool speeds and Mach — the continuous quantities a
@@ -84,86 +93,103 @@ def write_deck_csv(df, path):
     out.to_csv(path, index=False)
 
 
-if __name__ == "__main__":
+def configure_runtime():
+    """Quiet the expected solver noise and set up logging.
 
-    parser = argparse.ArgumentParser(description=__doc__.split('\n', 1)[0])
-    parser.add_argument('--mode', choices=['dry', 'wet', 'both'], default='both',
-                        help="Sweep mode (default: both). Use 'dry' or 'wet' "
-                             "to run only one mode without re-running the other.")
-    args = parser.parse_args()
+    Called from main() rather than at import so that importing this module
+    (tests, other drivers) doesn't reconfigure the host's logging or warnings.
+    """
+    warnings.filterwarnings('ignore', category=RuntimeWarning)
+    try:
+        from openmdao.utils.om_warnings import SolverWarning
+        warnings.filterwarnings('ignore', category=SolverWarning)
+    except ImportError:
+        pass
 
-    # ── Sweep grid (shared by both modes) ────────────────────────────────────
-    # Crawl-walk-run scope: low altitudes, static conditions on the runway.
-    alts      = np.arange(0, 5001, 2500)       # [0, 2500, 5000] ft — 3 pts
-    # dTs ordering: anchor at 0 (matches OD verification), walk hot first
-    # (+10..+50), then jump to cold side (-10..-50). Bridge logic handles
-    # the +50 → -10 jump within each alt level.
-    dTs_vals  = [0., 10., 20., 30., 40., 50.,
-                 -10., -20., -30., -40., -50.]   # 11 pts, hot-first
-    MACH      = 0.001                           # static (runway) conditions
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-    # Dry: sweep Tt4 from mil (3100) down to part-power (2500)
-    dry_powers = [3100., 2900., 2700., 2500.]   # Tt4, degR
 
-    # Wet: sweep T7 from min AB (3200) up to max (3800)
-    wet_powers = [3800., 3600., 3400., 3200.]   # Tt7, degR
+def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.'):
+    """Build the DESIGN problem for one mode, sweep it, and write its deck.
+
+    Parameters
+    ----------
+    mode : {'dry', 'wet'}
+    alts, dTs_vals, powers : sequence of float
+        The sweep axes, already in traversal order. ``powers`` is Tt4 (degR)
+        in dry mode and Tt7 (degR) in wet mode.
+    out_dir : path-like
+        Directory the ``cycle_deck_<mode>.csv`` is written to.
+
+    Returns
+    -------
+    (pandas.DataFrame, int)
+        The converged rows (with a ``mode`` column) and the number of points
+        the sweep attempted.
+    """
+    if mode == 'dry':
+        prob, mp = build_dry_problem()
+        runner_kwargs = dict(afterburn=False)
+    elif mode == 'wet':
+        prob, mp = build_wet_problem()
+        runner_kwargs = dict(afterburn=True, mil_Tt4=MIL_Tt4)
+    else:
+        raise ValueError(f"mode must be 'dry' or 'wet', got {mode!r}")
+    prob.set_solver_print(level=-1)
+
+    sweep_pts = build_snake_sweep(alts, dTs_vals, powers)
+    print(f"\n{mode.capitalize()} sweep matrix: {len(sweep_pts)} points")
+
+    runner = SweepRunner(prob, od_pt=mp.od_pt, mach=MACH, **runner_kwargs)
+    df = runner.run_sweep(
+        sweep_pts,
+        bridge_threshold=BRIDGE_THRESHOLD,
+        max_bridge_steps=MAX_BRIDGE_STEPS,
+    )
+    df['mode'] = mode
+    write_deck_csv(df, Path(out_dir) / f'cycle_deck_{mode}.csv')
+    return df, len(sweep_pts)
+
+
+def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
+               dry_powers=DEFAULT_DRY_POWERS, wet_powers=DEFAULT_WET_POWERS,
+               out_dir='.'):
+    """Run the dry sweep, the wet sweep, or both, and write the decks.
+
+    ``mode`` is 'dry', 'wet' or 'both'; 'both' also writes the combined
+    ``cycle_deck_full_envelope.csv``. Returns ``{mode: DataFrame}`` for the
+    modes that ran.
+    """
+    if mode not in ('dry', 'wet', 'both'):
+        raise ValueError(f"mode must be 'dry', 'wet' or 'both', got {mode!r}")
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     st_total = time.time()
-    df_dry = df_wet = None
-    n_dry = n_wet = 0
+    results, attempted = {}, {}
+    for m, powers in (('dry', dry_powers), ('wet', wet_powers)):
+        if mode in (m, 'both'):
+            results[m], attempted[m] = run_mode_sweep(
+                m, alts, dTs_vals, powers, out_dir)
 
-    # ── DRY SWEEP ────────────────────────────────────────────────────────────
-    if args.mode in ('dry', 'both'):
-        prob_dry, mp_dry = build_dry_problem()
-        prob_dry.set_solver_print(level=-1)
+    if mode == 'both':
+        df_all = pd.concat([results['dry'], results['wet']], ignore_index=True)
+        write_deck_csv(df_all, out_dir / 'cycle_deck_full_envelope.csv')
 
-        dry_sweep_pts = build_snake_sweep(alts, dTs_vals, dry_powers)
-        n_dry = len(dry_sweep_pts)
-        print(f"\nDry sweep matrix: {n_dry} points")
+    print(f"\nSweep complete in {time.time() - st_total:.1f}s")
+    for m, df in results.items():
+        print(f"  {m.capitalize()}: {len(df)} / {attempted[m]} converged "
+              f"→ {out_dir / f'cycle_deck_{m}.csv'}")
+    if mode == 'both':
+        print(f"  Combined: {len(df_all)} rows "
+              f"→ {out_dir / 'cycle_deck_full_envelope.csv'}")
+    return results
 
-        runner_dry = SweepRunner(
-            prob_dry, od_pt=mp_dry.od_pt, mach=MACH,
-            afterburn=False,
-        )
-        df_dry = runner_dry.run_sweep(
-            dry_sweep_pts,
-            bridge_threshold={'alt': 2000, 'dTs': 30, 'power': 100},
-            max_bridge_steps=5,
-        )
-        df_dry['mode'] = 'dry'
-        write_deck_csv(df_dry, 'cycle_deck_dry.csv')
 
-    # ── WET SWEEP ────────────────────────────────────────────────────────────
-    if args.mode in ('wet', 'both'):
-        prob_wet, mp_wet = build_wet_problem()
-        prob_wet.set_solver_print(level=-1)
-
-        wet_sweep_pts = build_snake_sweep(alts, dTs_vals, wet_powers)
-        n_wet = len(wet_sweep_pts)
-        print(f"\nWet sweep matrix: {n_wet} points")
-
-        runner_wet = SweepRunner(
-            prob_wet, od_pt=mp_wet.od_pt, mach=MACH,
-            afterburn=True, mil_Tt4=MIL_Tt4,
-        )
-        df_wet = runner_wet.run_sweep(
-            wet_sweep_pts,
-            bridge_threshold={'alt': 2000, 'dTs': 30, 'power': 100},
-            max_bridge_steps=5,
-        )
-        df_wet['mode'] = 'wet'
-        write_deck_csv(df_wet, 'cycle_deck_wet.csv')
-
-    # ── Combined CSV (only when both modes ran) ──────────────────────────────
-    if df_dry is not None and df_wet is not None:
-        df_all = pd.concat([df_dry, df_wet], ignore_index=True)
-        write_deck_csv(df_all, 'cycle_deck_full_envelope.csv')
-
-    elapsed = time.time() - st_total
-    print(f"\nSweep complete in {elapsed:.1f}s")
-    if df_dry is not None:
-        print(f"  Dry: {len(df_dry)} / {n_dry} converged → cycle_deck_dry.csv")
-    if df_wet is not None:
-        print(f"  Wet: {len(df_wet)} / {n_wet} converged → cycle_deck_wet.csv")
-    if df_dry is not None and df_wet is not None:
-        print(f"  Combined: {len(df_dry) + len(df_wet)} rows → cycle_deck_full_envelope.csv")
+if __name__ == "__main__":
+    # Kept so `python -m F404_pycycle.sweep_full_envelope [--mode ...]` still
+    # works; it is the same as `f404 sweep`.
+    import sys
+    from F404_pycycle.cli import main
+    sys.exit(main(['sweep', *sys.argv[1:]]))
