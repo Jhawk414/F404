@@ -140,8 +140,80 @@ def _axis_arg(builder):
     return convert
 
 
+class _PanelHelpParser(argparse.ArgumentParser):
+    """ArgumentParser that prints ``--help`` as rounded panels.
+
+    Only ``-h``/``--help`` output is restyled. Usage errors still go through
+    argparse's plain ``usage:`` + ``error:`` text on stderr, which is what
+    scripts and agents parse. Subparsers inherit this class, so ``f404 sweep
+    -h`` is styled the same way. When stdout isn't a terminal rich drops the
+    colour but keeps the box characters, so piped help carries no ANSI codes.
+    """
+
+    def _help_sections(self):
+        """Group actions into (title, [(label, help), ...]) for display.
+
+        A "Required" section appears only when some flag is required; the
+        subcommand list is shown as "Commands".
+        """
+        commands, required, options = [], [], []
+        for action in self._actions:
+            if action.help == argparse.SUPPRESS:
+                continue
+            if isinstance(action, argparse._SubParsersAction):
+                commands += [(sub.metavar, sub.help)
+                             for sub in action._choices_actions]
+            elif action.option_strings:
+                label = ', '.join(action.option_strings)
+                if action.nargs != 0:  # takes a value
+                    label += ' ' + (
+                        action.metavar
+                        or ('{' + ','.join(map(str, action.choices)) + '}'
+                            if action.choices else action.dest.upper()))
+                (required if action.required else options).append(
+                    (label, action.help))
+        return [(title, rows) for title, rows in (
+            ('Commands', commands), ('Required', required),
+            ('Options', options)) if rows]
+
+    def _has_required_flags(self):
+        return any(a.required and a.option_strings for a in self._actions)
+
+    def _takes_options_only(self):
+        """True for a leaf command: it has flags and no subcommands."""
+        return not any(isinstance(a, argparse._SubParsersAction)
+                       for a in self._actions)
+
+    def print_help(self, file=None):
+        # Imported here so only help output pays for rich.
+        from rich import box
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        console = Console(file=file, highlight=False)
+        console.print(Text(self.format_usage().rstrip()))
+        if self.description:
+            console.print()
+            console.print(Text(self.description))
+        for title, rows in self._help_sections():
+            grid = Table.grid(padding=(0, 2))
+            grid.add_column(style='bold cyan', no_wrap=True)
+            grid.add_column()
+            for label, text in rows:
+                # Text, not str: help strings contain [..] that rich would
+                # otherwise read as markup.
+                grid.add_row(Text(label), Text(text or ''))
+            console.print(Panel(grid, title=title, title_align='left',
+                                box=box.ROUNDED, padding=(0, 1)))
+        if self._takes_options_only() and not self._has_required_flags():
+            console.print(Text("No flag is required: omitted flags use the "
+                               "defaults shown.", style='dim'))
+
+
 def build_parser():
-    parser = argparse.ArgumentParser(
+    parser = _PanelHelpParser(
         prog='f404',
         description="GE F404 mixed-flow twin-spool turbofan cycle model.",
     )

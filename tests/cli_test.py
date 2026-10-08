@@ -246,3 +246,73 @@ def test_design_prints_the_requested_engine(capsys):
 
     out = capsys.readouterr().out
     assert 'DRY' in out and 'WET' not in out
+
+
+# ── help rendering ────────────────────────────────────────────────────────────
+
+def help_text(capsys, *argv):
+    with pytest.raises(SystemExit) as exc:
+        cli.main([*argv, '-h'])
+    assert exc.value.code == 0
+    return capsys.readouterr().out
+
+
+def test_top_level_help_lists_commands_in_a_rounded_panel(capsys):
+    out = help_text(capsys)
+
+    assert 'GE F404 mixed-flow twin-spool turbofan cycle model.' in out
+    assert '╭─ Commands' in out and '╰' in out
+    assert 'sweep' in out and 'design' in out
+
+
+def test_sweep_help_documents_every_flag_with_its_default(capsys):
+    out = help_text(capsys, 'sweep')
+
+    for fragment in ('--mode {dry,wet,both}', '--alt MIN,MAX,STEP',
+                     '--dts MIN,MAX,STEP', '--throttle MIN,MAX,STEP',
+                     '--out DIR', '0,5000,2500', '-50,50,10'):
+        assert fragment in out, fragment
+
+
+def test_help_says_when_no_flag_is_required(capsys):
+    assert 'No flag is required' in help_text(capsys, 'sweep')
+    assert 'No flag is required' in help_text(capsys, 'design')
+
+
+def test_help_has_no_required_section_while_nothing_is_required(capsys):
+    assert 'Required' not in help_text(capsys, 'sweep')
+
+
+def test_a_required_flag_gets_its_own_panel(capsys):
+    parser = cli._PanelHelpParser(prog='x')
+    parser.add_argument('--must', required=True, metavar='N', help='needed')
+    parser.add_argument('--may', help='optional')
+
+    parser.print_help()
+
+    out = capsys.readouterr().out
+    assert '╭─ Required' in out and '╭─ Options' in out
+    assert 'No flag is required' not in out
+    assert out.index('--must N') < out.index('--may')
+
+
+def test_piped_help_carries_no_ansi_escape_codes(capsys):
+    assert '\x1b' not in help_text(capsys, 'sweep')
+
+
+def test_bracketed_text_in_help_is_not_read_as_markup(capsys):
+    parser = cli._PanelHelpParser(prog='x')
+    parser.add_argument('--r', help='e.g. [0,10000,1000] and [bold]')
+
+    parser.print_help()
+
+    assert '[0,10000,1000] and [bold]' in capsys.readouterr().out
+
+
+def test_usage_errors_stay_plain_argparse_text(capsys):
+    with pytest.raises(SystemExit):
+        cli.main(['sweep', '--alt', '0,1'])
+
+    err = capsys.readouterr().err
+    assert err.startswith('usage: f404 sweep')
+    assert '╭' not in err and 'error: argument --alt' in err
