@@ -156,8 +156,13 @@ grid is the default one below, so the output matches earlier decks.
 | `--out DIR` | deck directory, created if missing | `.` |
 
 ```bash
-f404 sweep --mode wet --alt 0,10000,2500 --dts 0,20,10 --out /tmp/run1
+# Wet sweep: T7 from 3800 down to 3200 R (Tt4 held at mil, 3100 R)
+f404 sweep --mode wet --alt 0,10000,2500 --dts 0,20,10 \
+           --throttle 3200,3800,200 --out /tmp/run1
 ```
+
+`--throttle` is shown here at its wet default for completeness; leave it off
+to get the same T7 values.
 
 - Each range is one `min,max,step` triple, inclusive of `max`, bare or
   bracketed (`--alt [0,10000,1000]`). The order is fixed.
