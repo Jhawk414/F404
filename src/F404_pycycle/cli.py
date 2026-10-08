@@ -143,7 +143,7 @@ def _axis_arg(builder):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog='f404',
-        description="GE F404 mixed-flow turbofan cycle model.",
+        description="GE F404 mixed-flow twin-spool turbofan cycle model.",
     )
     sub = parser.add_subparsers(dest='command', required=True, metavar='COMMAND')
 
