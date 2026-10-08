@@ -15,8 +15,9 @@ at sea-level-static conditions and sweeps altitude, ambient temperature offset,
 and throttle to generate a converged off-design performance deck.
 
 **Status:** In development. Single-engine model with separate dry (military
-power) and wet (afterburning) design points and altitude/dTs/throttle sweep
-infrastructure. See [Current status](#current-status) for convergence coverage
+power) and wet (afterburning) design points, altitude/dTs/throttle sweep
+infrastructure, and an `f404` command line for sweeps and single design
+points. See [Current status](#current-status) for convergence coverage
 and [Roadmap](#roadmap) for planned work. Not yet validated against public
 F404 performance data.
 
@@ -214,7 +215,8 @@ alt ∈ {0, 2500, 5000} ft, dTs ∈ {0, ±10, ±20, ±30, ±40, ±50} R, static
 | Dry | 125 / 132 | Tt4 3100 → 2500 R |
 | Wet | 89 / 132 | Tt7 3800 → 3200 R (Tt4 fixed at 3100 R MIL) |
 
-All points with dTs ≥ 0 R converge. Solver failures concentrate at cold
+All points with dTs ≥ 0 R converge. (A local re-run on OpenMDAO 3.39.0 gave
+dry 118 / 132 and wet 89 / 132; the dry difference is not yet explained.) Solver failures concentrate at cold
 (dTs < 0 R), high-altitude, maximum afterburning conditions, tracked in
 [issue #3](https://github.com/Jhawk414/F404/issues/3).
 
