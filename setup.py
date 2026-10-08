@@ -61,6 +61,9 @@ setup(name='om-pycycle',
         # F404_pycycle only: SweepRunner collects results into a DataFrame and
         # write_deck_csv serialises the cycle deck from it.
         'pandas',
+        # F404_pycycle only: the f404 command's --help is rendered as rounded
+        # panels. Falls back to plain text when output isn't a terminal.
+        'rich',
       ],
     package_dir={'F404_pycycle': 'src/F404_pycycle'},
     package_data={
