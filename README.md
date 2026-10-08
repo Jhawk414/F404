@@ -136,6 +136,7 @@ f404 sweep                      # dry + wet, default grid, decks in the cwd
 f404 sweep --mode wet           # one mode only
 f404 design --mode dry          # solve and print one DESIGN + OD point
 f404 --help                     # and `f404 sweep --help`, `f404 design --help`
+                                # (rich panels; plain argparse text for usage errors)
 ```
 
 ### `f404 sweep`
@@ -197,8 +198,8 @@ pure functions or build a model without solving it. `pytest` needs no prior
 install — `pythonpath` in `pyproject.toml` puts `src/` on the path — and runs
 in CI on Ubuntu (3.9, 3.12) and macOS (3.12).
 
-159 tests (one an expected failure tracking
-[#2](https://github.com/Jhawk414/F404/issues/2)), 94% coverage. The driver and
+167 tests (one an expected failure tracking
+[#2](https://github.com/Jhawk414/F404/issues/2)), 95% coverage. The driver and
 CLI are importable and covered; what remains uncovered is mostly
 `sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 
