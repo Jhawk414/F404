@@ -16,8 +16,13 @@ from F404_pycycle.printer import page_viewer
 
 # ── Design-point targets ──────────────────────────────────────────────────────
 MIL_Tt4    = 3100.   # degR — core burner exit at mil power (throttle wall)
-MAX_Tt7    = 3800.   # degR — afterburner exit at max AB
 DRY_DSN_FN = 11000.  # lbf  — SLS mil power (no afterburner); sizes the engine
+MAX_AB_FN  = 17700.  # lbf  — SLS max afterburner; an output the next line calibrates to
+MAX_Tt7    = 3608.   # degR — afterburner exit at max AB. With the augmentor's
+                     # 5.4% hot loss (mp_cycle.py), the dry-sized engine makes
+                     # MAX_AB_FN here. At 3800 R it makes 18,615 lbf: the cycle's
+                     # augmentation ratio (1.69) exceeds the targets' (1.61).
+                     # See docs/adr/0001-single-engine-sizing.md.
 
 # ── Design-point conditions and component performance ─────────────────────────
 DSN_ALT = 0.0   # ft  — sea level static
@@ -152,7 +157,7 @@ def build_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, max_Tt7=MAX_Tt7,
 
     # The wet point starts from the dry-sized engine with the afterburner lit,
     # so it gets its own guesses: near-DESIGN flow and bypass, an AB fuel-air
-    # ratio for ~3800 R, and an A8 about 1.7x the dry throat.
+    # ratio for max AB, and an A8 about 1.7x the dry throat.
     wet = mp.od_pts['wet']
     prob.set_val(wet + '.balance.rhs:FAR_ab', max_Tt7, units='degR')
     prob[wet + '.balance.FAR_ab'] = 0.04

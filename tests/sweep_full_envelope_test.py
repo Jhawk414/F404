@@ -137,7 +137,7 @@ def test_default_grid_is_the_committed_envelope():
     assert DEFAULT_DTS == [0., 10., 20., 30., 40., 50.,
                            -10., -20., -30., -40., -50.]
     assert DEFAULT_DRY_POWERS == [3100., 2900., 2700., 2500.]
-    assert DEFAULT_WET_POWERS == [3800., 3600., 3400., 3200.]
+    assert DEFAULT_WET_POWERS == [3608., 3408., 3208., 3008.]
 
 
 @pytest.mark.parametrize('call', [
@@ -150,7 +150,7 @@ def test_unknown_mode_is_rejected_before_any_work(call):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('mode, power', [('dry', 3100.), ('wet', 3800.)])
+@pytest.mark.parametrize('mode, power', [('dry', 3100.), ('wet', 3608.)])
 def test_run_mode_sweep_writes_a_deck_for_the_requested_grid(tmp_path, mode, power):
     df, attempted = run_mode_sweep(mode, [0.], [0.], [power], out_dir=tmp_path)
 

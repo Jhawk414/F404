@@ -12,6 +12,7 @@ import pytest
 
 from F404_pycycle.problems import (
     DRY_DSN_FN,
+    MAX_AB_FN,
     MAX_Tt7,
     MIL_Tt4,
     build_problem,
@@ -34,14 +35,13 @@ DRY_DESIGN = {
 # The same engine at SLS max afterburner (OD_wet at Tt7 = MAX_Tt7). Thrust is
 # an output here, not a target.
 MAX_AB = {
-    'perf.Fn': 18615.35841749,     # lbf
-    'perf.Fg': 18665.39264996,     # lbf
-    'perf.TSFC': 1.52447529,
+    'perf.Fg': 17750.63508397,     # lbf
+    'perf.TSFC': 1.47868273,
     'balance.W': 144.18248547,     # lbm/s
     'balance.BPR': 0.75281208,
     'balance.FAR_core': 0.02726298,
-    'balance.FAR_ab': 0.04153251,
-    'a8_ctrl.A8': 319.62694512,    # in**2
+    'balance.FAR_ab': 0.03728426,
+    'a8_ctrl.A8': 326.93774791,    # in**2
 }
 
 # Mechanical spool speeds the engine is sized at (mp_cycle.py input defaults).
@@ -174,6 +174,25 @@ def test_off_design_spools_return_to_their_design_speeds(problem, mode):
 
 
 # ── Max afterburner baseline ──────────────────────────────────────────────────
+
+@pytest.mark.slow
+def test_max_afterburner_is_calibrated_to_the_wet_thrust_target(problem):
+    # MAX_Tt7 and the augmentor loss are chosen so the dry-sized engine makes
+    # the F404's SLS max-AB thrust; without them it overshoots by 5.17% (#2).
+    prob, mp = problem
+
+    assert _scalar(prob.get_val(f"{mp.od_pts['wet']}.perf.Fn", units='lbf')) == \
+        pytest.approx(MAX_AB_FN, rel=REL)
+
+
+@pytest.mark.slow
+def test_augmentor_pressure_loss_applies_only_when_lit(problem):
+    # Keeping the dry Duct lossless is what keeps the dry deck unchanged.
+    prob, mp = problem
+
+    assert _scalar(prob.get_val(f"{mp.od_pts['wet']}.afterburner.dPqP")) == 0.054
+    assert _scalar(prob.get_val(f"{mp.od_pts['dry']}.afterburner.dPqP")) == 0.
+
 
 @pytest.mark.slow
 def test_max_afterburner_matches_baseline(problem):

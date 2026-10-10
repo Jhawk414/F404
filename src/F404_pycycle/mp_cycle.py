@@ -44,6 +44,11 @@ class MPMixedFlowTurbofan(pyc.MPCycle):
         self.set_input_defaults('DESIGN.LP_Nmech', 10000, units='rpm')
         self.set_input_defaults('DESIGN.HP_Nmech', 14000, units='rpm')
 
+        # Augmentor hot (Rayleigh + flameholder) pressure loss, from upstream
+        # pyCycle's mixedflow_turbofan example. Wet only: the dry points'
+        # afterburner Duct stays lossless, so the dry deck is unchanged.
+        self.set_input_defaults(self.od_pts['wet'] + '.afterburner.dPqP', 0.054)
+
         # Cycle parameters shared across all points
         self.pyc_add_cycle_param('hp_shaft.HPX', 250, units='hp')
         self.pyc_add_cycle_param('inlet.ram_recovery', 0.9990)

@@ -108,7 +108,7 @@ def test_dts_axis_reproduces_the_default_order():
 
 def test_throttle_axis_reproduces_both_default_power_lists():
     assert throttle_axis('2500,3100,200') == DEFAULT_DRY_POWERS
-    assert throttle_axis('3200,3800,200') == DEFAULT_WET_POWERS
+    assert throttle_axis('3008,3608,200') == DEFAULT_WET_POWERS
 
 
 def test_dts_axis_without_a_cold_side_is_plain_ascending():

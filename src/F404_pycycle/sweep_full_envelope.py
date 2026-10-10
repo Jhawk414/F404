@@ -43,8 +43,8 @@ MACH = 0.001                                   # static (runway) conditions
 
 # Dry: sweep Tt4 from mil (3100) down to part-power (2500)
 DEFAULT_DRY_POWERS = [3100., 2900., 2700., 2500.]   # Tt4, degR
-# Wet: sweep T7 from max (3800) down to min AB (3200)
-DEFAULT_WET_POWERS = [3800., 3600., 3400., 3200.]   # Tt7, degR
+# Wet: sweep T7 from max (problems.MAX_Tt7) down to min AB
+DEFAULT_WET_POWERS = [3608., 3408., 3208., 3008.]   # Tt7, degR
 
 BRIDGE_THRESHOLD = {'alt': 2000, 'dTs': 30, 'power': 100}
 MAX_BRIDGE_STEPS = 5
