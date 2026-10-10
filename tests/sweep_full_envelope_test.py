@@ -30,6 +30,7 @@ ROW = {
     'hpt_PR': 2.6407372249, 'lpt_PR': 2.4477651512,
     'T4': 3100.0000000012, 'T7': 3799.9999958999,
     'LP_Nmech': 9999.9999867901, 'HP_Nmech': 13999.9999421201,
+    'Wf_core': 1.8945960871, 'Wf_ab': 5.6012345678, 'A8': 381.2345678,
     'mode': 'wet',
 }
 
@@ -59,6 +60,8 @@ def test_continuous_quantities_keep_four_decimals(written):
     assert written['TSFC'] == '0.6201'
     assert written['LP_Nmech'] == '10000.0000'  # 9999.99998679, rounded up
     assert written['MN'] == '0.0010'
+    assert written['Wf_core'] == '1.8946'
+    assert written['Wf_ab'] == '5.6012'
 
 
 def test_thrust_temperatures_and_flight_conditions_keep_two_decimals(written):
@@ -66,6 +69,7 @@ def test_thrust_temperatures_and_flight_conditions_keep_two_decimals(written):
     assert written['T4'] == '3100.00'
     assert written['T7'] == '3800.00'
     assert written['alt'] == '2500.00'
+    assert written['A8'] == '381.23'
 
 
 def test_every_numeric_column_is_assigned_a_precision(written):

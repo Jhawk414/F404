@@ -60,7 +60,7 @@ MAX_BRIDGE_STEPS = 5
 DECK_HI_PRECISION_COLS = {
     'MN', 'TSFC', 'W', 'BPR',
     'OPR', 'fan_PR', 'hpc_PR', 'hpt_PR', 'lpt_PR',
-    'LP_Nmech', 'HP_Nmech',
+    'LP_Nmech', 'HP_Nmech', 'Wf_core', 'Wf_ab',
 }
 
 # Fuel-air ratios sit around 0.03–0.04, so a fixed-decimal format wastes its

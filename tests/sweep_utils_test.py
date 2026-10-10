@@ -151,6 +151,8 @@ def _results_state(**overrides):
         f'{OD}.hpt.PR': 2.523, f'{OD}.lpt.PR': 2.401,
         f'{OD}.burner.Fl_O:tot:T': 3100., f'{OD}.afterburner.Fl_O:tot:T': 3800.,
         f'{OD}.balance.LP_Nmech': 10000., f'{OD}.balance.HP_Nmech': 14000.,
+        f'{OD}.burner.Wfuel': 2.42, f'{OD}.afterburner.Wfuel': 4.1,
+        f'{OD}.mixed_nozz.Throat:stat:area': 380.,
     }
     state.update(overrides)
     return state
@@ -163,16 +165,24 @@ def test_extract_od_results_derives_opr_from_the_two_compressors():
     assert row['OPR'] == pytest.approx(4.1 * 6.5)
 
 
-def test_extract_od_results_reports_zero_far_ab_in_dry_mode():
-    # Dry mode has no FAR_ab balance at all; reading it would raise, so the
-    # column has to be filled in as a literal zero to keep the deck schema
-    # identical between modes.
+def test_extract_od_results_reports_zero_augmentor_fuel_in_dry_mode():
+    # Dry mode has no FAR_ab balance and a Duct for an afterburner, so both
+    # reads would raise; the columns are filled in as literal zeros to keep
+    # the deck schema identical between modes.
     state = _results_state()
     del state[f'{OD}.balance.FAR_ab']
+    del state[f'{OD}.afterburner.Wfuel']
 
     row = extract_od_results(StubProblem(state), OD, afterburn=False)
 
     assert row['FAR_ab'] == 0.0
+    assert row['Wf_ab'] == 0.0
+
+
+def test_extract_od_results_reports_fuel_flows_and_nozzle_throat():
+    row = extract_od_results(StubProblem(_results_state()), OD)
+
+    assert (row['Wf_core'], row['Wf_ab'], row['A8']) == (2.42, 4.1, 380.)
 
 
 def test_extract_od_results_schema_matches_between_modes():

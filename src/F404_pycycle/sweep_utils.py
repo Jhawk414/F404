@@ -137,7 +137,7 @@ def extract_od_results(prob, pt, afterburn=True):
         Point name (e.g. 'OD').
     afterburn : bool
         True if the problem was built with afterburn=True (FAR_ab balance exists).
-        False for dry mode — FAR_ab is reported as 0.0.
+        False for dry mode — FAR_ab and Wf_ab are reported as 0.0.
 
     Returns
     -------
@@ -164,6 +164,9 @@ def extract_od_results(prob, pt, afterburn=True):
         'T7':        _scalar(prob.get_val(f'{pt}.afterburner.Fl_O:tot:T', units='degR')),
         'LP_Nmech':  _scalar(prob.get_val(f'{pt}.balance.LP_Nmech', units='rpm')),
         'HP_Nmech':  _scalar(prob.get_val(f'{pt}.balance.HP_Nmech', units='rpm')),
+        'Wf_core':   _scalar(prob.get_val(f'{pt}.burner.Wfuel', units='lbm/s')),
+        'Wf_ab':     _scalar(prob.get_val(f'{pt}.afterburner.Wfuel', units='lbm/s')) if afterburn else 0.0,
+        'A8':        _scalar(prob.get_val(f'{pt}.mixed_nozz.Throat:stat:area', units='inch**2')),
     }
 
 
