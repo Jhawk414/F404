@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GE F404 Turbofan Cycle Deck Explorer</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-sky-500 selection:text-white">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-20 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-400 font-bold font-mono text-sm shadow-inner">
+        F404
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight text-white flex items-center gap-2">
+          GE F404 Turbofan Cycle Deck Explorer
+          <span class="text-xs px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 font-normal">v1.0</span>
+        </h1>
+        <p class="text-xs text-slate-400">Interactive off-design thermodynamic cycle interpolation & performance envelope</p>
+      </div>
+    </div>
+
+    <!-- Right header controls -->
+    <div class="flex items-center gap-4 flex-wrap">
+      <!-- Deck selector -->
+      <div class="flex items-center gap-2">
+        <label for="deckSelect" class="text-xs font-medium text-slate-400">Deck:</label>
+        <select id="deckSelect" class="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500 font-mono">
+          <option>Loading decks...</option>
+        </select>
+      </div>
+
+      <!-- Mode toggle -->
+      <div class="flex items-center gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800" id="modeToggleContainer">
+        <!-- populated dynamically: DRY / WET -->
+      </div>
+
+      <!-- Interpolation status badge -->
+      <div id="methodBadge" class="px-2.5 py-1 text-xs font-mono font-medium rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+        Initializing...
+      </div>
+    </div>
+  </header>
+
+  <!-- Error banner if any -->
+  <div id="errorBanner" class="hidden bg-rose-950/80 border-b border-rose-800 px-6 py-2.5 text-xs text-rose-300 font-mono"></div>
+
+  <!-- Main Grid Layout -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 max-w-[1720px] w-full mx-auto">
+
+    <!-- Left Column: Flight Envelope & Throttle Sliders -->
+    <aside class="lg:col-span-4 flex flex-col gap-5">
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col gap-5">
+        <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <h2 class="text-sm font-semibold text-white tracking-wide uppercase flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-sky-400"></span> Operating Conditions
+          </h2>
+          <button id="resetBtn" class="text-xs text-sky-400 hover:text-sky-300 hover:underline font-medium cursor-pointer">
+            Reset to SLS
+          </button>
+        </div>
+
+        <!-- Altitude Slider -->
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center text-xs">
+            <label for="altSlider" class="font-medium text-slate-300">Altitude (alt)</label>
+            <span id="altValue" class="font-mono text-sky-400 font-semibold text-sm">0 ft</span>
+          </div>
+          <input type="range" id="altSlider" min="0" max="5000" step="100" value="0" class="slider-sky">
+          <div class="flex justify-between text-[11px] text-slate-500 font-mono">
+            <span>Sea Level (0 ft)</span>
+            <span>5,000 ft</span>
+          </div>
+        </div>
+
+        <!-- Delta ISA Temperature Slider -->
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center text-xs">
+            <label for="dtsSlider" class="font-medium text-slate-300">ISA Temp Offset (dTs)</label>
+            <span id="dtsValue" class="font-mono text-sky-400 font-semibold text-sm">+0 °R</span>
+          </div>
+          <input type="range" id="dtsSlider" min="-30" max="50" step="1" value="0" class="slider-sky">
+          <div class="flex justify-between text-[11px] text-slate-500 font-mono">
+            <span>-30 °R (Cold)</span>
+            <span>Std (0)</span>
+            <span>+50 °R (Hot)</span>
+          </div>
+        </div>
+
+        <!-- Throttle Slider (T7 wet / T4 dry) -->
+        <div class="flex flex-col gap-2">
+          <div class="flex justify-between items-center text-xs">
+            <label for="thrSlider" id="thrLabel" class="font-medium text-slate-300">Throttle (T7 Augmentor Exit)</label>
+            <span id="thrValue" class="font-mono text-sky-400 font-semibold text-sm">3800 °R</span>
+          </div>
+          <input type="range" id="thrSlider" min="3200" max="3800" step="10" value="3800" class="slider-sky">
+          <div class="flex justify-between text-[11px] text-slate-500 font-mono">
+            <span>Min (3,200 °R)</span>
+            <span>Max (3,800 °R)</span>
+          </div>
+        </div>
+
+        <!-- Flight Mach number note -->
+        <div class="bg-slate-950/60 border border-slate-800 rounded-lg p-3 text-xs flex justify-between items-center text-slate-400">
+          <span>Flight Condition:</span>
+          <span class="font-mono text-slate-200 font-medium">Static Sea-Level (MN = 0.001)</span>
+        </div>
+      </div>
+
+      <!-- Nearest Grid Points / Weights Inspection Panel -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col gap-3">
+        <h3 class="text-xs font-semibold text-slate-300 tracking-wide uppercase flex items-center justify-between">
+          <span>Active Interpolation Weights</span>
+          <span class="text-[10px] text-slate-500 font-normal">Bounding Nodes</span>
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="text-[11px] text-slate-400 border-b border-slate-800 pb-1 font-mono">
+                <th class="py-1 px-2">alt (ft)</th>
+                <th class="py-1 px-2">dTs (°R)</th>
+                <th class="py-1 px-2">Throttle (°R)</th>
+                <th class="py-1 px-2 text-right">Weight</th>
+              </tr>
+            </thead>
+            <tbody id="cornersTableBody" class="divide-y divide-slate-800/40">
+              <!-- Populated by app.ts -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right Column: Performance Cards, Charts & Cycle Tables -->
+    <section class="lg:col-span-8 flex flex-col gap-6">
+
+      <!-- Top Row: Primary Performance KPI Cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+
+        <!-- Net Thrust -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+          <div class="flex justify-between items-start">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Net Thrust (Fn)</span>
+            <span class="text-[11px] text-slate-500 font-mono">lbf</span>
+          </div>
+          <div class="my-2">
+            <div id="outFn" class="text-2xl font-bold font-mono text-white tracking-tight">17,741.9</div>
+            <div id="outFnKn" class="text-xs font-mono text-slate-400 mt-0.5">78.92 kN</div>
+          </div>
+          <div class="text-[11px] text-slate-500 flex justify-between border-t border-slate-800/60 pt-1.5">
+            <span>Gross Fg:</span>
+            <span id="outFg" class="font-mono text-slate-300">17,746.7 lbf</span>
+          </div>
+        </div>
+
+        <!-- TSFC -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+          <div class="flex justify-between items-start">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">TSFC</span>
+            <span class="text-[11px] text-slate-500 font-mono">lbm/(lbf·hr)</span>
+          </div>
+          <div class="my-2">
+            <div id="outTsfc" class="text-2xl font-bold font-mono text-white tracking-tight">1.5208</div>
+            <div id="outTsfcSi" class="text-xs font-mono text-slate-400 mt-0.5">43.08 g/(kN·s)</div>
+          </div>
+          <div class="text-[11px] text-slate-500 border-t border-slate-800/60 pt-1.5">
+            Specific fuel consumption
+          </div>
+        </div>
+
+        <!-- Air Mass Flow -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+          <div class="flex justify-between items-start">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Air Mass Flow (W)</span>
+            <span class="text-[11px] text-slate-500 font-mono">lbm/s</span>
+          </div>
+          <div class="my-2">
+            <div id="outW" class="text-2xl font-bold font-mono text-white tracking-tight">137.09</div>
+            <div id="outWKg" class="text-xs font-mono text-slate-400 mt-0.5">62.18 kg/s</div>
+          </div>
+          <div class="text-[11px] text-slate-500 flex justify-between border-t border-slate-800/60 pt-1.5">
+            <span>Bypass (BPR):</span>
+            <span id="outBpr" class="font-mono text-slate-300">0.7528</span>
+          </div>
+        </div>
+
+        <!-- Fuel Mass Flow -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+          <div class="flex justify-between items-start">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Fuel Flow (Wf)</span>
+            <span class="text-[11px] text-slate-500 font-mono">lbm/s</span>
+          </div>
+          <div class="my-2">
+            <div id="outWf" class="text-2xl font-bold font-mono text-white tracking-tight">7.495</div>
+            <div id="outWfPph" class="text-xs font-mono text-slate-400 mt-0.5">26,981.8 lbm/hr</div>
+          </div>
+          <div class="text-[11px] text-slate-500 flex justify-between border-t border-slate-800/60 pt-1.5">
+            <span>Core: <span id="outWfCore" class="font-mono text-slate-300">2.12</span></span>
+            <span>AB: <span id="outWfAb" class="font-mono text-slate-300">5.37</span></span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Secondary Row: Nozzle Area & Cycle Limits -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Nozzle Area A8 -->
+        <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <div class="text-xs text-slate-400 font-medium">Nozzle Throat Area (A8)</div>
+            <div id="outA8" class="text-lg font-bold font-mono text-slate-200 mt-1">—</div>
+          </div>
+          <div class="text-xs text-slate-500 font-mono">sq. in.</div>
+        </div>
+
+        <!-- Spool Speeds -->
+        <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <div class="text-xs text-slate-400 font-medium">Shaft Speeds (LP / HP)</div>
+            <div class="text-lg font-bold font-mono text-slate-200 mt-1">
+              <span id="outLpNmech">10,000</span> <span class="text-xs text-slate-500 font-normal">/</span> <span id="outHpNmech">14,000</span>
+            </div>
+          </div>
+          <div class="text-xs text-slate-500 font-mono">RPM</div>
+        </div>
+
+        <!-- Gas Path Temperatures -->
+        <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <div class="text-xs text-slate-400 font-medium">Gas Temps (T4 Core / T7 AB)</div>
+            <div class="text-lg font-bold font-mono text-slate-200 mt-1">
+              <span id="outT4">3,100 °R</span> <span class="text-xs text-slate-500 font-normal">/</span> <span id="outT7">3,800 °R</span>
+            </div>
+          </div>
+          <div class="text-xs text-slate-500 font-mono">degR</div>
+        </div>
+      </div>
+
+      <!-- Interactive 60 FPS Charts Row -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col gap-2">
+          <canvas id="thrustChart" class="w-full h-64 rounded-lg bg-slate-950"></canvas>
+        </div>
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col gap-2">
+          <canvas id="tsfcChart" class="w-full h-64 rounded-lg bg-slate-950"></canvas>
+        </div>
+      </div>
+
+      <!-- Detailed Aeromechanical & Thermodynamic Component Parameters -->
+      <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <h3 class="text-xs font-semibold text-white tracking-wide uppercase mb-3 flex items-center gap-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Thermodynamic & Component Pressure Ratios
+        </h3>
+        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3 text-center">
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+            <div class="text-[10px] text-slate-400 uppercase font-mono">OPR</div>
+            <div id="outOpr" class="text-sm font-bold font-mono text-slate-200 mt-1">26.65</div>
+          </div>
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+            <div class="text-[10px] text-slate-400 uppercase font-mono">Fan PR</div>
+            <div id="outFanPr" class="text-sm font-bold font-mono text-slate-200 mt-1">4.100</div>
+          </div>
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+            <div class="text-[10px] text-slate-400 uppercase font-mono">HPC PR</div>
+            <div id="outHpcPr" class="text-sm font-bold font-mono text-slate-200 mt-1">6.500</div>
+          </div>
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+            <div class="text-[10px] text-slate-400 uppercase font-mono">HPT PR</div>
+            <div id="outHptPr" class="text-sm font-bold font-mono text-slate-200 mt-1">2.641</div>
+          </div>
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+            <div class="text-[10px] text-slate-400 uppercase font-mono">LPT PR</div>
+            <div id="outLptPr" class="text-sm font-bold font-mono text-slate-200 mt-1">2.448</div>
+          </div>
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+            <div class="text-[10px] text-slate-400 uppercase font-mono">FAR Core</div>
+            <div id="outFarCore" class="text-sm font-bold font-mono text-slate-200 mt-1">0.02726</div>
+          </div>
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
+            <div class="text-[10px] text-slate-400 uppercase font-mono">FAR AB</div>
+            <div id="outFarAb" class="text-sm font-bold font-mono text-slate-200 mt-1">0.04153</div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 bg-slate-900/40 px-6 py-3 text-xs text-slate-500 flex justify-between items-center mt-auto">
+    <div>NASA pyCycle F404 Propulsion Modeling Suite</div>
+    <div>Zero-solver client-side trilinear interpolation</div>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
