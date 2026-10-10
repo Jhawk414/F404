@@ -120,8 +120,9 @@ Going forward:
   stacking unrelated work:
   - e.g. `refactor/src-layout` for items 1-2 here
   - e.g. `feature/single-engine-sizing` for the
-    `improvements/single_engine_mode.md` work (dry/wet engines currently
-    differ by ~1-2%)
+    `improvements/single_engine_mode.md` work (dry/wet engines differed by
+    5.17%; resolved as `feat/single-engine-sizing`, see
+    [ADR-0001](../adr/0001-single-engine-sizing.md))
   - Keep the pydantic refactor (item 3) as its own branch once the
     layout work lands, rather than bundling it in.
 
