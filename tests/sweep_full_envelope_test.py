@@ -30,6 +30,7 @@ ROW = {
     'hpt_PR': 2.6407372249, 'lpt_PR': 2.4477651512,
     'T4': 3100.0000000012, 'T7': 3799.9999958999,
     'LP_Nmech': 9999.9999867901, 'HP_Nmech': 13999.9999421201,
+    'Wf_core': 1.8945960871, 'Wf_ab': 5.6012345678, 'A8': 381.2345678,
     'mode': 'wet',
 }
 
@@ -59,6 +60,8 @@ def test_continuous_quantities_keep_four_decimals(written):
     assert written['TSFC'] == '0.6201'
     assert written['LP_Nmech'] == '10000.0000'  # 9999.99998679, rounded up
     assert written['MN'] == '0.0010'
+    assert written['Wf_core'] == '1.8946'
+    assert written['Wf_ab'] == '5.6012'
 
 
 def test_thrust_temperatures_and_flight_conditions_keep_two_decimals(written):
@@ -66,6 +69,7 @@ def test_thrust_temperatures_and_flight_conditions_keep_two_decimals(written):
     assert written['T4'] == '3100.00'
     assert written['T7'] == '3800.00'
     assert written['alt'] == '2500.00'
+    assert written['A8'] == '381.23'
 
 
 def test_every_numeric_column_is_assigned_a_precision(written):
@@ -133,7 +137,7 @@ def test_default_grid_is_the_committed_envelope():
     assert DEFAULT_DTS == [0., 10., 20., 30., 40., 50.,
                            -10., -20., -30., -40., -50.]
     assert DEFAULT_DRY_POWERS == [3100., 2900., 2700., 2500.]
-    assert DEFAULT_WET_POWERS == [3800., 3600., 3400., 3200.]
+    assert DEFAULT_WET_POWERS == [3608., 3408., 3208., 3008.]
 
 
 @pytest.mark.parametrize('call', [
@@ -146,7 +150,7 @@ def test_unknown_mode_is_rejected_before_any_work(call):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('mode, power', [('dry', 3100.), ('wet', 3800.)])
+@pytest.mark.parametrize('mode, power', [('dry', 3100.), ('wet', 3608.)])
 def test_run_mode_sweep_writes_a_deck_for_the_requested_grid(tmp_path, mode, power):
     df, attempted = run_mode_sweep(mode, [0.], [0.], [power], out_dir=tmp_path)
 

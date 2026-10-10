@@ -4,18 +4,21 @@ from F404_pycycle.engine_model import MixedFlowTurbofan
 
 
 class MPMixedFlowTurbofan(pyc.MPCycle):
+    """One sized engine, operated dry and wet.
 
-    def initialize(self):
-        self.options.declare('afterburn', default=True, types=bool,
-                             desc='True = wet/AB mode (FAR_ab balance active). '
-                                  'False = dry mode (afterburner FAR fixed at 0).')
-        super().initialize()
+    DESIGN sizes the engine at dry mil power, with the afterburner as a Duct.
+    Two off-design points run on that geometry: ``OD_dry`` (Duct) and
+    ``OD_wet`` (Combustor, with A8 held by a nozzle control law). The element
+    types differ because a Combustor burning no fuel makes the Jacobian
+    rank-deficient. A sweep drives one point and freezes the other (see
+    ``SweepRunner``). ``od_pts`` maps mode to point name.
+    """
+
+    od_pts = {'dry': 'OD_dry', 'wet': 'OD_wet'}
 
     def setup(self):
-        afterburn = self.options['afterburn']
-
-        # Create design instance of model
-        self.pyc_add_pnt('DESIGN', MixedFlowTurbofan(design=True, thermo_method='TABULAR', afterburn=afterburn))
+        # Create design instance of model — dry mil sizes the gas generator
+        self.pyc_add_pnt('DESIGN', MixedFlowTurbofan(design=True, thermo_method='TABULAR', afterburn=False))
 
         # BPR balance drives mixer.ER (= Pt_core/Pt_bypass) to 1.0 — equal total
         # pressures at mixer inlet. The actual BPR falls out of the thermodynamics.
@@ -41,10 +44,12 @@ class MPMixedFlowTurbofan(pyc.MPCycle):
         self.set_input_defaults('DESIGN.LP_Nmech', 10000, units='rpm')
         self.set_input_defaults('DESIGN.HP_Nmech', 14000, units='rpm')
 
+        # Augmentor hot (Rayleigh + flameholder) pressure loss, from upstream
+        # pyCycle's mixedflow_turbofan example. Wet only: the dry points'
+        # afterburner Duct stays lossless, so the dry deck is unchanged.
+        self.set_input_defaults(self.od_pts['wet'] + '.afterburner.dPqP', 0.054)
+
         # Cycle parameters shared across all points
-        # NOTE: balance.rhs:FAR_ab is intentionally NOT a cycle param so that
-        # DESIGN T7 and OD T7 can be set independently. Set via prob.set_val()
-        # in the calling script (wet mode only).
         self.pyc_add_cycle_param('hp_shaft.HPX', 250, units='hp')
         self.pyc_add_cycle_param('inlet.ram_recovery', 0.9990)
         self.pyc_add_cycle_param('inlet_duct.dPqP', 0.0107)
@@ -65,9 +70,10 @@ class MPMixedFlowTurbofan(pyc.MPCycle):
         self.pyc_add_cycle_param('hpt.cool3:frac_P', 1.0)
         self.pyc_add_cycle_param('lpt.cool1:frac_P', 1.0)
 
-        # Single generic OD point — conditions set by calling script via prob.set_val()
-        self.od_pt = 'OD'
-        self.pyc_add_pnt(self.od_pt, MixedFlowTurbofan(design=False, thermo_method='TABULAR', afterburn=afterburn))
+        # Off-design points — conditions set by the calling script via prob.set_val()
+        for mode, pt in self.od_pts.items():
+            self.pyc_add_pnt(pt, MixedFlowTurbofan(design=False, thermo_method='TABULAR',
+                                                   afterburn=(mode == 'wet')))
 
         # Map scalars: transfer design compressor/turbine map scaling to OD
         self.pyc_connect_des_od('fan.s_PR', 'fan.s_PR')
@@ -90,8 +96,10 @@ class MPMixedFlowTurbofan(pyc.MPCycle):
         self.pyc_connect_des_od('lpt.s_eff', 'lpt.s_eff')
         self.pyc_connect_des_od('lpt.s_Np', 'lpt.s_Np')
 
+        # Nozzle throat: dry runs the DESIGN A8; wet sets its own (engine_model.py)
+        self.connect('DESIGN.mixed_nozz.Throat:stat:area', self.od_pts['dry'] + '.balance.rhs:W')
+
         # Flow areas: transfer design station areas to OD
-        self.pyc_connect_des_od('mixed_nozz.Throat:stat:area', 'balance.rhs:W')
         self.pyc_connect_des_od('inlet.Fl_O:stat:area', 'inlet.area')
         self.pyc_connect_des_od('fan.Fl_O:stat:area', 'fan.area')
         self.pyc_connect_des_od('splitter.Fl_O1:stat:area', 'splitter.area1')

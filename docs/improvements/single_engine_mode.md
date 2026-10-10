@@ -1,5 +1,23 @@
 # Single-Engine Sizing for Dry + Wet Modes
 
+> **Status: resolved** — [#2](https://github.com/Jhawk414/F404/issues/2), by
+> neither option below. The trade study in
+> [ADR-0001](../adr/0001-single-engine-sizing.md) found:
+>
+> - Both options, as written, have no dry solution: the wet-sized nozzle
+>   throat is too big for dry flow.
+> - Once given a per-mode A8, both options work, Option 2's near-zero-FAR
+>   Jacobian included.
+>
+> The adopted design is a third architecture:
+>
+> - One DESIGN at dry mil feeds two OD points (`OD_dry` with a Duct
+>   afterburner, `OD_wet` with a Combustor).
+> - The wet A8 follows a fan-operating-line control law.
+> - Max AB is calibrated to 17,700 lbf (Tt7 3608 R, 5.4% augmentor loss).
+>
+> The text below is the original proposal, kept for the record.
+
 ## Problem statement
 
 The repo currently builds two independent `om.Problem` instances — one for dry

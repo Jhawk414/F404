@@ -161,9 +161,22 @@ class MixedFlowTurbofan(pyc.Cycle):
 
         else:
 
+            # W floats until the nozzle throat matches the commanded A8 (rhs:W).
             balance.add_balance('W', lower=25, upper=200., units='lbm/s', eq_units='inch**2') #OG lower = 1e-3
             self.connect('balance.W', 'fc.W')
             self.connect('mixed_nozz.Throat:stat:area', 'balance.lhs:W')
+
+            if afterburn:
+                # Augmentor nozzle control: A8 opens or closes to hold the fan
+                # on its design operating line, so lighting the afterburner
+                # doesn't back-pressure the gas generator. Dry points take A8
+                # from DESIGN instead (see mp_cycle.py). A separate BalanceComp
+                # because a balance output can't feed its own component.
+                a8 = self.add_subsystem('a8_ctrl', om.BalanceComp())
+                a8.add_balance('A8', units='inch**2', eq_units=None, lower=50., upper=800.,
+                               val=320., rhs_val=pyc.AXI5.defaults['RlineMap'])
+                self.connect('fan.map.RlineMap', 'a8_ctrl.lhs:A8')
+                self.connect('a8_ctrl.A8', 'balance.rhs:W')
 
             balance.add_balance('BPR', lower=0.1, upper=1.0, val=0.34, eq_units='psi')
             self.connect('balance.BPR', 'splitter.BPR')

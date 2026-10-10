@@ -1,16 +1,17 @@
 """Tests for the DESIGN-to-off-design wiring.
 
 ``MPMixedFlowTurbofan``'s job is to size the engine once at DESIGN and hand
-that geometry to the OD point. A dropped connection here doesn't fail loudly:
-the OD point just solves a subtly different engine, and the error lands in
-the deck as a plausible-looking number. Everything below inspects the built
-model without solving.
+that geometry to both OD points, dry and wet. A dropped connection here
+doesn't fail loudly: the OD point just solves a subtly different engine, and
+the error lands in the deck as a plausible-looking number — exactly the
+two-engines problem of #2. Everything below inspects the built model without
+solving.
 """
 import openmdao.api as om
+import pycycle.api as pyc
 import pytest
 
 from F404_pycycle.mp_cycle import MPMixedFlowTurbofan
-from F404_pycycle.sweep_utils import _scalar
 
 # Scaled map coordinates. Without these the OD point runs on unscaled
 # textbook maps instead of the sized engine's.
@@ -50,25 +51,28 @@ def is_transferred(design_to_od, component, variable):
 
 
 @pytest.fixture(scope='module')
-def wiring():
-    """Map every OD input fed from the DESIGN point to its source."""
+def model():
     prob = om.Problem()
-    prob.model = mp = MPMixedFlowTurbofan(afterburn=True)
+    prob.model = MPMixedFlowTurbofan()
     prob.setup()
+    return prob.model
 
+
+@pytest.fixture(scope='module', params=['dry', 'wet'])
+def wiring(request, model):
+    """Map every input of one OD point fed from the DESIGN point to its source."""
+    pt = model.od_pts[request.param]
     design_to_od = {
-        source for target, source in prob.model._conn_global_abs_in2out.items()
-        if source.startswith('DESIGN.') and target.startswith(f'{mp.od_pt}.')
+        source for target, source in model._conn_global_abs_in2out.items()
+        if source.startswith('DESIGN.') and target.startswith(f'{pt}.')
     }
-    return mp, design_to_od
+    return request.param, design_to_od
 
 
-def test_off_design_point_is_named_consistently(wiring):
-    # Callers address the OD point through mp.od_pt rather than hardcoding
-    # the string; the two must not drift.
-    mp, _ = wiring
-
-    assert mp.od_pt == 'OD'
+def test_off_design_points_are_named_by_mode(model):
+    # Callers address the OD points through mp.od_pts rather than hardcoding
+    # the strings; the two must not drift.
+    assert model.od_pts == {'dry': 'OD_dry', 'wet': 'OD_wet'}
 
 
 @pytest.mark.parametrize('component, scalars', sorted(MAP_SCALARS.items()))
@@ -91,41 +95,28 @@ def test_every_frozen_station_area_reaches_the_off_design_point(wiring):
     assert not missing, f"station areas not transferred to OD: {missing}"
 
 
-def test_nozzle_throat_area_drives_the_off_design_flow_balance(wiring):
-    # The OD W balance solves inlet flow against the design throat area —
-    # the frozen-A8 assumption that #8 proposes to replace with a
-    # T7-scheduled schedule, and that #3's wet-corner failures trace back to.
-    _, design_to_od = wiring
+def test_nozzle_throat_comes_from_design_dry_and_from_the_control_law_wet(model):
+    # Dry runs the DESIGN A8. Wet sets its own: a hot augmented flow through
+    # the dry throat would back-pressure the fan off its map, and holding the
+    # wet point to the DESIGN area is what left single-engine Options 1 and
+    # 2 with no dry solution (ADR-0001).
+    feeds = model._conn_global_abs_in2out
 
-    assert is_transferred(design_to_od, 'mixed_nozz', 'Throat:stat:area')
-
-
-def test_augmentor_target_is_settable_independently_per_point():
-    """T7 must not be a cycle parameter.
-
-    A cycle param is shared across every point, which would force the OD
-    afterburner to the design-point T7 and make the wet throttle sweep
-    impossible — the sweep's entire job is varying T7 while DESIGN stays at
-    max AB.
-    """
-    prob = om.Problem()
-    prob.model = mp = MPMixedFlowTurbofan(afterburn=True)
-    prob.setup()
-
-    prob.set_val('DESIGN.balance.rhs:FAR_ab', 3800., units='degR')
-    prob.set_val(f'{mp.od_pt}.balance.rhs:FAR_ab', 3400., units='degR')
-
-    assert _scalar(prob.get_val('DESIGN.balance.rhs:FAR_ab',
-                                units='degR')) == 3800.
-    assert _scalar(prob.get_val(f'{mp.od_pt}.balance.rhs:FAR_ab',
-                                units='degR')) == 3400.
+    assert is_transferred({feeds['OD_dry.balance.rhs:W']},
+                          'mixed_nozz', 'Throat:stat:area')
+    assert feeds['OD_wet.balance.rhs:W'] == 'OD_wet.a8_ctrl.A8'
 
 
-@pytest.mark.parametrize('afterburn', [True, False])
-def test_both_points_are_built_in_either_mode(afterburn):
-    prob = om.Problem()
-    prob.model = mp = MPMixedFlowTurbofan(afterburn=afterburn)
-    prob.setup()
+def test_design_sizes_the_engine_with_the_afterburner_unlit(model):
+    # Dry mil is the sizing point: one engine, which the wet point then lights.
+    design = model._get_subsystem('DESIGN')
 
-    names = {s.name for s in prob.model._subsystems_myproc}
-    assert {'DESIGN', mp.od_pt} <= names
+    assert isinstance(design._get_subsystem('afterburner'), pyc.Duct)
+    assert 'FAR_ab' not in design._get_subsystem('balance')._state_vars
+
+
+def test_every_point_is_built(model):
+    # Subset, not equality: newer OpenMDAO also lists its own _auto_ivc here.
+    names = {s.name for s in model._subsystems_myproc}
+
+    assert {'DESIGN', *model.od_pts.values()} <= names

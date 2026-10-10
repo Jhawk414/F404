@@ -1,8 +1,8 @@
 """Tests for problem construction: fail-fast validation and golden baselines.
 
 The validation tests are instant — they never build a model. The rest assert
-against a converged baseline captured on this branch, so that the solver work
-queued behind this suite (#2, #3, #8) has something to regress against.
+against a converged baseline, so that the solver work queued behind this suite
+(#3, #8) has something to regress against.
 
 Golden values are held to a 1e-4 relative tolerance: tight enough that any
 real change to the cycle trips them, loose enough to survive last-digit
@@ -12,17 +12,16 @@ import pytest
 
 from F404_pycycle.problems import (
     DRY_DSN_FN,
-    DSN_Tt7,
+    MAX_AB_FN,
+    MAX_Tt7,
     MIL_Tt4,
-    WET_DSN_FN,
-    build_dry_problem,
-    build_wet_problem,
+    build_problem,
 )
 from F404_pycycle.sweep_utils import _scalar
 
 REL = 1e-4
 
-# Converged DESIGN-point baseline, SLS (0 ft, MN 0.01).
+# Converged DESIGN-point baseline, SLS (0 ft, MN 0.01), dry mil.
 # Fn is the balance target, not a result; the rest fall out of the cycle.
 DRY_DESIGN = {
     'perf.Fg': 11050.03423243,     # lbf
@@ -33,13 +32,16 @@ DRY_DESIGN = {
     'hpt.PR': 2.64073722,
     'lpt.PR': 2.44776515,
 }
-WET_DESIGN = {
-    'perf.Fg': 17747.57393833,     # lbf
-    'perf.TSFC': 1.52447529,
-    'balance.W': 137.09271321,     # lbm/s
+# The same engine at SLS max afterburner (OD_wet at Tt7 = MAX_Tt7). Thrust is
+# an output here, not a target.
+MAX_AB = {
+    'perf.Fg': 17750.63508397,     # lbf
+    'perf.TSFC': 1.47868273,
+    'balance.W': 144.18248547,     # lbm/s
     'balance.BPR': 0.75281208,
     'balance.FAR_core': 0.02726298,
-    'balance.FAR_ab': 0.04153251,
+    'balance.FAR_ab': 0.03728426,
+    'a8_ctrl.A8': 326.93774791,    # in**2
 }
 
 # Mechanical spool speeds the engine is sized at (mp_cycle.py input defaults).
@@ -59,39 +61,37 @@ def assert_matches_baseline(prob, point, baseline):
 # These must raise before the solve, not several minutes into a diverging
 # Newton — that is the whole point of validating at all.
 
-@pytest.mark.parametrize('build', [build_dry_problem, build_wet_problem])
 @pytest.mark.parametrize('fn_target', [0., -1., -11000.])
-def test_non_positive_thrust_target_is_rejected(build, fn_target):
+def test_non_positive_thrust_target_is_rejected(fn_target):
     with pytest.raises(ValueError, match='fn_target'):
-        build(fn_target=fn_target)
+        build_problem(fn_target=fn_target)
 
 
-@pytest.mark.parametrize('build', [build_dry_problem, build_wet_problem])
+@pytest.mark.parametrize('target', ['fn_target', 'mil_Tt4', 'max_Tt7'])
 @pytest.mark.parametrize('bad', [float('nan'), float('inf'), -float('inf')])
-def test_non_finite_targets_are_rejected(build, bad):
+def test_non_finite_targets_are_rejected(target, bad):
     # A NaN passes through prob.set_val() and into the residual without
     # complaint, so it surfaces only as an unexplained divergence.
     with pytest.raises(ValueError, match='finite'):
-        build(fn_target=bad)
+        build_problem(**{target: bad})
 
 
-@pytest.mark.parametrize('build', [build_dry_problem, build_wet_problem])
-def test_non_positive_burner_temperature_is_rejected(build):
+def test_non_positive_burner_temperature_is_rejected():
     with pytest.raises(ValueError, match='mil_Tt4'):
-        build(mil_Tt4=0.)
+        build_problem(mil_Tt4=0.)
 
 
-@pytest.mark.parametrize('dsn_Tt7', [MIL_Tt4, MIL_Tt4 - 100.])
-def test_augmentor_target_below_core_target_is_rejected(dsn_Tt7):
+@pytest.mark.parametrize('max_Tt7', [MIL_Tt4, MIL_Tt4 - 100.])
+def test_augmentor_target_below_core_target_is_rejected(max_Tt7):
     # The afterburner adds heat downstream of the turbines, so asking for an
     # exit cooler than the core burner's is asking for negative fuel flow.
-    with pytest.raises(ValueError, match='dsn_Tt7'):
-        build_wet_problem(dsn_Tt7=dsn_Tt7)
+    with pytest.raises(ValueError, match='max_Tt7'):
+        build_problem(max_Tt7=max_Tt7)
 
 
 def test_validation_errors_name_the_offending_value_and_the_expected_range():
     with pytest.raises(ValueError) as excinfo:
-        build_dry_problem(fn_target=-5.)
+        build_problem(fn_target=-5.)
 
     message = str(excinfo.value)
     assert '-5.0' in message           # what was passed
@@ -99,37 +99,37 @@ def test_validation_errors_name_the_offending_value_and_the_expected_range():
     assert str(int(DRY_DSN_FN)) in message  # what a sane value looks like
 
 
-# ── Dry baseline ──────────────────────────────────────────────────────────────
+# ── DESIGN (dry mil) baseline ─────────────────────────────────────────────────
 
 @pytest.mark.slow
-def test_dry_design_meets_its_thrust_target(dry_problem):
-    prob, _ = dry_problem
+def test_design_meets_its_thrust_target(problem):
+    prob, _ = problem
 
     assert _scalar(prob.get_val('DESIGN.perf.Fn', units='lbf')) == pytest.approx(
         DRY_DSN_FN, rel=1e-6)
 
 
 @pytest.mark.slow
-def test_dry_design_matches_baseline(dry_problem):
-    prob, _ = dry_problem
+def test_design_matches_baseline(problem):
+    prob, _ = problem
 
     assert_matches_baseline(prob, 'DESIGN', DRY_DESIGN)
 
 
 @pytest.mark.slow
-def test_dry_design_holds_the_commanded_burner_exit_temperature(dry_problem):
-    prob, _ = dry_problem
+def test_design_holds_the_commanded_burner_exit_temperature(problem):
+    prob, _ = problem
 
     assert _scalar(prob.get_val('DESIGN.burner.Fl_O:tot:T', units='degR')) == \
         pytest.approx(MIL_Tt4, rel=1e-6)
 
 
 @pytest.mark.slow
-def test_mixer_streams_are_pressure_matched_at_design(dry_problem):
+def test_mixer_streams_are_pressure_matched_at_design(problem):
     # The DESIGN BPR balance drives mixer.ER (core Pt / bypass Pt) to 1.0;
     # BPR itself is whatever the thermodynamics require to get there. An ER
     # off 1.0 means that balance did not actually close.
-    prob, _ = dry_problem
+    prob, _ = problem
 
     assert _scalar(prob.get_val('DESIGN.mixer.ER')) == pytest.approx(1.0, rel=1e-6)
 
@@ -137,20 +137,19 @@ def test_mixer_streams_are_pressure_matched_at_design(dry_problem):
 # ── Off-design consistency ────────────────────────────────────────────────────
 
 @pytest.mark.slow
-@pytest.mark.parametrize('point_fixture', ['dry_problem', 'wet_problem'])
-def test_off_design_reproduces_the_design_point(point_fixture, request):
-    """The OD point, run at design conditions, must recover the design solve.
+def test_dry_off_design_reproduces_the_design_point(problem):
+    """OD_dry, run at design conditions, must recover the design solve.
 
     Both points are set to the same altitude, Mach and power targets, so any
     disagreement means the design-to-off-design handoff — map scalars and
     station areas wired in mp_cycle.py — is dropping something.
     """
-    prob, mp = request.getfixturevalue(point_fixture)
+    prob, mp = problem
 
     for var in ('perf.Fn', 'perf.TSFC', 'balance.W', 'balance.BPR',
                 'balance.FAR_core'):
         design = _scalar(prob.get_val(f'DESIGN.{var}'))
-        off_design = _scalar(prob.get_val(f'{mp.od_pt}.{var}'))
+        off_design = _scalar(prob.get_val(f"{mp.od_pts['dry']}.{var}"))
         assert off_design == pytest.approx(design, rel=REL), (
             f"{var}: OD {off_design:.8f} != DESIGN {design:.8f} at identical "
             f"conditions"
@@ -158,103 +157,105 @@ def test_off_design_reproduces_the_design_point(point_fixture, request):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('point_fixture', ['dry_problem', 'wet_problem'])
-def test_off_design_spools_return_to_their_design_speeds(point_fixture, request):
+@pytest.mark.parametrize('mode', ['dry', 'wet'])
+def test_off_design_spools_return_to_their_design_speeds(problem, mode):
     # LP/HP Nmech are fixed inputs at DESIGN and solved-for states at OD, so
-    # recovering them is an independent check on the shaft power balances
-    # rather than a restatement of the point above.
-    prob, mp = request.getfixturevalue(point_fixture)
+    # recovering them is an independent check on the shaft power balances.
+    # The wet point recovers them too: its A8 control holds the fan on its
+    # design operating line, so lighting the afterburner leaves the gas
+    # generator where dry mil put it.
+    prob, mp = problem
+    pt = mp.od_pts[mode]
 
-    assert _scalar(prob.get_val(f'{mp.od_pt}.balance.LP_Nmech', units='rpm')) == \
+    assert _scalar(prob.get_val(f'{pt}.balance.LP_Nmech', units='rpm')) == \
         pytest.approx(DSN_LP_NMECH, rel=REL)
-    assert _scalar(prob.get_val(f'{mp.od_pt}.balance.HP_Nmech', units='rpm')) == \
+    assert _scalar(prob.get_val(f'{pt}.balance.HP_Nmech', units='rpm')) == \
         pytest.approx(DSN_HP_NMECH, rel=REL)
 
 
-# ── Wet baseline ──────────────────────────────────────────────────────────────
+# ── Max afterburner baseline ──────────────────────────────────────────────────
 
 @pytest.mark.slow
-def test_wet_design_meets_its_thrust_target(wet_problem):
-    prob, _ = wet_problem
+def test_max_afterburner_is_calibrated_to_the_wet_thrust_target(problem):
+    # MAX_Tt7 and the augmentor loss are chosen so the dry-sized engine makes
+    # the F404's SLS max-AB thrust; without them it overshoots by 5.17% (#2).
+    prob, mp = problem
 
-    assert _scalar(prob.get_val('DESIGN.perf.Fn', units='lbf')) == pytest.approx(
-        WET_DSN_FN, rel=1e-6)
-
-
-@pytest.mark.slow
-def test_wet_design_matches_baseline(wet_problem):
-    prob, _ = wet_problem
-
-    assert_matches_baseline(prob, 'DESIGN', WET_DESIGN)
+    assert _scalar(prob.get_val(f"{mp.od_pts['wet']}.perf.Fn", units='lbf')) == \
+        pytest.approx(MAX_AB_FN, rel=REL)
 
 
 @pytest.mark.slow
-def test_wet_design_is_anchored_at_max_augmentor_temperature(wet_problem):
-    # Sizing at max AB rather than an arbitrary mid-AB point is the reason
-    # the wet DESIGN exists; a drifted T7 here silently resizes the engine.
-    prob, _ = wet_problem
+def test_augmentor_pressure_loss_applies_only_when_lit(problem):
+    # Keeping the dry Duct lossless is what keeps the dry deck unchanged.
+    prob, mp = problem
 
-    assert _scalar(prob.get_val('DESIGN.afterburner.Fl_O:tot:T', units='degR')) \
-        == pytest.approx(DSN_Tt7, rel=1e-6)
+    assert _scalar(prob.get_val(f"{mp.od_pts['wet']}.afterburner.dPqP")) == 0.054
+    assert _scalar(prob.get_val(f"{mp.od_pts['dry']}.afterburner.dPqP")) == 0.
 
 
 @pytest.mark.slow
-def test_augmentor_burns_fuel_only_in_wet_mode(dry_problem, wet_problem):
-    dry_prob, _ = dry_problem
-    wet_prob, _ = wet_problem
+def test_max_afterburner_matches_baseline(problem):
+    prob, mp = problem
 
-    assert _scalar(wet_prob.get_val('DESIGN.balance.FAR_ab')) > 0.
-    # Dry mode replaces the Combustor with a Duct, so the balance is absent
+    assert_matches_baseline(prob, mp.od_pts['wet'], MAX_AB)
+
+
+@pytest.mark.slow
+def test_max_afterburner_runs_at_the_commanded_augmentor_temperature(problem):
+    prob, mp = problem
+
+    assert _scalar(prob.get_val(f"{mp.od_pts['wet']}.afterburner.Fl_O:tot:T",
+                                units='degR')) == pytest.approx(MAX_Tt7, rel=1e-6)
+
+
+@pytest.mark.slow
+def test_nozzle_control_opens_the_throat_and_holds_the_fan_operating_line(problem):
+    # The wet throat is a solved state, not the DESIGN area: hot augmented
+    # flow needs a bigger nozzle to pass the same corrected flow.
+    prob, mp = problem
+    wet = mp.od_pts['wet']
+
+    assert _scalar(prob.get_val(f'{wet}.fan.map.RlineMap')) == pytest.approx(
+        2.0, rel=1e-6)
+    assert _scalar(prob.get_val(f'{wet}.mixed_nozz.Throat:stat:area')) > \
+        1.5 * _scalar(prob.get_val('DESIGN.mixed_nozz.Throat:stat:area'))
+
+
+@pytest.mark.slow
+def test_augmentor_burns_fuel_only_on_the_wet_point(problem):
+    prob, mp = problem
+
+    assert _scalar(prob.get_val(f"{mp.od_pts['wet']}.balance.FAR_ab")) > 0.
+    # The dry point's afterburner is a Duct, so the balance is absent
     # entirely rather than present and zeroed.
     with pytest.raises(Exception):
-        dry_prob.get_val('DESIGN.balance.FAR_ab')
+        prob.get_val(f"{mp.od_pts['dry']}.balance.FAR_ab")
 
 
 @pytest.mark.slow
-def test_afterburner_roughly_doubles_specific_fuel_consumption(dry_problem,
-                                                               wet_problem):
+def test_afterburner_roughly_doubles_specific_fuel_consumption(problem):
     # A coarse physical sanity check independent of the golden numbers: max
     # AB should cost far more fuel per pound of thrust than mil power.
-    dry_prob, _ = dry_problem
-    wet_prob, _ = wet_problem
+    prob, mp = problem
 
-    dry_tsfc = _scalar(dry_prob.get_val('DESIGN.perf.TSFC'))
-    wet_tsfc = _scalar(wet_prob.get_val('DESIGN.perf.TSFC'))
+    dry_tsfc = _scalar(prob.get_val(f"{mp.od_pts['dry']}.perf.TSFC"))
+    wet_tsfc = _scalar(prob.get_val(f"{mp.od_pts['wet']}.perf.TSFC"))
 
     assert wet_tsfc > 2 * dry_tsfc
 
 
-# ── Dry/wet sizing divergence (#2) ────────────────────────────────────────────
+# ── One engine for both modes (#2) ────────────────────────────────────────────
 
 @pytest.mark.slow
-def test_dry_and_wet_agree_on_everything_except_size(dry_problem, wet_problem):
-    # The two DESIGN solves produce the same cycle — same pressure ratios,
-    # same Tt4 target, same bypass ratio — and differ only in how much air
-    # they push through it. That is the contract #2 is scoped against: the
-    # divergence is one of scale, not of cycle definition.
-    dry_prob, _ = dry_problem
-    wet_prob, _ = wet_problem
+def test_dry_and_wet_run_the_same_engine(problem):
+    # The fix for #2: both modes take their map scalars and station areas from
+    # the one DESIGN point, so at SLS mil and max AB they swallow the same air.
+    prob, mp = problem
 
-    for shared in ('balance.BPR', 'balance.FAR_core', 'fan.PR', 'hpc.PR'):
-        assert _scalar(dry_prob.get_val(f'DESIGN.{shared}')) == pytest.approx(
-            _scalar(wet_prob.get_val(f'DESIGN.{shared}')), rel=REL)
-
-
-@pytest.mark.slow
-@pytest.mark.xfail(strict=True, reason=(
-    "Dry and wet each run their own DESIGN solve, so they size two engines "
-    "rather than one — https://github.com/Jhawk414/F404/issues/2. Asserted as "
-    "the behaviour we want, so that fixing #2 turns this XFAIL into an XPASS "
-    "and fails the suite until the marker is removed."
-))
-def test_dry_and_wet_size_the_same_engine(dry_problem, wet_problem):
-    dry_prob, _ = dry_problem
-    wet_prob, _ = wet_problem
-
-    assert _scalar(dry_prob.get_val('DESIGN.balance.W', units='lbm/s')) == \
-        pytest.approx(
-            _scalar(wet_prob.get_val('DESIGN.balance.W', units='lbm/s')),
-            rel=REL)
+    assert _scalar(prob.get_val(f"{mp.od_pts['dry']}.balance.W", units='lbm/s')) \
+        == pytest.approx(_scalar(prob.get_val(f"{mp.od_pts['wet']}.balance.W",
+                                              units='lbm/s')), rel=REL)
 
 
 # ── Off-nominal sizing ────────────────────────────────────────────────────────
@@ -263,7 +264,7 @@ def test_dry_and_wet_size_the_same_engine(dry_problem, wet_problem):
 def test_a_lower_thrust_target_sizes_a_smaller_engine():
     # Confirms fn_target is actually wired to the sizing balance rather than
     # only being validated — the defaults alone can't show that.
-    prob, _ = build_dry_problem(fn_target=DRY_DSN_FN * 0.8, verbose=False)
+    prob, _ = build_problem(fn_target=DRY_DSN_FN * 0.8, verbose=False)
 
     assert _scalar(prob.get_val('DESIGN.perf.Fn', units='lbf')) == pytest.approx(
         DRY_DSN_FN * 0.8, rel=1e-6)
@@ -277,12 +278,11 @@ def test_a_lower_thrust_target_sizes_a_smaller_engine():
 # ── Verbose path ──────────────────────────────────────────────────────────────
 
 @pytest.mark.slow
-@pytest.mark.parametrize('build', [build_dry_problem, build_wet_problem])
-def test_verbose_build_prints_both_result_pages(build, capsys):
+def test_verbose_build_prints_every_result_page(capsys):
     # verbose=True is the default and what `f404 design` relies on. Every other
     # test passes verbose=False, so without this the print path — which asks
     # the dry afterburner (a Duct) for a burner table — went unexercised.
-    build()
+    build_problem()
 
     out = capsys.readouterr().out
-    assert 'DESIGN' in out and 'OD' in out
+    assert all(pt in out for pt in ('DESIGN', 'OD_dry', 'OD_wet'))
