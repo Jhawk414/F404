@@ -4,6 +4,7 @@ Entry points::
 
     f404 sweep  [--mode {dry,wet,both}] [--alt R] [--dts R] [--throttle R] [--out DIR]
     f404 design [--mode {dry,wet,both}] [--fn-target LBF] [--mil-tt4 DEGR] [--dsn-tt7 DEGR]
+    f404 gui    [--deck PATH] [--port PORT] [--no-browser]
 
 ``python -m F404_pycycle`` is equivalent to ``f404``. Every range flag takes one
 ``min,max,step`` triple (inclusive of ``max``), bare or bracketed.
@@ -269,6 +270,28 @@ def build_parser():
         help="wet DESIGN afterburner exit temperature, degR (default: 3800). "
              "Wet mode only")
     design.set_defaults(handler=_run_design_command)
+
+    gui = sub.add_parser(
+        'gui',
+        help="launch interactive cycle deck explorer GUI in a browser",
+        description="Launch an interactive browser GUI to explore and "
+                    "interpolate engine performance (thrust, SFC, airflow, "
+                    "fuel flow, nozzle area) across altitude, temperature offset, "
+                    "and throttle from cycle decks.",
+    )
+    gui.add_argument(
+        '--deck', type=Path, default=None, metavar='PATH',
+        help="path to cycle deck CSV file or directory (default: auto-detect)")
+    gui.add_argument(
+        '--port', type=int, default=8080, metavar='PORT',
+        help="local HTTP server port (default: 8080)")
+    gui.add_argument(
+        '--host', default='127.0.0.1', metavar='HOST',
+        help="local HTTP server host (default: 127.0.0.1)")
+    gui.add_argument(
+        '--no-browser', action='store_true',
+        help="do not open the browser automatically")
+    gui.set_defaults(handler=_run_gui_command)
     return parser
 
 
@@ -338,6 +361,23 @@ def _run_design_command(args, parser):
         print(f"f404 design: the DESIGN solve did not converge: {exc}",
               file=sys.stderr)
         return 1
+    return 0
+
+
+def _run_gui_command(args, parser):
+    from F404_pycycle.gui_server import start_server
+    try:
+        start_server(
+            deck_path=args.deck,
+            host=args.host,
+            port=args.port,
+            open_browser=not args.no_browser,
+            block=True,
+        )
+    except FileNotFoundError as exc:
+        parser.error(str(exc))
+    except KeyboardInterrupt:
+        pass
     return 0
 
 

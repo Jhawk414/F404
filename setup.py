@@ -67,6 +67,7 @@ setup(name='om-pycycle',
       ],
     package_dir={'F404_pycycle': 'src/F404_pycycle'},
     package_data={
+        'F404_pycycle': ['gui/static/*', 'gui/src/*'],
         'pycycle.elements.test': ['reg_data/*.csv'],
         'pycycle.thermo.test': ['*.csv'],
         'pycycle.thermo.tabular': ['*.pkl'],
