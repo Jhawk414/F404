@@ -116,6 +116,7 @@ def test_design_sizes_the_engine_with_the_afterburner_unlit(model):
 
 
 def test_every_point_is_built(model):
+    # Subset, not equality: newer OpenMDAO also lists its own _auto_ivc here.
     names = {s.name for s in model._subsystems_myproc}
 
-    assert names == {'DESIGN', *model.od_pts.values()}
+    assert {'DESIGN', *model.od_pts.values()} <= names
