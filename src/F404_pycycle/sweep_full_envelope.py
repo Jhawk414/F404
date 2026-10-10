@@ -1,21 +1,19 @@
 """
 Full-envelope cycle deck builder for the F404 mixed-flow turbofan.
 
-Runs two separate sweeps — dry (mil power and below) and wet (afterburning) —
-using two independent om.Problem instances, one per mode.
+Sizes one engine (DESIGN at SLS dry mil) and sweeps it in two modes, each on
+its own off-design point of the same om.Problem.
 
-Dry sweep
----------
-  - afterburn=False: no FAR_ab balance; afterburner is a zero-FAR pass-through
-  - 'power' in sweep points = Tt4 target (degR)
+Dry sweep (OD_dry)
+------------------
+  - afterburner is a Duct; 'power' in sweep points = Tt4 target (degR)
 
-Wet sweep
----------
-  - afterburn=True: FAR_ab balance drives T7 to target
-  - 'power' in sweep points = T7 (Tt7) target (degR)
+Wet sweep (OD_wet)
+------------------
+  - FAR_ab balance drives T7 to target; 'power' in sweep points = Tt7 (degR)
   - Tt4 is fixed at mil power (mil_Tt4) for the entire wet sweep
-  - DESIGN anchor: Tt7=3800 degR (max AB), Fn=17,700 lbf — correct sizing point
-  - Sweep covers partial-AB range (3200–3800 degR); thrust is an output, not a target
+  - A8 is set by the nozzle control law (fan held on its design operating line)
+  - Thrust is an output, not a target
 
 Usage (see F404_pycycle.cli for the full flag set):
     f404 sweep                       # both modes, default grid
@@ -30,9 +28,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from F404_pycycle.problems import (
-    build_dry_problem, build_wet_problem, MIL_Tt4,
-)
+from F404_pycycle.problems import build_problem, MIL_Tt4
 from F404_pycycle.sweep_utils import build_snake_sweep, SweepRunner
 
 # ── Default sweep grid (shared by both modes) ────────────────────────────────
@@ -109,8 +105,8 @@ def configure_runtime():
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 
-def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.'):
-    """Build the DESIGN problem for one mode, sweep it, and write its deck.
+def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.', built=None):
+    """Sweep one mode of the sized engine and write its deck.
 
     Parameters
     ----------
@@ -120,6 +116,8 @@ def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.'):
         in dry mode and Tt7 (degR) in wet mode.
     out_dir : path-like
         Directory the ``cycle_deck_<mode>.csv`` is written to.
+    built : (Problem, MPMixedFlowTurbofan), optional
+        A problem from ``build_problem()`` to sweep; built here if omitted.
 
     Returns
     -------
@@ -128,19 +126,20 @@ def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.'):
         the sweep attempted.
     """
     if mode == 'dry':
-        prob, mp = build_dry_problem()
         runner_kwargs = dict(afterburn=False)
     elif mode == 'wet':
-        prob, mp = build_wet_problem()
         runner_kwargs = dict(afterburn=True, mil_Tt4=MIL_Tt4)
     else:
         raise ValueError(f"mode must be 'dry' or 'wet', got {mode!r}")
+    prob, mp = built if built is not None else build_problem()
     prob.set_solver_print(level=-1)
 
     sweep_pts = build_snake_sweep(alts, dTs_vals, powers)
     print(f"\n{mode.capitalize()} sweep matrix: {len(sweep_pts)} points")
 
-    runner = SweepRunner(prob, od_pt=mp.od_pt, mach=MACH, **runner_kwargs)
+    frozen = [pt for m, pt in mp.od_pts.items() if m != mode]
+    runner = SweepRunner(prob, od_pt=mp.od_pts[mode], mach=MACH,
+                         frozen_pts=frozen, **runner_kwargs)
     df = runner.run_sweep(
         sweep_pts,
         bridge_threshold=BRIDGE_THRESHOLD,
@@ -157,8 +156,8 @@ def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
     """Run the dry sweep, the wet sweep, or both, and write the decks.
 
     ``mode`` is 'dry', 'wet' or 'both'; 'both' also writes the combined
-    ``cycle_deck_full_envelope.csv``. Returns ``{mode: DataFrame}`` for the
-    modes that ran.
+    ``cycle_deck_full_envelope.csv``. The engine is sized once and both modes
+    sweep it. Returns ``{mode: DataFrame}`` for the modes that ran.
     """
     if mode not in ('dry', 'wet', 'both'):
         raise ValueError(f"mode must be 'dry', 'wet' or 'both', got {mode!r}")
@@ -167,11 +166,12 @@ def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
     out_dir.mkdir(parents=True, exist_ok=True)
 
     st_total = time.time()
+    built = build_problem()
     results, attempted = {}, {}
     for m, powers in (('dry', dry_powers), ('wet', wet_powers)):
         if mode in (m, 'both'):
             results[m], attempted[m] = run_mode_sweep(
-                m, alts, dTs_vals, powers, out_dir)
+                m, alts, dTs_vals, powers, out_dir, built)
 
     if mode == 'both':
         df_all = pd.concat([results['dry'], results['wet']], ignore_index=True)

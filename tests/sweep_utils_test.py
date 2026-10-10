@@ -9,12 +9,13 @@ to call converged.
 """
 import pytest
 
-from F404_pycycle.problems import build_dry_problem
+from F404_pycycle.problems import build_problem
 from F404_pycycle.sweep_utils import (
     SweepConfigurationError,
     _BOUND_TOL_FRAC,
+    _FROZEN_NEWTON,
     _OD_BOUNDS,
-    _OD_FAR_AB_BOUNDS,
+    _OD_WET_BOUNDS,
     _TARGET_TOL_DEGR,
     SweepRunner,
     _scalar,
@@ -34,6 +35,7 @@ CLEAN_STATE = {
     f'{OD}.balance.FAR_ab':   0.035,
     f'{OD}.balance.LP_Nmech': 10000.,
     f'{OD}.balance.HP_Nmech': 14000.,
+    f'{OD}.a8_ctrl.A8':       320.,
 }
 
 
@@ -293,7 +295,7 @@ def test_target_not_met_when_temperature_is_unreadable():
 
 # ── _OD_BOUNDS drift ──────────────────────────────────────────────────────────
 
-def test_od_bounds_table_matches_the_bounds_the_model_declares(wet_problem):
+def test_od_bounds_table_matches_the_bounds_the_model_declares(problem):
     """`_OD_BOUNDS` is hand-maintained alongside the real BalanceComp bounds.
 
     It exists because ``_state_at_bounds`` needs the numbers without
@@ -302,16 +304,17 @@ def test_od_bounds_table_matches_the_bounds_the_model_declares(wet_problem):
     silently starts measuring against the old one. This locks the two
     together until they are unified (#5's follow-on pydantic work).
     """
-    prob, _ = wet_problem
-    balance = prob.model._get_subsystem('OD.balance')
+    prob, mp = problem
 
     def scalar(bound):
         # OpenMDAO stores bounds as length-1 arrays.
         return None if bound is None else _scalar(bound)
 
-    expected = dict(_OD_BOUNDS, **{'balance.FAR_ab': _OD_FAR_AB_BOUNDS})
+    expected = dict(_OD_BOUNDS, **_OD_WET_BOUNDS)
     for key, (lo, hi) in expected.items():
-        meta = balance._var_rel2meta[key.split('.', 1)[1]]
+        comp, var = key.split('.', 1)
+        owner = prob.model._get_subsystem(f"{mp.od_pts['wet']}.{comp}")
+        meta = owner._var_rel2meta[var]
         declared_lo = scalar(meta['lower'])
         declared_hi = scalar(meta['upper'])
 
@@ -323,6 +326,11 @@ def test_od_bounds_table_matches_the_bounds_the_model_declares(wet_problem):
 
 # ── End to end ────────────────────────────────────────────────────────────────
 
+def dry_point(mp):
+    """SweepRunner kwargs that drive OD_dry and freeze OD_wet."""
+    return dict(od_pt=mp.od_pts['dry'], frozen_pts=[mp.od_pts['wet']])
+
+
 @pytest.mark.slow
 def test_a_short_dry_sweep_converges_and_returns_a_deck_frame():
     """Drives the real loop — solve, guard, extract, collect — on 3 points.
@@ -332,18 +340,18 @@ def test_a_short_dry_sweep_converges_and_returns_a_deck_frame():
     this asserts the machinery works, not that the hard corners converge —
     those are #3.
     """
-    prob, mp = build_dry_problem(verbose=False)
+    prob, mp = build_problem(verbose=False)
     prob.set_solver_print(level=-1)
     points = build_snake_sweep([0.], [0., 10., 20.], [3100.])
 
-    runner = SweepRunner(prob, od_pt=mp.od_pt, mach=0.001, afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp), mach=0.001, afterburn=False)
     deck = runner.run_sweep(points)
 
     assert len(deck) == len(points), "a nominal SLS sweep should fully converge"
     assert list(deck['dTs']) == [0., 10., 20.]
     # Every row carries the full schema, and the guards passed on each.
     assert set(deck.columns) == set(
-        extract_od_results(prob, mp.od_pt, afterburn=False))
+        extract_od_results(prob, mp.od_pts['dry'], afterburn=False))
     assert (deck['T4'] - 3100.).abs().max() <= _TARGET_TOL_DEGR
     # A hotter day thins the air, so the sized engine swallows less of it.
     assert deck['W'].is_monotonic_decreasing
@@ -362,13 +370,13 @@ def test_a_sweep_point_that_cannot_converge_is_dropped_not_reported():
     may exhaust Newton (AnalysisError) or collapse the Jacobian underneath it
     (RuntimeError from the linear solve).
     """
-    prob, mp = build_dry_problem(verbose=False)
+    prob, mp = build_problem(verbose=False)
     prob.set_solver_print(level=-1)
     # 800 degR is below the compressor discharge temperature, so the burner
     # would have to remove heat — FAR_core pins at its 1e-4 floor.
     points = build_snake_sweep([0.], [0.], [800.])
 
-    deck = SweepRunner(prob, od_pt=mp.od_pt, mach=0.001,
+    deck = SweepRunner(prob, **dry_point(mp), mach=0.001,
                        afterburn=False).run_sweep(points)
 
     assert len(deck) == 0
@@ -378,12 +386,12 @@ def test_a_sweep_point_that_cannot_converge_is_dropped_not_reported():
 def test_a_failed_point_does_not_abandon_the_rest_of_the_sweep():
     # The failure is deliberately placed first, so the two points after it
     # only produce rows if the sweep survived it.
-    prob, mp = build_dry_problem(verbose=False)
+    prob, mp = build_problem(verbose=False)
     prob.set_solver_print(level=-1)
     points = (build_snake_sweep([0.], [0.], [800.])
               + build_snake_sweep([0.], [0., 10.], [3100.]))
 
-    deck = SweepRunner(prob, od_pt=mp.od_pt, mach=0.001,
+    deck = SweepRunner(prob, **dry_point(mp), mach=0.001,
                        afterburn=False).run_sweep(points)
 
     assert len(deck) == 2
@@ -400,9 +408,9 @@ def test_an_unexpected_error_aborts_the_sweep_rather_than_failing_a_point():
     bounds table reaching the caller as "264 points failed" would hide the
     cause completely.
     """
-    prob, mp = build_dry_problem(verbose=False)
+    prob, mp = build_problem(verbose=False)
     prob.set_solver_print(level=-1)
-    runner = SweepRunner(prob, od_pt=mp.od_pt, mach=0.001, afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp), mach=0.001, afterburn=False)
 
     def exploding_run_model():
         raise KeyError("OD.balance.typo")
@@ -418,9 +426,9 @@ def test_a_drifted_bounds_table_aborts_the_sweep():
     # SweepConfigurationError is deliberately not a RuntimeError, so it
     # travels through _run_point's except clause instead of being recorded
     # as an ordinary failed point.
-    prob, mp = build_dry_problem(verbose=False)
+    prob, mp = build_problem(verbose=False)
     prob.set_solver_print(level=-1)
-    runner = SweepRunner(prob, od_pt=mp.od_pt, mach=0.001, afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp), mach=0.001, afterburn=False)
 
     with pytest.raises(SweepConfigurationError, match='balance.nonexistent'):
         with_drift = dict(_OD_BOUNDS, **{'balance.nonexistent': (0., 1.)})
@@ -430,3 +438,29 @@ def test_a_drifted_bounds_table_aborts_the_sweep():
             runner.run_sweep(build_snake_sweep([0.], [0.], [3100.]))
         finally:
             su._OD_BOUNDS = original
+
+
+@pytest.mark.slow
+def test_the_point_not_being_swept_is_frozen_then_restored():
+    """Every run_model() solves all points; the inactive one must sit still.
+
+    Otherwise a struggling wet point would raise AnalysisError during a dry
+    sweep and be recorded as a failed dry point.
+    """
+    prob, mp = build_problem(verbose=False)
+    prob.set_solver_print(level=-1)
+    wet_newton = prob.model._get_subsystem(mp.od_pts['wet']).nonlinear_solver
+    before = {k: wet_newton.options[k] for k in _FROZEN_NEWTON}
+    during = []
+    solve = prob.run_model
+
+    def recording_run_model():
+        during.append({k: wet_newton.options[k] for k in _FROZEN_NEWTON})
+        solve()
+
+    prob.run_model = recording_run_model
+    SweepRunner(prob, **dry_point(mp), mach=0.001, afterburn=False).run_sweep(
+        build_snake_sweep([0.], [0.], [3100.]))
+
+    assert during and all(opts == _FROZEN_NEWTON for opts in during)
+    assert {k: wet_newton.options[k] for k in _FROZEN_NEWTON} == before

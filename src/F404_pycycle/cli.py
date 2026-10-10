@@ -3,7 +3,7 @@
 Entry points::
 
     f404 sweep  [--mode {dry,wet,both}] [--alt R] [--dts R] [--throttle R] [--out DIR]
-    f404 design [--mode {dry,wet,both}] [--fn-target LBF] [--mil-tt4 DEGR] [--dsn-tt7 DEGR]
+    f404 design [--fn-target LBF] [--mil-tt4 DEGR] [--max-tt7 DEGR]
 
 ``python -m F404_pycycle`` is equivalent to ``f404``. Every range flag takes one
 ``min,max,step`` triple (inclusive of ``max``), bare or bracketed.
@@ -250,24 +250,20 @@ def build_parser():
 
     design = sub.add_parser(
         'design',
-        help="solve and print one DESIGN + OD point",
-        description="Size the engine at sea-level static and print the DESIGN "
-                    "and OD result tables, without running a sweep.",
+        help="solve and print the DESIGN point and both OD points",
+        description="Size the engine at sea-level static dry mil power and "
+                    "print the DESIGN, dry OD and max-afterburner OD result "
+                    "tables, without running a sweep.",
     )
     design.add_argument(
-        '--mode', choices=['dry', 'wet', 'both'], default='both',
-        help="which engine to size (default: both)")
-    design.add_argument(
         '--fn-target', type=float, metavar='LBF',
-        help="DESIGN thrust target, lbf (default: 11000 dry / 17700 wet). "
-             "Requires --mode dry or wet")
+        help="SLS dry mil thrust that sizes the engine, lbf (default: 11000)")
     design.add_argument(
         '--mil-tt4', type=float, metavar='DEGR',
         help="core burner exit temperature, degR (default: 3100)")
     design.add_argument(
-        '--dsn-tt7', type=float, metavar='DEGR',
-        help="wet DESIGN afterburner exit temperature, degR (default: 3800). "
-             "Wet mode only")
+        '--max-tt7', type=float, metavar='DEGR',
+        help="max-afterburner exit temperature, degR (default: 3800)")
     design.set_defaults(handler=_run_design_command)
     return parser
 
@@ -308,34 +304,19 @@ def _run_sweep_command(args, parser):
 
 
 def _run_design_command(args, parser):
-    if args.fn_target is not None and args.mode == 'both':
-        parser.error(
-            "--fn-target is a thrust target for one engine, and dry and wet "
-            "are sized to different thrusts. Use --mode dry or --mode wet.")
-    if args.dsn_tt7 is not None and args.mode == 'dry':
-        parser.error("--dsn-tt7 only applies to the wet (afterburning) design")
-
     import openmdao.api as om
-    from F404_pycycle.problems import build_dry_problem, build_wet_problem
+    from F404_pycycle.problems import build_problem
 
-    common = {}
-    if args.mil_tt4 is not None:
-        common['mil_Tt4'] = args.mil_tt4
-    if args.fn_target is not None:
-        common['fn_target'] = args.fn_target
+    targets = {name: value for name, value in (
+        ('fn_target', args.fn_target), ('mil_Tt4', args.mil_tt4),
+        ('max_Tt7', args.max_tt7)) if value is not None}
 
     try:
-        if args.mode in ('dry', 'both'):
-            build_dry_problem(**common)
-        if args.mode in ('wet', 'both'):
-            wet = dict(common)
-            if args.dsn_tt7 is not None:
-                wet['dsn_Tt7'] = args.dsn_tt7
-            build_wet_problem(**wet)
+        build_problem(**targets)
     except ValueError as exc:
         parser.error(str(exc))
     except om.AnalysisError as exc:
-        print(f"f404 design: the DESIGN solve did not converge: {exc}",
+        print(f"f404 design: the solve did not converge: {exc}",
               file=sys.stderr)
         return 1
     return 0

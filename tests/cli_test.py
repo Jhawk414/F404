@@ -209,11 +209,13 @@ def test_a_command_is_required(capsys):
 
 
 @pytest.mark.parametrize('argv, fragment', [
-    (['design', '--fn-target', '9000'], 'Use --mode dry or --mode wet'),
-    (['design', '--mode', 'dry', '--dsn-tt7', '3800'], 'wet (afterburning)'),
-    (['design', '--mode', 'dry', '--fn-target', '-5'], 'fn_target must be a positive'),
-    (['design', '--mode', 'dry', '--mil-tt4', 'nan'], 'must be a finite number'),
-    (['design', '--mode', 'wet', '--dsn-tt7', '3000'], 'must exceed mil_Tt4'),
+    # One engine now, so there is no mode to pick, and the wet target is an
+    # off-design max-AB temperature rather than a DESIGN one (#2).
+    (['design', '--mode', 'dry'], 'unrecognized arguments'),
+    (['design', '--dsn-tt7', '3800'], 'unrecognized arguments'),
+    (['design', '--fn-target', '-5'], 'fn_target must be a positive'),
+    (['design', '--mil-tt4', 'nan'], 'must be a finite number'),
+    (['design', '--max-tt7', '3000'], 'must exceed mil_Tt4'),
 ])
 def test_bad_design_arguments_fail_before_any_solve(capsys, argv, fragment):
     fails(capsys, argv, fragment)
@@ -241,11 +243,11 @@ def test_sweep_end_to_end_writes_the_requested_deck(tmp_path, capsys):
 
 
 @pytest.mark.slow
-def test_design_prints_the_requested_engine(capsys):
-    assert cli.main(['design', '--mode', 'dry']) == 0
+def test_design_prints_the_design_and_both_off_design_points(capsys):
+    assert cli.main(['design']) == 0
 
     out = capsys.readouterr().out
-    assert 'DRY' in out and 'WET' not in out
+    assert all(pt in out for pt in ('DESIGN', 'OD_dry', 'OD_wet'))
 
 
 # ── help rendering ────────────────────────────────────────────────────────────

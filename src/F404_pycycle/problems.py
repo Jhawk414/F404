@@ -1,15 +1,11 @@
-"""Construction of converged F404 ``om.Problem`` instances.
+"""Construction of the converged F404 ``om.Problem``.
 
-Two builders, one per afterburner mode — ``build_dry_problem()`` and
-``build_wet_problem()``. Each wires an ``MPMixedFlowTurbofan`` into a
-Problem, applies the design-point targets and the initial guesses that get
-Newton into the right basin, and solves the DESIGN point (which sizes the
-engine) plus the OD point at design conditions.
-
-Dry and wet are separate Problems because the ``FAR_ab`` balance is
-structural — it exists or it doesn't, and can't be toggled at runtime.
-Unifying the two sizings is tracked in
-`#2 <https://github.com/Jhawk414/F404/issues/2>`_.
+``build_problem()`` wires an ``MPMixedFlowTurbofan`` into a Problem, applies
+the design-point targets and the initial guesses that get Newton into the
+right basin, and solves the DESIGN point (which sizes the engine at dry mil)
+plus both OD points at sea-level static: ``OD_dry`` at mil power and
+``OD_wet`` at max afterburner. One engine serves both modes — see
+``docs/adr/0001-single-engine-sizing.md``.
 """
 import math
 
@@ -20,16 +16,15 @@ from F404_pycycle.printer import page_viewer
 
 # ── Design-point targets ──────────────────────────────────────────────────────
 MIL_Tt4    = 3100.   # degR — core burner exit at mil power (throttle wall)
-DSN_Tt7    = 3800.   # degR — afterburner exit at DESIGN point (wet only; max AB)
-DRY_DSN_FN = 11000.  # lbf  — SLS mil power (no afterburner)
-WET_DSN_FN = 17700.  # lbf  — SLS max afterburner
+MAX_Tt7    = 3800.   # degR — afterburner exit at max AB
+DRY_DSN_FN = 11000.  # lbf  — SLS mil power (no afterburner); sizes the engine
 
 # ── Design-point conditions and component performance ─────────────────────────
 DSN_ALT = 0.0   # ft  — sea level static
 DSN_MN  = 0.01  # Mach — nominally static; 0 is singular in the flow solve
 
 
-def _validate_design_targets(fn_target, mil_Tt4, dsn_Tt7=None):
+def _validate_design_targets(fn_target, mil_Tt4, max_Tt7):
     """Reject design targets that can't produce a meaningful sizing.
 
     These three checks cover the mistakes that otherwise surface only as an
@@ -37,8 +32,8 @@ def _validate_design_targets(fn_target, mil_Tt4, dsn_Tt7=None):
     that sizes a nonsense engine and corrupts every OD point downstream.
     """
     for name, value in (('fn_target', fn_target), ('mil_Tt4', mil_Tt4),
-                        ('dsn_Tt7', dsn_Tt7)):
-        if value is not None and not math.isfinite(value):
+                        ('max_Tt7', max_Tt7)):
+        if not math.isfinite(value):
             raise ValueError(
                 f"{name} must be a finite number, got {value!r}. A NaN or inf "
                 f"target propagates through prob.set_val() into the Newton "
@@ -51,8 +46,7 @@ def _validate_design_targets(fn_target, mil_Tt4, dsn_Tt7=None):
             f"The DESIGN W balance solves inlet mass flow against this target; "
             f"a non-positive target drives W to its 25 lbm/s lower bound and "
             f"sizes an engine that no off-design point can be trusted from. "
-            f"Use DRY_DSN_FN ({DRY_DSN_FN:.0f}) for dry or WET_DSN_FN "
-            f"({WET_DSN_FN:.0f}) for wet."
+            f"The default is DRY_DSN_FN ({DRY_DSN_FN:.0f}), SLS mil power."
         )
 
     if mil_Tt4 <= 0:
@@ -62,9 +56,9 @@ def _validate_design_targets(fn_target, mil_Tt4, dsn_Tt7=None):
             f"this target."
         )
 
-    if dsn_Tt7 is not None and dsn_Tt7 <= mil_Tt4:
+    if max_Tt7 <= mil_Tt4:
         raise ValueError(
-            f"dsn_Tt7 ({dsn_Tt7} degR) must exceed mil_Tt4 ({mil_Tt4} degR). "
+            f"max_Tt7 ({max_Tt7} degR) must exceed mil_Tt4 ({mil_Tt4} degR). "
             f"The afterburner adds heat downstream of the turbines, so its exit "
             f"is always hotter than the core burner's; a target at or below "
             f"mil_Tt4 asks the FAR_ab balance for negative fuel flow and it "
@@ -123,91 +117,60 @@ def _apply_od_inputs(prob, pt, mil_Tt4):
     prob[pt + '.hpc.map.RlineMap'] = 2.0
 
 
-def _solve(prob, pt, label, verbose, afterburn):
-    """Run the DESIGN + OD solve, optionally printing both result pages."""
+def build_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, max_Tt7=MAX_Tt7,
+                  verbose=True):
+    """Build and solve the single-engine MPCycle problem.
+
+    Parameters
+    ----------
+    fn_target : float
+        SLS dry mil thrust, lbf. Sizes the engine — see
+        ``_validate_design_targets``.
+    mil_Tt4 : float
+        Core burner exit temperature at mil power, degR. Wet points hold it.
+    max_Tt7 : float
+        Afterburner exit temperature at max AB, degR — the ``OD_wet`` target
+        at the SLS point solved here.
+    verbose : bool
+        Print Newton iterations and the DESIGN/OD result tables.
+
+    Returns
+    -------
+    (openmdao.api.Problem, MPMixedFlowTurbofan)
+        The solved problem and its model, whose ``od_pts`` attribute maps
+        'dry' and 'wet' to the off-design point names.
+    """
+    _validate_design_targets(fn_target, mil_Tt4, max_Tt7)
+
+    prob = om.Problem()
+    prob.model = mp = MPMixedFlowTurbofan()
+    prob.setup()
+
+    _apply_design_inputs(prob, fn_target, mil_Tt4)
+    for pt in mp.od_pts.values():
+        _apply_od_inputs(prob, pt, mil_Tt4)
+
+    # The wet point starts from the dry-sized engine with the afterburner lit,
+    # so it gets its own guesses: near-DESIGN flow and bypass, an AB fuel-air
+    # ratio for ~3800 R, and an A8 about 1.7x the dry throat.
+    wet = mp.od_pts['wet']
+    prob.set_val(wet + '.balance.rhs:FAR_ab', max_Tt7, units='degR')
+    prob[wet + '.balance.FAR_ab'] = 0.04
+    prob[wet + '.balance.W']      = 140.
+    prob[wet + '.balance.BPR']    = 0.75
+    prob[wet + '.a8_ctrl.A8']     = 320.
+
     prob.set_solver_print(level=-1)
     if verbose:
         prob.set_solver_print(level=2, depth=1)
         print("=" * 60)
-        print(f"{label} — Running DESIGN + OD at design conditions...")
+        print("Running DESIGN (dry mil) + OD_dry + OD_wet at SLS...")
         print("=" * 60)
 
     prob.run_model()
 
     if verbose:
-        page_viewer(prob, 'DESIGN', afterburn=afterburn)
-        page_viewer(prob, pt, afterburn=afterburn)
-
-
-def build_dry_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, verbose=True):
-    """Build and solve a dry (no afterburner) MPCycle problem.
-
-    Parameters
-    ----------
-    fn_target : float
-        SLS DESIGN thrust target, lbf. Sizes the engine — see
-        ``_validate_design_targets``.
-    mil_Tt4 : float
-        Core burner exit temperature at mil power, degR.
-    verbose : bool
-        Print Newton iterations and the DESIGN/OD result tables.
-
-    Returns
-    -------
-    (openmdao.api.Problem, MPMixedFlowTurbofan)
-        The solved problem and its model, whose ``od_pt`` attribute names
-        the off-design point.
-    """
-    _validate_design_targets(fn_target, mil_Tt4)
-
-    prob = om.Problem()
-    prob.model = mp = MPMixedFlowTurbofan(afterburn=False)
-    prob.setup()
-
-    _apply_design_inputs(prob, fn_target, mil_Tt4)
-    # Dry mode: the afterburner is a pyc.Duct, so there is no Fl_I:FAR
-    # balance to seed. FAR propagates through from the mixer duct as-is.
-    _apply_od_inputs(prob, mp.od_pt, mil_Tt4)
-
-    _solve(prob, mp.od_pt, 'DRY', verbose, afterburn=False)
-    return prob, mp
-
-
-def build_wet_problem(fn_target=WET_DSN_FN, mil_Tt4=MIL_Tt4, dsn_Tt7=DSN_Tt7,
-                      verbose=True):
-    """Build and solve a wet (afterburning) MPCycle problem.
-
-    Parameters
-    ----------
-    fn_target : float
-        SLS DESIGN thrust target, lbf, at max afterburner.
-    mil_Tt4 : float
-        Core burner exit temperature, degR. Held fixed across a wet sweep.
-    dsn_Tt7 : float
-        Afterburner exit temperature at the DESIGN point, degR. This is the
-        sizing corner, so it belongs at max AB, not mid-AB.
-    verbose : bool
-        Print Newton iterations and the DESIGN/OD result tables.
-
-    Returns
-    -------
-    (openmdao.api.Problem, MPMixedFlowTurbofan)
-        The solved problem and its model.
-    """
-    _validate_design_targets(fn_target, mil_Tt4, dsn_Tt7)
-
-    prob = om.Problem()
-    prob.model = mp = MPMixedFlowTurbofan(afterburn=True)
-    prob.setup()
-
-    _apply_design_inputs(prob, fn_target, mil_Tt4)
-    prob.set_val('DESIGN.balance.rhs:FAR_ab', dsn_Tt7, units='degR')
-    prob['DESIGN.balance.FAR_ab'] = 0.0375
-
-    pt = mp.od_pt
-    _apply_od_inputs(prob, pt, mil_Tt4)
-    prob.set_val(pt + '.balance.rhs:FAR_ab', dsn_Tt7, units='degR')
-    prob[pt + '.balance.FAR_ab'] = 0.025
-
-    _solve(prob, pt, 'WET', verbose, afterburn=True)
+        page_viewer(prob, 'DESIGN', afterburn=False)
+        page_viewer(prob, mp.od_pts['dry'], afterburn=False)
+        page_viewer(prob, wet, afterburn=True)
     return prob, mp
