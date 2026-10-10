@@ -316,3 +316,47 @@ def test_usage_errors_stay_plain_argparse_text(capsys):
     err = capsys.readouterr().err
     assert err.startswith('usage: f404 sweep')
     assert '╭' not in err and 'error: argument --alt' in err
+
+
+def test_gui_help_prints_options(capsys):
+    assert '--deck' in help_text(capsys, 'gui')
+    assert '--port' in help_text(capsys, 'gui')
+    assert '--no-browser' in help_text(capsys, 'gui')
+
+
+def test_gui_parser_defaults():
+    parser = cli.build_parser()
+    args = parser.parse_args(['gui'])
+    assert args.command == 'gui'
+    assert args.deck is None
+    assert args.port == 8080
+    assert args.host == '127.0.0.1'
+    assert args.no_browser is False
+
+
+def test_gui_parser_custom_flags():
+    parser = cli.build_parser()
+    args = parser.parse_args(['gui', '--deck', 'custom.csv', '--port', '9000', '--host', '0.0.0.0', '--no-browser'])
+    assert str(args.deck) == 'custom.csv'
+    assert args.port == 9000
+    assert args.host == '0.0.0.0'
+    assert args.no_browser is True
+
+
+def test_gui_command_invokes_start_server(monkeypatch):
+    called = {}
+
+    def fake_start_server(deck_path, host, port, open_browser, block):
+        called['deck_path'] = deck_path
+        called['host'] = host
+        called['port'] = port
+        called['open_browser'] = open_browser
+        called['block'] = block
+
+    monkeypatch.setattr('F404_pycycle.gui_server.start_server', fake_start_server)
+    exit_code = cli.main(['gui', '--port', '8888', '--no-browser'])
+    assert exit_code == 0
+    assert called['port'] == 8888
+    assert called['open_browser'] is False
+    assert called['block'] is True
+
