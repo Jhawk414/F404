@@ -9,6 +9,7 @@ these pin the format down.
 import pandas as pd
 import pytest
 
+from F404_pycycle.problems import build_problem
 from F404_pycycle.sweep_full_envelope import (
     DECK_HI_PRECISION_COLS,
     DECK_SCI_COLS,
@@ -159,3 +160,15 @@ def test_run_mode_sweep_writes_a_deck_for_the_requested_grid(tmp_path, mode, pow
     assert len(df) == len(deck) == 1
     assert deck['mode'].iloc[0] == mode
     assert deck['alt'].iloc[0] == 0.0
+
+
+@pytest.mark.slow
+def test_wet_sweep_holds_the_mil_temperature_the_engine_was_built_with(tmp_path):
+    # A problem built with custom targets and handed in via built= must keep
+    # its own mil Tt4 in the wet sweep, not the module default (3100 R).
+    built = build_problem(mil_Tt4=3000., verbose=False)
+
+    df, _ = run_mode_sweep('wet', [0.], [0.], [3608.], out_dir=tmp_path,
+                           built=built)
+
+    assert df['T4'].iloc[0] == pytest.approx(3000., abs=0.01)

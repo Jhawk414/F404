@@ -28,8 +28,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from F404_pycycle.problems import build_problem, MIL_Tt4
-from F404_pycycle.sweep_utils import build_snake_sweep, SweepRunner
+from F404_pycycle.problems import build_problem
+from F404_pycycle.sweep_utils import build_snake_sweep, SweepRunner, _scalar
 
 # ── Default sweep grid (shared by both modes) ────────────────────────────────
 # Crawl-walk-run scope: low altitudes, static conditions on the runway.
@@ -125,21 +125,21 @@ def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.', built=None):
         The converged rows (with a ``mode`` column) and the number of points
         the sweep attempted.
     """
-    if mode == 'dry':
-        runner_kwargs = dict(afterburn=False)
-    elif mode == 'wet':
-        runner_kwargs = dict(afterburn=True, mil_Tt4=MIL_Tt4)
-    else:
+    if mode not in ('dry', 'wet'):
         raise ValueError(f"mode must be 'dry' or 'wet', got {mode!r}")
     prob, mp = built if built is not None else build_problem()
     prob.set_solver_print(level=-1)
+    # Wet holds Tt4 at the mil value this engine was built with, which may
+    # not be problems.MIL_Tt4 if the caller passed custom targets.
+    mil_Tt4 = _scalar(prob.get_val('DESIGN.balance.rhs:FAR_core', units='degR'))
 
     sweep_pts = build_snake_sweep(alts, dTs_vals, powers)
     print(f"\n{mode.capitalize()} sweep matrix: {len(sweep_pts)} points")
 
     frozen = [pt for m, pt in mp.od_pts.items() if m != mode]
     runner = SweepRunner(prob, od_pt=mp.od_pts[mode], mach=MACH,
-                         frozen_pts=frozen, **runner_kwargs)
+                         afterburn=(mode == 'wet'), mil_Tt4=mil_Tt4,
+                         frozen_pts=frozen)
     df = runner.run_sweep(
         sweep_pts,
         bridge_threshold=BRIDGE_THRESHOLD,
