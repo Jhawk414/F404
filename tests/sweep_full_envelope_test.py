@@ -172,3 +172,20 @@ def test_wet_sweep_holds_the_mil_temperature_the_engine_was_built_with(tmp_path)
                            built=built)
 
     assert df['T4'].iloc[0] == pytest.approx(3000., abs=0.01)
+
+
+@pytest.mark.slow
+def test_both_modes_sweep_one_problem_and_survive_a_failed_point(tmp_path):
+    # --mode both sizes once and sweeps dry then wet on the same problem. The
+    # dry grid opens with an unreachable point (800 R is below compressor
+    # delivery), so the wet sweep only produces a row if the failure didn't
+    # leave the shared problem broken and the freeze/restore round-tripped.
+    results = run_sweeps('both', alts=[0.], dTs_vals=[0.],
+                         dry_powers=[800., 3100.], wet_powers=[3608.],
+                         out_dir=tmp_path)
+
+    assert list(results['dry']['T4'].round()) == [3100.]
+    assert list(results['wet']['T7'].round()) == [3608.]
+    assert results['dry']['W'].iloc[0] == pytest.approx(
+        results['wet']['W'].iloc[0], rel=1e-3)
+    assert len(pd.read_csv(tmp_path / 'cycle_deck_full_envelope.csv')) == 2
