@@ -57,9 +57,10 @@ class MixedFlowTurbofan(pyc.Cycle):
         self.add_subsystem('mixer', pyc.Mixer(designed_stream=1))
         self.add_subsystem('mixer_duct', pyc.Duct())
         # Afterburner Components — in dry mode it's just a pipe (Duct), not a
-        # Combustor. A Combustor with no fuel addition produces a rank-deficient
-        # Jacobian (every output equation collapses to a copy of the input),
-        # which crashes the OD linear solve at part-power dry conditions.
+        # Combustor. A Combustor with its fuel-air ratio fixed at zero produced
+        # a rank-deficient Jacobian that crashed the OD linear solve at
+        # part-power dry conditions. A FAR_ab balance allowed to reach zero
+        # avoids that (ADR-0001), but the Duct also carries no dry-mode state.
         if afterburn:
             self.add_subsystem('afterburner', pyc.Combustor(fuel_type=FUEL_TYPE))
         else:

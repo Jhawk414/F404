@@ -8,10 +8,13 @@ class MPMixedFlowTurbofan(pyc.MPCycle):
 
     DESIGN sizes the engine at dry mil power, with the afterburner as a Duct.
     Two off-design points run on that geometry: ``OD_dry`` (Duct) and
-    ``OD_wet`` (Combustor, with A8 held by a nozzle control law). The element
-    types differ because a Combustor burning no fuel makes the Jacobian
-    rank-deficient. A sweep drives one point and freezes the other (see
-    ``SweepRunner``). ``od_pts`` maps mode to point name.
+    ``OD_wet`` (Combustor, with A8 held by a nozzle control law). The dry
+    points use a Duct rather than an unlit Combustor: a zero-fuel Combustor
+    has hit Jacobian conditioning failures here before, and it would carry a
+    FAR_ab state with nothing to do in dry mode. (An always-live FAR_ab
+    balance with a zero lower bound did run cleanly in ADR-0001's study, so
+    this is a choice, not a hard limit.) A sweep drives one point and freezes
+    the other (see ``SweepRunner``). ``od_pts`` maps mode to point name.
     """
 
     od_pts = {'dry': 'OD_dry', 'wet': 'OD_wet'}
