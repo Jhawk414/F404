@@ -61,13 +61,13 @@ def _validate_design_targets(fn_target, mil_Tt4, max_Tt7):
             f"this target."
         )
 
-    if max_Tt7 <= mil_Tt4:
+    if max_Tt7 <= 0:
         raise ValueError(
-            f"max_Tt7 ({max_Tt7} degR) must exceed mil_Tt4 ({mil_Tt4} degR). "
-            f"The afterburner adds heat downstream of the turbines, so its exit "
-            f"is always hotter than the core burner's; a target at or below "
-            f"mil_Tt4 asks the FAR_ab balance for negative fuel flow and it "
-            f"pins at its 1e-4 lower bound instead."
+            f"max_Tt7 must be a positive afterburner exit temperature in degR, "
+            f"got {max_Tt7}. It has to exceed the augmentor inlet (mixer exit) "
+            f"temperature, ~1500 R at SLS mil; that depends on the cycle, so "
+            f"only the solve can check it, where a lower target pins FAR_ab at "
+            f"its lower bound and fails to converge."
         )
 
 

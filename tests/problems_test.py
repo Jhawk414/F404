@@ -81,12 +81,20 @@ def test_non_positive_burner_temperature_is_rejected():
         build_problem(mil_Tt4=0.)
 
 
-@pytest.mark.parametrize('max_Tt7', [MIL_Tt4, MIL_Tt4 - 100.])
-def test_augmentor_target_below_core_target_is_rejected(max_Tt7):
-    # The afterburner adds heat downstream of the turbines, so asking for an
-    # exit cooler than the core burner's is asking for negative fuel flow.
+@pytest.mark.parametrize('max_Tt7', [0., -3608.])
+def test_non_positive_augmentor_target_is_rejected(max_Tt7):
     with pytest.raises(ValueError, match='max_Tt7'):
         build_problem(max_Tt7=max_Tt7)
+
+
+@pytest.mark.slow
+def test_augmentor_target_below_core_temperature_still_burns_fuel():
+    # The augmentor heats mixed flow at ~1500 R, downstream of the turbines,
+    # so T7 below Tt4 is a valid min-AB setting, not negative fuel flow. The
+    # default wet grid bottoms out at 3008 R, below MIL_Tt4.
+    prob, mp = build_problem(max_Tt7=MIL_Tt4 - 92., verbose=False)
+
+    assert _scalar(prob.get_val(f"{mp.od_pts['wet']}.balance.FAR_ab")) > 1e-3
 
 
 def test_validation_errors_name_the_offending_value_and_the_expected_range():

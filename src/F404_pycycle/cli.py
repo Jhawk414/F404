@@ -278,14 +278,10 @@ def _run_sweep_command(args, parser):
 
     # Imported here, not at module level, so that --help and every argument
     # error above return immediately instead of after loading OpenMDAO.
-    from F404_pycycle.problems import MIL_Tt4
+    # Wet Tt7 needs no floor here: the physical one is the augmentor inlet
+    # temperature, known only after a solve, and a point below it pins FAR_ab
+    # at its bound and is dropped by SweepRunner's guards.
     from F404_pycycle import sweep_full_envelope as sfe
-
-    if args.throttle is not None and args.mode == 'wet' and min(args.throttle) <= MIL_Tt4:
-        parser.error(
-            f"--throttle for wet mode is Tt7 and must exceed the fixed core "
-            f"Tt4 of {MIL_Tt4:g} degR (the afterburner only adds heat), got a "
-            f"minimum of {min(args.throttle):g}")
 
     throttle = {'dry': sfe.DEFAULT_DRY_POWERS, 'wet': sfe.DEFAULT_WET_POWERS}
     if args.throttle is not None:
