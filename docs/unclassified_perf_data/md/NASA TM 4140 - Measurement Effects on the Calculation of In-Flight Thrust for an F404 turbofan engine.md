@@ -1,2 +1,2 @@
 
-- [[NASA TM 4538 - Flight-Determine Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane|NASA TM 4538]] - flight-determined F404 exhaust characteristics
+- [[NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring|NASA TM-4240]] - simple dynamic engine model for real-time simulation
