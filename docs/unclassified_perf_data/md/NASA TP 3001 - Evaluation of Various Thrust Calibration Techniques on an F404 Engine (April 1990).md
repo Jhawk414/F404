@@ -3,7 +3,7 @@ title: "Evaluation of Various Thrust Calibration Techniques on an F404 Engine"
 author: "Ronald J. Ray"
 year: 1990
 source: "[[NASA TP 3001 - Evaluation of Various Thrust Calibration Techniques on an F404 Engine (April 1990).pdf]]"
-report: "NASA Technical Paper 3001 (errata: title should read "Thrust Calculation Techniques")"
+report: 'NASA Technical Paper 3001 (errata: title should read "Thrust Calculation Techniques")'
 type: reference
 tags: [f404, reference/perf-data]
 created: 2026-10-11
