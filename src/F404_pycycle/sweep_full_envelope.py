@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from F404_pycycle.problems import build_problem
+from F404_pycycle.problems import build_problem, MAX_Tt7
 from F404_pycycle.sweep_utils import build_snake_sweep, SweepRunner, _scalar
 
 # ── Default sweep grid (shared by both modes) ────────────────────────────────
@@ -43,8 +43,8 @@ MACH = 0.001                                   # static (runway) conditions
 
 # Dry: sweep Tt4 from mil (3100) down to part-power (2500)
 DEFAULT_DRY_POWERS = [3100., 2900., 2700., 2500.]   # Tt4, degR
-# Wet: sweep T7 from max (problems.MAX_Tt7) down to min AB
-DEFAULT_WET_POWERS = [3608., 3408., 3208., 3008.]   # Tt7, degR
+# Wet: sweep T7 from the calibrated max AB down to min AB, 200 R steps
+DEFAULT_WET_POWERS = [MAX_Tt7 - 200. * k for k in range(4)]   # Tt7, degR
 
 BRIDGE_THRESHOLD = {'alt': 2000, 'dTs': 30, 'power': 100}
 MAX_BRIDGE_STEPS = 5
