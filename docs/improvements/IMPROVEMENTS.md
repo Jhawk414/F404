@@ -1,9 +1,11 @@
 # Repo Improvements Roadmap
 
-Forward-looking architectural changes discussed after closing out
-`feature/alt-mach-sweep` (see `HANDOFF_05Sep26.md` for the branch's actual
-accomplishments). None of this is implemented yet — it's a plan to work
-from in a new branch.
+Architectural changes first discussed after closing out
+`feature/alt-mach-sweep`. This is a historical roadmap: items 1, 2 and 6 are
+done, 3 and 8 are filed as #17 and #16, and the single-engine work in item 4
+landed as #2 (ADR-0001). Each section carries a status note where it has one.
+Open work is tracked in GitHub issues; the AGENTS/ handoffs record what
+shipped.
 
 ## 1. Move F404 application code out of the repo root into `/src/`
 

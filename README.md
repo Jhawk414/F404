@@ -236,9 +236,14 @@ alt ∈ {0, 2500, 5000} ft, dTs ∈ {0, ±10, ±20, ±30, ±40, ±50} R, static
 Decks: [`deck/cycle_deck_dry.csv`](deck/cycle_deck_dry.csv),
 [`deck/cycle_deck_wet.csv`](deck/cycle_deck_wet.csv).
 
-All points with dTs ≥ 0 R converge in both modes. The failures are at cold
-(dTs < 0 R), higher-altitude corners, tracked in
-[issue #3](https://github.com/Jhawk414/F404/issues/3).
+Where the failures are, tracked in
+[issue #3](https://github.com/Jhawk414/F404/issues/3):
+
+- **Wet:** every point with dTs ≥ 0 R converges; all failures are on the cold
+  (dTs < 0 R) side, worst at altitude.
+- **Dry:** 67 of the 72 non-cold points converge. Five hot-day, low-power
+  points fail at Tt4 = 2500 R: dTs +40 and +50 R at 0 and 2500 ft, and
+  +50 R at 5000 ft. The rest of the dry failures are on the cold side.
 
 - **Wet** rose from 89/132 when the wet A8 stopped being frozen at its DESIGN
   value ([ADR-0001](docs/adr/0001-single-engine-sizing.md)).
