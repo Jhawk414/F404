@@ -8,6 +8,7 @@ Provides:
 - SweepRunner: Orchestrates the full sweep loop with warm-starting and bridge points
 """
 import logging
+from contextlib import contextmanager
 
 import numpy as np
 import openmdao.api as om
@@ -34,7 +35,16 @@ _OD_BOUNDS = {
     'balance.LP_Nmech':  (500.,  None),  # no upper bound in BalanceComp
     'balance.HP_Nmech':  (500.,  None),
 }
-_OD_FAR_AB_BOUNDS = (1e-4, 0.06)  # only present when afterburn=True
+# Only present on the wet OD point.
+_OD_WET_BOUNDS = {
+    'balance.FAR_ab':    (1e-4,  0.06),
+    'a8_ctrl.A8':        (50.,   800.),
+}
+
+# Newton settings that hold an inactive OD point where it is: one residual
+# evaluation per run_model(), and never an AnalysisError on its account.
+_FROZEN_NEWTON = {'maxiter': 0, 'solve_subsystems': False,
+                  'err_on_non_converge': False}
 
 # Fraction of bound width within which a state is considered saturated.
 _BOUND_TOL_FRAC = 0.01
@@ -137,7 +147,7 @@ def extract_od_results(prob, pt, afterburn=True):
         Point name (e.g. 'OD').
     afterburn : bool
         True if the problem was built with afterburn=True (FAR_ab balance exists).
-        False for dry mode — FAR_ab is reported as 0.0.
+        False for dry mode — FAR_ab and Wf_ab are reported as 0.0.
 
     Returns
     -------
@@ -164,6 +174,9 @@ def extract_od_results(prob, pt, afterburn=True):
         'T7':        _scalar(prob.get_val(f'{pt}.afterburner.Fl_O:tot:T', units='degR')),
         'LP_Nmech':  _scalar(prob.get_val(f'{pt}.balance.LP_Nmech', units='rpm')),
         'HP_Nmech':  _scalar(prob.get_val(f'{pt}.balance.HP_Nmech', units='rpm')),
+        'Wf_core':   _scalar(prob.get_val(f'{pt}.burner.Wfuel', units='lbm/s')),
+        'Wf_ab':     _scalar(prob.get_val(f'{pt}.afterburner.Wfuel', units='lbm/s')) if afterburn else 0.0,
+        'A8':        _scalar(prob.get_val(f'{pt}.mixed_nozz.Throat:stat:area', units='inch**2')),
     }
 
 
@@ -180,7 +193,7 @@ class SweepRunner:
     prob : openmdao.api.Problem
         Problem with DESIGN already converged via prob.run_model().
     od_pt : str
-        Name of the OD point in the model (default 'OD').
+        Name of the OD point to drive, e.g. ``mp.od_pts['wet']``.
     mach : float
         Mach number to use for all sweep points.
     afterburn : bool
@@ -189,11 +202,17 @@ class SweepRunner:
     mil_Tt4 : float
         Core burner exit temp (degR) held fixed during a wet sweep (mil power).
         Ignored in dry mode.
+    frozen_pts : sequence of str
+        Other OD points in the model. Every ``run_model()`` solves all points,
+        so these are frozen for the sweep — otherwise a point the sweep isn't
+        driving could fail, and its failure would be recorded against this one.
     """
 
-    def __init__(self, prob, od_pt='OD', mach=0.01, afterburn=True, mil_Tt4=3100.):
+    def __init__(self, prob, od_pt, mach=0.01, afterburn=True, mil_Tt4=3100.,
+                 frozen_pts=()):
         self.prob = prob
         self.od_pt = od_pt
+        self.frozen_pts = tuple(frozen_pts)
         self.mach = mach
         self.afterburn = afterburn
         self.mil_Tt4 = mil_Tt4
@@ -215,6 +234,22 @@ class SweepRunner:
         self._od_newton().linesearch.options['maxiter'] = (
             0 if mode == 'fast' else 5
         )
+
+    @contextmanager
+    def _others_frozen(self):
+        """Freeze ``frozen_pts`` for the duration, then restore their Newtons."""
+        newtons = [self.prob.model._get_subsystem(pt).nonlinear_solver
+                   for pt in self.frozen_pts]
+        saved = [{k: n.options[k] for k in _FROZEN_NEWTON} for n in newtons]
+        for n in newtons:
+            for k, v in _FROZEN_NEWTON.items():
+                n.options[k] = v
+        try:
+            yield
+        finally:
+            for n, opts in zip(newtons, saved):
+                for k, v in opts.items():
+                    n.options[k] = v
 
     def _snapshot_state(self):
         """Capture the FULL OD output vector (all implicit Newton states).
@@ -266,14 +301,14 @@ class SweepRunner:
         pt = self.od_pt
         bounds = dict(_OD_BOUNDS)
         if self.afterburn:
-            bounds['balance.FAR_ab'] = _OD_FAR_AB_BOUNDS
+            bounds.update(_OD_WET_BOUNDS)
         for key, (lo, hi) in bounds.items():
             try:
                 val = _scalar(self.prob[f'{pt}.{key}'])
             except Exception as err:
                 # Fail loudly rather than skipping the state. Every key in
-                # _OD_BOUNDS exists in every OD configuration (FAR_ab is added
-                # above only when it does), so an unreadable one means the
+                # _OD_BOUNDS exists in every OD configuration (the wet-only
+                # ones are added above only when they do), so an unreadable one means the
                 # table has drifted from the model — and silently skipping it
                 # would retire this guard for that state without a symptom,
                 # which is the exact false-convergence failure it exists to
@@ -415,7 +450,7 @@ class SweepRunner:
         if self._last_good_state is None:
             # Anchor the fallback on the state we were handed. The problem
             # arrives with OD converged at design conditions (see
-            # problems.build_dry_problem / build_wet_problem), which is a
+            # problems.build_problem), which is a
             # perfectly good warm start. Without this, a failure before the
             # first success has nothing to restore from, so the model stays in
             # whatever state Newton abandoned and every later point
@@ -423,65 +458,66 @@ class SweepRunner:
             # takes the entire deck with it.
             self._last_good_state = self._snapshot_state()
 
-        for i, pt_cond in enumerate(sweep_points):
-            # Check if bridge points are needed
-            if prev_pt is not None:
-                needs_bridge = any(
-                    abs(pt_cond[key] - prev_pt[key]) > bridge_threshold.get(key, float('inf'))
-                    for key in ('alt', 'dTs', 'power')
-                )
-                if needs_bridge:
-                    bridges = generate_bridge_points(prev_pt, pt_cond, max_bridge_steps)
-                    for j, bp in enumerate(bridges, 1):
-                        print(f"  [BRIDGE {j}/{len(bridges)}] alt={bp['alt']:6.0f} ft  "
-                              f"dTs={bp['dTs']:+5.1f} R  MN={self.mach:.3f}  "
-                              f"{power_label}={bp['power']:6.1f} R")
-                        self._set_od_conditions(bp['alt'], bp['dTs'], bp['power'])
-                        bridge_ok = self._run_bridge()
-                        if not bridge_ok and self._last_good_state is not None:
-                            # Hard failure (bound saturation / NaN) — restore
-                            # so the next bridge doesn't inherit blown-up state.
-                            self._restore_state(self._last_good_state)
+        with self._others_frozen():
+            for i, pt_cond in enumerate(sweep_points):
+                # Check if bridge points are needed
+                if prev_pt is not None:
+                    needs_bridge = any(
+                        abs(pt_cond[key] - prev_pt[key]) > bridge_threshold.get(key, float('inf'))
+                        for key in ('alt', 'dTs', 'power')
+                    )
+                    if needs_bridge:
+                        bridges = generate_bridge_points(prev_pt, pt_cond, max_bridge_steps)
+                        for j, bp in enumerate(bridges, 1):
+                            print(f"  [BRIDGE {j}/{len(bridges)}] alt={bp['alt']:6.0f} ft  "
+                                  f"dTs={bp['dTs']:+5.1f} R  MN={self.mach:.3f}  "
+                                  f"{power_label}={bp['power']:6.1f} R")
+                            self._set_od_conditions(bp['alt'], bp['dTs'], bp['power'])
+                            bridge_ok = self._run_bridge()
+                            if not bridge_ok and self._last_good_state is not None:
+                                # Hard failure (bound saturation / NaN) — restore
+                                # so the next bridge doesn't inherit blown-up state.
+                                self._restore_state(self._last_good_state)
 
-            # Run the actual sweep point — fast linesearch first, fall back to
-            # safe (Armijo backtracking) only if the fast attempt diverges.
-            print(f"  [SWEEP  {i+1:3d}/{n_total}] alt={pt_cond['alt']:6.0f} ft  "
-                  f"dTs={pt_cond['dTs']:+5.1f} R  MN={self.mach:.3f}  "
-                  f"{power_label}={pt_cond['power']:6.1f} R", end="", flush=True)
-            self._set_od_conditions(pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
-
-            self._set_linesearch_mode('fast')
-            converged = self._run_point(power=pt_cond['power'])
-            mode_used = 'fast'
-
-            if not converged:
-                # Restore last known-good state (Newton may have left NaNs/junk
-                # in the state vector) and retry with safe linesearch.
-                if self._last_good_state is not None:
-                    self._restore_state(self._last_good_state)
+                # Run the actual sweep point — fast linesearch first, fall back to
+                # safe (Armijo backtracking) only if the fast attempt diverges.
+                print(f"  [SWEEP  {i+1:3d}/{n_total}] alt={pt_cond['alt']:6.0f} ft  "
+                      f"dTs={pt_cond['dTs']:+5.1f} R  MN={self.mach:.3f}  "
+                      f"{power_label}={pt_cond['power']:6.1f} R", end="", flush=True)
                 self._set_od_conditions(pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
-                self._set_linesearch_mode('safe')
+
+                self._set_linesearch_mode('fast')
                 converged = self._run_point(power=pt_cond['power'])
-                self._set_linesearch_mode('fast')  # restore default for next point
-                mode_used = 'safe'
+                mode_used = 'fast'
 
-            if converged:
-                row = extract_od_results(self.prob, self.od_pt, afterburn=self.afterburn)
-                results.append(row)
-                self._last_good_state = self._snapshot_state()
-                tag = "" if mode_used == 'fast' else " (safe)"
-                print(f"  → converged{tag}")
-            else:
-                # Both attempts failed — restore last-good state so the next
-                # sweep point doesn't warm-start from corrupted state and
-                # cascade more false convergences.
-                if self._last_good_state is not None:
-                    self._restore_state(self._last_good_state)
-                print("  → FAILED")
-                log.warning("Point did not converge: alt=%.0f dTs=%.1f power=%.0f",
-                            pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
+                if not converged:
+                    # Restore last known-good state (Newton may have left NaNs/junk
+                    # in the state vector) and retry with safe linesearch.
+                    if self._last_good_state is not None:
+                        self._restore_state(self._last_good_state)
+                    self._set_od_conditions(pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
+                    self._set_linesearch_mode('safe')
+                    converged = self._run_point(power=pt_cond['power'])
+                    self._set_linesearch_mode('fast')  # restore default for next point
+                    mode_used = 'safe'
 
-            prev_pt = pt_cond
+                if converged:
+                    row = extract_od_results(self.prob, self.od_pt, afterburn=self.afterburn)
+                    results.append(row)
+                    self._last_good_state = self._snapshot_state()
+                    tag = "" if mode_used == 'fast' else " (safe)"
+                    print(f"  → converged{tag}")
+                else:
+                    # Both attempts failed — restore last-good state so the next
+                    # sweep point doesn't warm-start from corrupted state and
+                    # cascade more false convergences.
+                    if self._last_good_state is not None:
+                        self._restore_state(self._last_good_state)
+                    print("  → FAILED")
+                    log.warning("Point did not converge: alt=%.0f dTs=%.1f power=%.0f",
+                                pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
+
+                prev_pt = pt_cond
 
         log.info("Sweep complete: %d / %d points converged",
                  len(results), len(sweep_points))

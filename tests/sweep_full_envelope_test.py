@@ -9,6 +9,7 @@ these pin the format down.
 import pandas as pd
 import pytest
 
+from F404_pycycle.problems import build_problem
 from F404_pycycle.sweep_full_envelope import (
     DECK_HI_PRECISION_COLS,
     DECK_SCI_COLS,
@@ -30,6 +31,7 @@ ROW = {
     'hpt_PR': 2.6407372249, 'lpt_PR': 2.4477651512,
     'T4': 3100.0000000012, 'T7': 3799.9999958999,
     'LP_Nmech': 9999.9999867901, 'HP_Nmech': 13999.9999421201,
+    'Wf_core': 1.8945960871, 'Wf_ab': 5.6012345678, 'A8': 381.2345678,
     'mode': 'wet',
 }
 
@@ -59,6 +61,8 @@ def test_continuous_quantities_keep_four_decimals(written):
     assert written['TSFC'] == '0.6201'
     assert written['LP_Nmech'] == '10000.0000'  # 9999.99998679, rounded up
     assert written['MN'] == '0.0010'
+    assert written['Wf_core'] == '1.8946'
+    assert written['Wf_ab'] == '5.6012'
 
 
 def test_thrust_temperatures_and_flight_conditions_keep_two_decimals(written):
@@ -66,6 +70,7 @@ def test_thrust_temperatures_and_flight_conditions_keep_two_decimals(written):
     assert written['T4'] == '3100.00'
     assert written['T7'] == '3800.00'
     assert written['alt'] == '2500.00'
+    assert written['A8'] == '381.23'
 
 
 def test_every_numeric_column_is_assigned_a_precision(written):
@@ -133,7 +138,7 @@ def test_default_grid_is_the_committed_envelope():
     assert DEFAULT_DTS == [0., 10., 20., 30., 40., 50.,
                            -10., -20., -30., -40., -50.]
     assert DEFAULT_DRY_POWERS == [3100., 2900., 2700., 2500.]
-    assert DEFAULT_WET_POWERS == [3800., 3600., 3400., 3200.]
+    assert DEFAULT_WET_POWERS == [3608., 3408., 3208., 3008.]
 
 
 @pytest.mark.parametrize('call', [
@@ -146,7 +151,7 @@ def test_unknown_mode_is_rejected_before_any_work(call):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('mode, power', [('dry', 3100.), ('wet', 3800.)])
+@pytest.mark.parametrize('mode, power', [('dry', 3100.), ('wet', 3608.)])
 def test_run_mode_sweep_writes_a_deck_for_the_requested_grid(tmp_path, mode, power):
     df, attempted = run_mode_sweep(mode, [0.], [0.], [power], out_dir=tmp_path)
 
@@ -155,3 +160,32 @@ def test_run_mode_sweep_writes_a_deck_for_the_requested_grid(tmp_path, mode, pow
     assert len(df) == len(deck) == 1
     assert deck['mode'].iloc[0] == mode
     assert deck['alt'].iloc[0] == 0.0
+
+
+@pytest.mark.slow
+def test_wet_sweep_holds_the_mil_temperature_the_engine_was_built_with(tmp_path):
+    # A problem built with custom targets and handed in via built= must keep
+    # its own mil Tt4 in the wet sweep, not the module default (3100 R).
+    built = build_problem(mil_Tt4=3000., verbose=False)
+
+    df, _ = run_mode_sweep('wet', [0.], [0.], [3608.], out_dir=tmp_path,
+                           built=built)
+
+    assert df['T4'].iloc[0] == pytest.approx(3000., abs=0.01)
+
+
+@pytest.mark.slow
+def test_both_modes_sweep_one_problem_and_survive_a_failed_point(tmp_path):
+    # --mode both sizes once and sweeps dry then wet on the same problem. The
+    # dry grid opens with an unreachable point (800 R is below compressor
+    # delivery), so the wet sweep only produces a row if the failure didn't
+    # leave the shared problem broken and the freeze/restore round-tripped.
+    results = run_sweeps('both', alts=[0.], dTs_vals=[0.],
+                         dry_powers=[800., 3100.], wet_powers=[3608.],
+                         out_dir=tmp_path)
+
+    assert list(results['dry']['T4'].round()) == [3100.]
+    assert list(results['wet']['T7'].round()) == [3608.]
+    assert results['dry']['W'].iloc[0] == pytest.approx(
+        results['wet']['W'].iloc[0], rel=1e-3)
+    assert len(pd.read_csv(tmp_path / 'cycle_deck_full_envelope.csv')) == 2

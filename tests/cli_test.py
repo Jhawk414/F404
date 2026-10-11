@@ -18,7 +18,6 @@ from F404_pycycle.cli import (
     parse_range,
     throttle_axis,
 )
-from F404_pycycle.problems import MIL_Tt4
 from F404_pycycle.sweep_full_envelope import (
     DEFAULT_ALTS,
     DEFAULT_DRY_POWERS,
@@ -108,7 +107,7 @@ def test_dts_axis_reproduces_the_default_order():
 
 def test_throttle_axis_reproduces_both_default_power_lists():
     assert throttle_axis('2500,3100,200') == DEFAULT_DRY_POWERS
-    assert throttle_axis('3200,3800,200') == DEFAULT_WET_POWERS
+    assert throttle_axis('3008,3608,200') == DEFAULT_WET_POWERS
 
 
 def test_dts_axis_without_a_cold_side_is_plain_ascending():
@@ -184,8 +183,6 @@ def fails(capsys, argv, fragment):
     (['sweep', '--dts', '0,ten,5'], 'must all be numbers'),
     (['sweep', '--throttle', '3100,2500,200', '--mode', 'dry'], 'must not exceed max'),
     (['sweep', '--throttle', '2500,3100,200'], 'can\'t serve --mode both'),
-    (['sweep', '--mode', 'wet', '--throttle', f'{MIL_Tt4 - 100:g},3800,100'],
-     'must exceed the fixed core'),
     (['sweep', '--mode', 'hot'], 'invalid choice'),
 ])
 def test_bad_sweep_arguments_fail_before_any_model_is_built(
@@ -209,11 +206,13 @@ def test_a_command_is_required(capsys):
 
 
 @pytest.mark.parametrize('argv, fragment', [
-    (['design', '--fn-target', '9000'], 'Use --mode dry or --mode wet'),
-    (['design', '--mode', 'dry', '--dsn-tt7', '3800'], 'wet (afterburning)'),
-    (['design', '--mode', 'dry', '--fn-target', '-5'], 'fn_target must be a positive'),
-    (['design', '--mode', 'dry', '--mil-tt4', 'nan'], 'must be a finite number'),
-    (['design', '--mode', 'wet', '--dsn-tt7', '3000'], 'must exceed mil_Tt4'),
+    # One engine now, so there is no mode to pick, and the wet target is an
+    # off-design max-AB temperature rather than a DESIGN one (#2).
+    (['design', '--mode', 'dry'], 'unrecognized arguments'),
+    (['design', '--dsn-tt7', '3800'], 'unrecognized arguments'),
+    (['design', '--fn-target', '-5'], 'fn_target must be a positive'),
+    (['design', '--mil-tt4', 'nan'], 'must be a finite number'),
+    (['design', '--max-tt7', '0'], 'max_Tt7 must be a positive'),
 ])
 def test_bad_design_arguments_fail_before_any_solve(capsys, argv, fragment):
     fails(capsys, argv, fragment)
@@ -241,11 +240,25 @@ def test_sweep_end_to_end_writes_the_requested_deck(tmp_path, capsys):
 
 
 @pytest.mark.slow
-def test_design_prints_the_requested_engine(capsys):
-    assert cli.main(['design', '--mode', 'dry']) == 0
+def test_documented_wet_range_sweeps_below_core_temperature(tmp_path, capsys):
+    # The README's wet example, thinned to its two ends. 3008 R is below the
+    # 3100 R core Tt4, which the CLI used to reject.
+    status = cli.main(['sweep', '--mode', 'wet', '--alt', '0,0,1',
+                       '--dts', '0,0,1', '--throttle', '3008,3608,600',
+                       '--out', str(tmp_path)])
+
+    deck = pd.read_csv(tmp_path / 'cycle_deck_wet.csv')
+    assert status == 0
+    assert sorted(deck['T7'].round()) == [3008., 3608.]
+    assert (deck['Wf_ab'] > 0).all()
+
+
+@pytest.mark.slow
+def test_design_prints_the_design_and_both_off_design_points(capsys):
+    assert cli.main(['design']) == 0
 
     out = capsys.readouterr().out
-    assert 'DRY' in out and 'WET' not in out
+    assert all(pt in out for pt in ('DESIGN', 'OD_dry', 'OD_wet'))
 
 
 # ── help rendering ────────────────────────────────────────────────────────────

@@ -1,8 +1,56 @@
 # Handoff: F404-pyCycle — Recommended Issue Order
 
-Supersedes `HANDOFF_19Sep26.md` (renamed to this file). Everything from that
-handoff, and from `HANDOFF_14Sep26.md` before it, is preserved below
-unchanged; the 07 Oct 26 session summary is new.
+Supersedes `HANDOFF_07Oct26.md` (renamed to this file). Everything from that
+handoff, and from the ones before it, is preserved below unchanged; the
+10 Oct 26 session summary is new.
+
+## Session summary (10 Oct 26) — #2 single-engine sizing
+
+Branch `feat/single-engine-sizing`. Trade study, then implementation. The full
+write-up is [ADR-0001](../docs/adr/0001-single-engine-sizing.md), the first
+ADR in the repo (`docs/adr/`).
+
+**What shipped:**
+- One `MPCycle` with one DESIGN, sized at SLS dry mil (11,000 lbf).
+- Two OD points:
+  - `OD_dry`: afterburner is a Duct; unchanged from before.
+  - `OD_wet`: afterburner is a Combustor. A8 is a free state (`a8_ctrl`)
+    holding fan `RlineMap` at its design value of 2.0.
+- `SweepRunner(frozen_pts=...)` freezes the point the sweep isn't driving,
+  because every `run_model()` solves all three.
+- Max AB is calibrated to 17,700 lbf: Tt7 = 3608 R, with a 5.4% augmentor
+  hot loss on `OD_wet` only.
+- New deck columns `Wf_core`, `Wf_ab` and `A8`.
+- `f404 design` drops `--mode`; `--dsn-tt7` is renamed `--max-tt7`.
+- Default wet grid is now 3608 → 3008 R.
+- 174 tests, 95% coverage, no xfail.
+
+**Findings worth keeping:**
+1. **The 5.17% was a cycle mismatch, not a sizing artefact.** The cycle's
+   augmentation ratio (1.692) differs from the target thrust ratio (1.609),
+   so no single sizing hits 11,000 dry *and* 17,700 wet at 3800 R. Closing it
+   needs a cycle knob.
+2. **Options 1 and 2 as written have no dry solution.** Dry flow through the
+   wet-sized throat leaves the map at about 217 of 304 in², with BPR hitting
+   its 1.0 bound. A per-mode A8 is a prerequisite for any single-engine
+   design.
+3. **The near-zero-FAR_ab Jacobian did not reproduce.** The test used a FAR
+   balance with lower bound 0 and a runtime T7-target selector, ran over the
+   full dry envelope, and saw no rank errors (117/132 vs 118/132).
+4. **Wet convergence on the full envelope rose from 89 to 100 of 132,** and
+   every previously converged point is kept. This supports #3's frozen-A8
+   hypothesis. Remaining failures are all dTs < 0.
+5. **Dry is 118/132, confirmed after a clean venv.** The old 125 is not
+   reproducible; README updated.
+6. **New bug [#22](https://github.com/Jhawk414/F404/issues/22):** `--dts
+   -20,20,10` is parsed as a flag. Workaround: `--dts=-20,20,10`.
+
+**For #8 / #3 next:**
+- The A8 law holds Rline at 2.0 everywhere, which leaves a small
+  dry → min-AB step off SLS. A PLA/T7 schedule, or a per-condition dry-Rline
+  target, slots into `a8_ctrl` without structural change.
+- The CLI's wet-throttle floor (`Tt7 > MIL_Tt4`) is conservative. The
+  physical floor is the mixer exit temperature (~1500 R).
 
 ## Session summary (07 Oct 26) — thin CLI (PR #19)
 

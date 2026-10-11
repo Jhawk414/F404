@@ -72,13 +72,25 @@ def test_balance_set_matches_the_point_type(cycle, design, expected):
 
 @pytest.mark.parametrize('design', [True, False])
 def test_far_ab_balance_exists_only_in_wet_mode(cycle, design):
-    # This is why dry and wet need separate om.Problem instances: the
-    # balance is structural and can't be toggled after setup.
+    # The balance is structural and can't be toggled after setup, which is
+    # why dry and wet run on separate OD points of the one problem.
     wet = cycle(design=design, afterburn=True)
     dry = cycle(design=design, afterburn=False)
 
     assert 'FAR_ab' in wet._get_subsystem('balance')._state_vars
     assert 'FAR_ab' not in dry._get_subsystem('balance')._state_vars
+
+
+@pytest.mark.parametrize('design, afterburn, expected', [
+    (False, True, True), (False, False, False), (True, True, False),
+])
+def test_only_a_wet_off_design_point_controls_the_nozzle_throat(
+        cycle, design, afterburn, expected):
+    # DESIGN computes A8 and dry OD inherits it; only the wet point solves
+    # its own, holding the fan on its design operating line.
+    model = cycle(design=design, afterburn=afterburn)
+
+    assert ('a8_ctrl' in {s.name for s in model._subsystems_myproc}) is expected
 
 
 # ── Solver configuration ──────────────────────────────────────────────────────
