@@ -50,6 +50,17 @@ Key vault conventions:
 
 ---
 
+## Data Provenance Taxonomy
+
+Numerical values throughout this index carry explicit provenance classifications to distinguish empirical data from model outputs:
+
+- **[M-DIR] Direct Measurement**: Values recorded by physical instruments (such as test cell load cells, traversing rakes, Venturi flowmeters, and test cell scales).
+- **[M-SPEC] Manufacturer Specification / Rating**: Nominal design targets, uncalibrated engine specification decks, or contractual program ratings published by General Electric or defense acquisition offices.
+- **[M-MOD] Model-Derived Synthesis**: Quantities computed by driving an aerothermodynamic cycle deck or gas generator model with recorded flight or test parameters (such as GE In-Flight Thrust Program 83112, GE Dynamic Real Time Model R88AEB427, or Computing Devices Company SGTM).
+- **[M-PLOT] Chart Reading**: Values scaled or digitized from published report plots.
+
+---
+
 ## Literature Inventory
 
 | Document Note | Lead Author | Year | Report Identifier | Test Campaign / Context | Primary Research Focus |
@@ -87,7 +98,7 @@ Key vault conventions:
 - Control sensors monitor inlet temperature ($T_1$), ambient pressure ($P_0$), fan speed ($N_1$), compressor inlet temperature ($T_{2.5}$), core speed ($N_2$), combustor static pressure ($PS_3$), and turbine exhaust temperature ($T_5$).
 - Engine uses hydromechanical control below military power and electronic supervisory control at military power and afterburning.
 
-#### Key Performance Metrics
+#### Key Performance Metrics [M-SPEC / Program Ratings: Figures 1, 3, 4, 14, 28, text p. 8]
 
 | Parameter | Value (US Units) | Value (SI Units) | Operating Condition / Source |
 | :--- | :--- | :--- | :--- |
@@ -138,7 +149,9 @@ Frith supplies the foundation for 0D thermodynamic station modeling: 3 fan stage
   - Condition 1: Mach 0.30 at 30,000 ft ($PT_1 = 4.65\text{ psia}$, $P_{\text{amb}} = 4.39\text{ psia}$, $TT_1 = 464.8^\circ\text{R}$).
   - Condition 2: Mach 0.87 at 24,000 ft ($PT_1 = 9.30\text{ psia}$, $P_{\text{amb}} = 5.70\text{ psia}$, $TT_1 = 504.5^\circ\text{R}$).
 
-#### Key Measured Survey Results
+#### Key Measured Survey Results [M-DIR: Traversing Rake at Station R (2 in aft of nozzle exit), Figures 9, 10, 11]
+
+*Note on measurement location: Values represent local stagnation pressures and temperatures recorded by probe tips traversing the exhaust plume 2 inches downstream of the nozzle exit plane (Station R), not bulk 1D mixed flow station values.*
 
 | Test Condition | Power Setting (PLA) | Outer Edge Radius | Peak Total Pressure ($PT_9$) | Centerline Total Pressure | Peak Total Temp ($TT_9$) | Centerline Total Temp | Expansion State |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -169,7 +182,7 @@ Frith supplies the foundation for 0D thermodynamic station modeling: 3 fan stage
 - Evaluated two thrust formulations: Mass Flow-Temperature (WT) and Area-Pressure (AP).
 - Calculated linear influence coefficients ($C_i = \Delta FN\% / 1\%$ parameter change) and verified them against full nonlinear error evaluations.
 
-#### Sensor Ranges and Absolute Uncertainties
+#### Sensor Ranges and Absolute Uncertainties [M-DIR Instrumentation Specifications: Table 1 of TM-4140]
 
 | Parameter | Sensor / Source | Operating Range | Absolute Uncertainty ($\pm$) |
 | :--- | :--- | :--- | :--- |
@@ -184,7 +197,7 @@ Frith supplies the foundation for 0D thermodynamic station modeling: 3 fan stage
 | Afterburner Fuel Flow ($WFAB$) | Volumetric flowmeter + temperature | 0 to 30,000 lb/hr | 600.0 lb/hr |
 | Fuel Heating Value ($FHV$) | Laboratory fuel sample analysis | 18,200 to 18,600 Btu/lb | 93.0 Btu/lb |
 
-#### Net Thrust Uncertainty Comparison across Flight Envelope
+#### Net Thrust Uncertainty Comparison across Flight Envelope [M-MOD: Synthesized via GE IFT Program 83112, Table 2 of TM-4140]
 
 | Flight Condition | Power Setting (PLA) | Baseline Net Thrust | WT Uncertainty ($UFNWT$) | AP Uncertainty ($UFNAP$) | AP/WT Error Ratio |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -226,7 +239,7 @@ Frith supplies the foundation for 0D thermodynamic station modeling: 3 fan stage
 - Afterburner liner buckling at high dynamic pressures resolved by adding circumferential stiffening rings.
 - Compressor rub friction fires resolved by replacing the forward titanium compressor casing with M152 steel and installing a PMR-15 polyimide composite outer bypass duct. The net engine weight increased by only 1 lb.
 
-#### F404 Derivative Family Performance Comparison
+#### F404 Derivative Family Performance Comparison [M-SPEC / Program Ratings: Figures 3, 12, 15, 17]
 
 | Variant | Aircraft Application | Max A/B Thrust | Dry Thrust (MIL) | Fan Airflow | Fan PR | TIT Delta vs -400 | Key Structural & Aerodynamic Features |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -261,7 +274,7 @@ Frith supplies the foundation for 0D thermodynamic station modeling: 3 fan stage
 4. **Simplified Gross Thrust Method ($FG_{SGTM}$)**: 1D gas dynamic model developed by Computing Devices Company using only internal pressures ($PT_{558}$, $PS_6$, $PS_7$) and ambient static pressure ($P_0$).
 5. **Engine Specification Model ($FG_{\text{spec}}$)**: Uncalibrated cycle deck predicting average F404-GE-400 performance (GE Program 80031A(U)).
 
-#### Accuracy Comparison Against PSL Load-Cell Measurements
+#### Accuracy Comparison Against PSL Load-Cell Measurements [Direct Comparison of M-MOD against M-DIR Load Cells: Table 6 of TP-3001]
 
 | Power Setting Regime | Test Points | Method | Mean Bias Error | $2\sigma$ Random Error Band |
 | :--- | :---: | :--- | :--- | :--- |
@@ -287,7 +300,7 @@ Frith supplies the foundation for 0D thermodynamic station modeling: 3 fan stage
 - GE Specification model consumed 1,745% of the memory and 248% of the CPU time required by the GE IFT program.
 
 #### Relevance to Cycle Modeling
-Uncalibrated manufacturer specification models deviate from individual production engines ($\pm 8.74\%$ scatter at military power; -29.7% bias at idle). Cycle decks need empirical tuning factors to represent specific engines. The Computing Devices Company SGTM formulation confirms that nozzle gross thrust can be calculated within 1.04% accuracy during afterburning using only five internal pressure taps, avoiding fuel flow meters or throat area sensors.
+Uncalibrated manufacturer specification models deviate from individual production engines: across the full operational range (PLA 40° to 130°, 131 test points), the specification model exhibited a 2σ random scatter of ±8.74% (at dry power PLA 40° to 87°, 2σ scatter was ±11.57%; at flight idle, mean bias reached -29.69% with ±23.69% 2σ scatter). Cycle decks require empirical tuning factors to match specific physical engines. The Computing Devices Company SGTM formulation demonstrated a 2σ random scatter band of ±1.04% relative to the NASA Lewis PSL load-cell thrust cradle during afterburning (PLA 90° to 130°), measuring gross thrust from five internal pressure taps without fuel flow meters or mechanical throat area sensors.
 
 ---
 
@@ -311,7 +324,9 @@ Uncalibrated manufacturer specification models deviate from individual productio
 | Non-Afterburning | 31° to 87° | 0.625 s | +19.03 deg/s | None (pure 1st-order decay) |
 | Afterburning | 87° to 130° | 0.550 s | +26.81 deg/s | None (pure 1st-order decay) |
 
-#### Full Envelope Max A/B Gross Thrust Grid ($FG$, lbf)
+#### Full Envelope Max A/B Gross Thrust Grid ($FG$, lbf) [M-MOD: GE Dynamic Real Time Model R88AEB427, Figure 4 of TM-4240]
+
+*Provenance note: This grid represents an off-line tabular surrogate synthesized by running the GE nonlinear dynamic aerothermodynamic cycle deck (Report R88AEB427) across flight conditions. It represents model-derived cycle predictions rather than load-cell thrust stand measurements.*
 
 | Mach Number | Sea Level | 10,000 ft | 20,000 ft | 30,000 ft | 35,000 ft | 40,000 ft | 50,000 ft |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -354,7 +369,7 @@ At high speed and altitude, ram drag and installation increments consume substan
 - Ambient conditions: altitude 2,082 to 2,143 ft MSL, ambient temperature $+11^\circ\text{R}$ to $+45^\circ\text{R}$ above standard day (70 to 104 °F), winds under 15 kts.
 - Evaluated bleed extraction rates up to 3.5 lb/s across part power (92% $N_2$), military power, and maximum afterburning.
 
-#### Measured Thrust Loss Slopes
+#### Measured Thrust Loss Slopes [M-DIR: Platform 3 Dual Load Cells and Venturi Flowmeters, Table 2 of TM-104247]
 
 $$\text{Thrust (lbf)} = (\text{Bleed Flow Rate [lb/s]}) \times \text{Slope} + \text{Zero-Bleed Intercept}$$
 
@@ -394,15 +409,16 @@ Distinguishes customer bleeds from internal turbine cooling bleeds. Customer ble
 - **Citation**: Kimberly A. Ennix, Frank W. Burcham, Jr., and Lannie D. Webb, *Flight-Determined Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane*, NASA TM-4538 / AIAA-93-2543, October 1993.
 - **Context**: 95 flyovers of an F-18 over Rogers Dry Lake at Edwards AFB supporting High-Speed Civil Transport subsonic climb noise research. Processed recorded flight parameters through the GE In-Flight Thrust program (Program 83112) using 1D isentropic nozzle relations.
 
-#### Flight Test Scope
+#### Flight Test Scope and Data Provenance
 - Pilot stabilized level flight over ground microphones, throttled left engine to flight idle (35° PLA) to isolate noise, and operated right engine at test power.
 - Evaluated subsonic climb profile (Mach 0.32 at 3,850 ft to Mach 0.89 at 32,307 ft, intermediate power 102° PLA).
 - Evaluated level flight sweeps at 3,800 ft (Mach 0.34 to 0.92, PLA 75° to 102°).
 - Evaluated static ground pad runs (AFFTC Edwards, PLA 80° to 102°).
+- *Data Provenance Note*: The aircraft carried no physical rake probes or immersion sensors in the exhaust plume. Engineers recorded standard engine sensors onboard and processed them through the GE In-Flight Thrust program (Program 83112, gas generator method) using 1D isentropic nozzle equations. All tabulated exhaust velocities ($V_9, V_{\text{jet}}$), Mach numbers ($M_9, M_{\text{jet}}$), temperatures ($T_8$), and thrusts ($FG$) represent model-derived outputs [M-MOD].
 
 #### Quantitative Exhaust Data Compilation
 
-#### Climb-to-Cruise Profile (PLA = 102°, Intermediate Power)
+#### Climb-to-Cruise Profile (PLA = 102°, Intermediate Power; [M-MOD] Table 2 of TM-4538)
 
 | Mach | Altitude (ft MSL) | NPR | Throat Temp ($T_8$, °R) | Mass Flow ($W_8$, lb/s) | Throat Area ($A_8$, in²) | Area Ratio ($AE_9/AE_8$) | Static Ratio ($P_{s9}/P_{\text{amb}}$) | Gross Thrust ($FG$, lbf) | Exit Mach ($M_9$) | Exit Velocity ($V_9$, ft/s) | Ideal Velocity ($V_{\text{jet}}$, ft/s) | Expansion State |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -412,7 +428,7 @@ Distinguishes customer bleeds from internal turbine cooling bleeds. Customer ble
 | 0.77 | 22,331 | 4.420 | 1,687.2 | 89.2 | 261.5 | 1.390 | 0.868 | 7,381 | 1.73 | 2,780 | 2,679 | Overexpanded |
 | 0.89 | 32,307 | 5.240 | 1,682.9 | 66.4 | 251.2 | 1.360 | 1.071 | 5,726 | 1.70 | 2,749 | 2,796 | Underexpanded |
 
-#### Level Speed Sweep at 3,800 ft Altitude
+#### Level Speed Sweep at 3,800 ft Altitude ([M-MOD] Table 3 of TM-4538)
 
 | Throttle (PLA) | Mach | NPR | Throat Temp ($T_8$, °R) | Mass Flow ($W_8$, lb/s) | Throat Area ($A_8$, in²) | Area Ratio ($AE_9/AE_8$) | Static Ratio ($P_{s9}/P_{\text{amb}}$) | Gross Thrust ($FG$, lbf) | Exit Mach ($M_9$) | Exit Velocity ($V_9$, ft/s) | Ideal Velocity ($V_{\text{jet}}$, ft/s) | Expansion State |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -421,7 +437,7 @@ Distinguishes customer bleeds from internal turbine cooling bleeds. Customer ble
 | 100° | 0.80 | 3.658 | 1,718.7 | 163.5 | 303.3 | 1.488 | 0.628 | 12,673 | 1.81 | 2,897 | 2,556 | Overexpanded |
 | 102° | 0.92 | 4.136 | 1,713.0 | 177.5 | 297.2 | 1.459 | 0.737 | 14,289 | 1.79 | 2,867 | 2,649 | Overexpanded |
 
-#### Static Ground Runs (AFFTC Edwards, 2,300 ft MSL, Mach 0.0)
+#### Static Ground Runs (AFFTC Edwards, 2,300 ft MSL, Mach 0.0; [M-MOD] Table 4 of TM-4538)
 
 | Throttle (PLA) | NPR | Throat Temp ($T_8$, °R) | Mass Flow ($W_8$, lb/s) | Throat Area ($A_8$, in²) | Area Ratio ($AE_9/AE_8$) | Static Ratio ($P_{s9}/P_{\text{amb}}$) | Gross Thrust ($FG$, lbf) | Exit Mach ($M_9$) | Exit Velocity ($V_9$, ft/s) | Ideal Velocity ($V_{\text{jet}}$, ft/s) | Expansion State |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -451,7 +467,7 @@ Distinguishes customer bleeds from internal turbine cooling bleeds. Customer ble
 - Fuel density: SSJF possessed 3.6% lower density (784 vs 811.3 kg/m³), with 37% lower aromatics and 55% lower sulfur.
 - Engine fuel control density dial remained fixed at 0.81 throughout the campaign.
 
-#### Key Performance Comparisons
+#### Key Performance Comparisons [M-DIR: Test Cell #4 Cradle and Rakes, Table A-1 and Figures 6-12 of GT2010-23402]
 
 | Parameter / Metric | Unit | Measurement Uncertainty | Baseline Jet A-1 | Test Blend (SSJF Pre-Endurance) | Test Blend (SSJF Post-Endurance) | Observed Delta vs Baseline |
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
