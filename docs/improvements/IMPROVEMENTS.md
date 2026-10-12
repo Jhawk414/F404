@@ -17,17 +17,17 @@ currently lives loose at the repo root, mixed in with that scaffolding:
 | File | Role | Proposed location |
 |------|------|--------------------|
 | `MFTF_od_CRZ.py` | Original monolithic model — superseded by `engine_model.py` + `mp_cycle.py` | Archive or delete (confirm nothing still depends on it) |
-| `engine_model.py` | `MixedFlowTurbofan(pyc.Cycle)` — single-point cycle | `src/F404_pycycle/engine_model.py` |
-| `mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)` — DESIGN+OD | `src/F404_pycycle/mp_cycle.py` |
-| `sweep_utils.py` | Sweep infrastructure (`SweepRunner`, bridge points) | `src/F404_pycycle/sweep_utils.py` |
-| `sweep_full_envelope.py` | Sweep driver script | `src/F404_pycycle/sweep_full_envelope.py` (or `scripts/` if we want to separate "library" from "runnable entry point") |
+| `engine_model.py` | `MixedFlowTurbofan(pyc.Cycle)` — single-point cycle | `src/f404/engine_model.py` |
+| `mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)` — DESIGN+OD | `src/f404/mp_cycle.py` |
+| `sweep_utils.py` | Sweep infrastructure (`SweepRunner`, bridge points) | `src/f404/sweep_utils.py` |
+| `sweep_full_envelope.py` | Sweep driver script | `src/f404/sweep_full_envelope.py` (or `scripts/` if we want to separate "library" from "runnable entry point") |
 | `run_design_od.py` | Single design+OD point runner | Same as above |
-| `printer.py` | Console/terminal output formatter for cycle results | `src/F404_pycycle/viz/printer.py` or `src/F404_pycycle/reporting/printer.py` — it's an auxiliary output utility, not part of the physics model, and should be namespaced as such |
+| `printer.py` | Console/terminal output formatter for cycle results | `src/f404/viz/printer.py` or `src/f404/reporting/printer.py` — it's an auxiliary output utility, not part of the physics model, and should be namespaced as such |
 
 `setup.py` at the root is the **vendored pycycle package's** setup file,
 not F404 app code — don't move it as part of this cleanup. If the F404
 app code becomes its own installable package, it needs its own
-`pyproject.toml`/`setup.py` under `src/F404_pycycle/` (or wherever it
+`pyproject.toml`/`setup.py` under `src/f404/` (or wherever it
 lands), separate from pycycle's.
 
 **Also clean up:** stray `*_out/` sweep artifact directories don't belong
@@ -295,7 +295,7 @@ related gaps to close, roughly in this order:
    ...) -> DesignResult` and `run_sweep(config: RunConfig) -> pd.DataFrame`
    (consuming item 7's `RunConfig`). Scripts become thin callers of these
    functions instead of owning the logic themselves.
-2. **CLI** — a `cli.py` (`src/F404_pycycle/cli.py` once item 1 lands)
+2. **CLI** — a `cli.py` (`src/f404/cli.py` once item 1 lands)
    wrapping the service layer with subcommands:
    - `design` — run a single DESIGN point
    - `sweep` — run a full/partial envelope sweep
@@ -306,6 +306,6 @@ related gaps to close, roughly in this order:
    round-trips through the `RunConfig` pydantic model without error).
 
 Sequence after item 1 (so the CLI and service layer live in `src/
-F404_pycycle/` from the start, not at the root needing another move) and
+f404/` from the start, not at the root needing another move) and
 after/alongside item 7 (so `run`/`init-config` have a config schema to
 target).

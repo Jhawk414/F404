@@ -37,19 +37,19 @@ validated against public F404 performance data.
 
 ## Repo layout
 
-F404 application code lives under `src/F404_pycycle/`, separate from the
+F404 application code lives under `src/f404/`, separate from the
 vendored upstream `pycycle` library at the repo root (see
 [#4](https://github.com/Jhawk414/F404/issues/4)).
 
 | Path | Role |
 |---|---|
-| `src/F404_pycycle/engine_model.py` | `MixedFlowTurbofan(pyc.Cycle)`: single-point thermodynamic cycle (fan, HPC, burner, HPT/LPT, mixer, afterburner, nozzle) |
-| `src/F404_pycycle/mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: one DESIGN point (dry mil) feeding two off-design points, `OD_dry` and `OD_wet`, with map scalars and station areas |
-| `src/F404_pycycle/problems.py` | `build_problem()`: design targets, the max-AB calibration, initial guesses and input validation |
-| `src/F404_pycycle/sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner`, result extraction |
-| `src/F404_pycycle/cli.py` | `f404` command line: `sweep` and `design` subcommands, `min,max,step` range parsing and validation |
-| `src/F404_pycycle/sweep_full_envelope.py` | Sweep driver: default grid, `run_sweeps()` for dry, wet, or both modes, and the cycle-deck CSV writer |
-| `src/F404_pycycle/printer.py` | Console table formatter for DESIGN/OD results |
+| `src/f404/engine_model.py` | `MixedFlowTurbofan(pyc.Cycle)`: single-point thermodynamic cycle (fan, HPC, burner, HPT/LPT, mixer, afterburner, nozzle) |
+| `src/f404/mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: one DESIGN point (dry mil) feeding two off-design points, `OD_dry` and `OD_wet`, with map scalars and station areas |
+| `src/f404/problems.py` | `build_problem()`: design targets, the max-AB calibration, initial guesses and input validation |
+| `src/f404/sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner`, result extraction |
+| `src/f404/cli.py` | `f404` command line: `sweep` and `design` subcommands, `min,max,step` range parsing and validation |
+| `src/f404/sweep_full_envelope.py` | Sweep driver: default grid, `run_sweeps()` for dry, wet, or both modes, and the cycle-deck CSV writer |
+| `src/f404/printer.py` | Console table formatter for DESIGN/OD results |
 | `tests/` | pytest suite, one `<module>_test.py` per module ([#5](https://github.com/Jhawk414/F404/issues/5)) |
 | `deck/` | Cycle-deck output CSVs |
 | `docs/` | System architecture diagrams (`f404_cycle.typ`, `f404_cycle.svg`), architecture decision records (`adr/`), planning docs (`improvements/`), and reference material (`unclassified_perf_data/`: source PDFs in `pdf/`, Obsidian-compatible markdown conversions with their figures in `md/`) |
@@ -78,7 +78,7 @@ Current data flow from CLI invocation to output CSV.
 
 ```mermaid
 flowchart TD
-    subgraph Drivers["Entry point (src/F404_pycycle/)"]
+    subgraph Drivers["Entry point (src/f404/)"]
         CLI["cli.py  (f404)<br/>sweep · design<br/>--mode · --alt · --dts · --throttle · --out"]
         A["sweep_full_envelope.py<br/>run_sweeps · write_deck_csv"]
     end
@@ -135,7 +135,7 @@ Requires Python 3.9+ and OpenMDAO 3.10.0+.
 ## Usage
 
 `pip install -e .[all]` installs an `f404` command (re-run it in an existing
-checkout to pick up the entry point). `python -m F404_pycycle` is equivalent
+checkout to pick up the entry point). `python -m f404` is equivalent
 and needs no install beyond the package being importable.
 
 ```bash
@@ -202,7 +202,7 @@ there is no `--mode`. Three flags override the targets:
 
 A non-converging solve exits 1 with the solver's message.
 
-`python -m F404_pycycle.sweep_full_envelope [--mode ...]` still works and is
+`python -m f404.sweep_full_envelope [--mode ...]` still works and is
 the same as `f404 sweep`.
 
 ## Testing
