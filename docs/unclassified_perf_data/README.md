@@ -54,16 +54,16 @@ Key vault conventions:
 
 | Document Note | Lead Author | Year | Report Identifier | Test Campaign / Context | Primary Research Focus |
 | :--- | :--- | :---: | :--- | :--- | :--- |
-| [[ADA164562 The General Electric F404 - Engine of the RAAF's New Fighter|ADA164562 (Frith 1985)]] | D. A. Frith | 1985 | ARL-AERO-PROP-TM-426 / AD-A164 562 | RAAF F/A-18 induction, NAPC altitude tests, CAC assembly | Baseline F404-GE-400 cycle, component stages, cooling bleeds, control schedules |
-| [[Exhaust-Gas P & T Survey of F404-GE-400 engine|Walton & Burcham (1986)]] | J. T. Walton | 1986 | NASA TM-88273 | NASA Lewis PSL Cell 4 ground altitude tests (S/N 215209) | Exhaust nozzle exit rakes, gas temperature profiles, wake pressure defects, Mach profiles |
-| [[NASA TM 4140 - Measurement Effects on the Calculation of In-Flight Thrust for an F404 turbofan engine|Conners (1989)]] | T. R. Conners | 1989 | NASA TM-4140 / AIAA-89-2364 | X-29A flight research program at NASA Ames-Dryden | Sensor error propagation, WT vs AP in-flight thrust calculation methods, sensitivity derivatives |
-| [[Powel 1990 - On the Leading Edge, Combining Maturity and Advanced Technology on the F404 Turbofan Engine|Powel (1990)]] | S. F. Powel IV | 1990 | ASME 90-GT-149 | GE Aircraft Engines fleet review (>2M EFH) | F404 family growth (F404-402 EPE, RM12, F412, Growth II/III), materials, deterioration control logic |
-| [[NASA TP 3001 - Evaluation of Various Thrust Calibration Techniques on an F404 Engine (April 1990)|Ray (1990)]] | R. J. Ray | 1990 | NASA TP-3001 (Errata May 1990) | NASA Lewis PSL Cell 4 (S/N 215-209) and X-29A flight test | Load-cell scale thrust calibration, ComDev SGTM algorithm, GE IFT gas generator deck |
-| [[NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring|Johnson (1990)]] | S. A. Johnson | 1990 | NASA TM-4240 / AIAA-90-2166 | F-18 HARV thrust-vectoring simulation at NASA Ames-Dryden | Real-time dynamic engine surrogate, 3D look-up tables, PLA lag filters, HARV vane drag penalties |
-| [[Yuhas 1992 - Effects of Bleed ir Extraction of Thrust Levels of the F404-GE-400 Turbofan Engine|Yuhas & Ray (1992)]] | A. J. Yuhas | 1992 | NASA TM-104247 / AIAA 92-3092 | F/A-18 HARV ground test on EAFB Universal Horizontal Thrust Stand | HPC customer bleed extraction, linear thrust penalty slopes, control nozzle modulation |
-| [[NASA TM 4538 - Flight-Determine Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane|Ennix et al. (1993)]] | K. A. Ennix | 1993 | NASA TM-4538 / AIAA-93-2543 | F-18 subsonic flyovers over Rogers Dry Lake for HSCT jet noise | In-flight exhaust gas properties, C-D nozzle expansion states, invariant exit Mach number |
-| [[Hadzic 2010 - Limited Qualification Tests of an F404 Engine with Blended FT-SPK and NATO F-34 Fuel|Hadzic et al. (2010)]] | R. Hadzic | 2010 | ASME GT2010-23402 | NRC Canada Test Cell #4 qualification campaign (CF-18) | 50/50 FT-SPK synthetic kerosene blend, fuel density effects, spool match invariance, acoustic stability |
-| `pdf/F404 Family Data Sheet_UPDATED.pdf` | GEAE | 2006 | OEM Product Sheet | Commercial and military marketing specifications | Unconverted PDF summary for F404-GE-402, F404-GE-102, and RM12 ratings |
+| [ADA164562 (Frith 1985)](md/ADA164562%20The%20General%20Electric%20F404%20-%20Engine%20of%20the%20RAAF%27s%20New%20Fighter.md) | D. A. Frith | 1985 | ARL-AERO-PROP-TM-426 / AD-A164 562 | RAAF F/A-18 induction, NAPC altitude tests, CAC assembly | Baseline F404-GE-400 cycle, component stages, cooling bleeds, control schedules |
+| [Walton & Burcham (1986)](md/Exhaust-Gas%20P%20%26%20T%20Survey%20of%20F404-GE-400%20engine.md) | J. T. Walton | 1986 | NASA TM-88273 | NASA Lewis PSL Cell 4 ground altitude tests (S/N 215209) | Exhaust nozzle exit rakes, gas temperature profiles, wake pressure defects, Mach profiles |
+| [Conners (1989)](md/NASA%20TM%204140%20-%20Measurement%20Effects%20on%20the%20Calculation%20of%20In-Flight%20Thrust%20for%20an%20F404%20turbofan%20engine.md) | T. R. Conners | 1989 | NASA TM-4140 / AIAA-89-2364 | X-29A flight research program at NASA Ames-Dryden | Sensor error propagation, WT vs AP in-flight thrust calculation methods, sensitivity derivatives |
+| [Powel (1990)](md/Powel%201990%20-%20On%20the%20Leading%20Edge%2C%20Combining%20Maturity%20and%20Advanced%20Technology%20on%20the%20F404%20Turbofan%20Engine.md) | S. F. Powel IV | 1990 | ASME 90-GT-149 | GE Aircraft Engines fleet review (>2M EFH) | F404 family growth (F404-402 EPE, RM12, F412, Growth II/III), materials, deterioration control logic |
+| [Ray (1990)](md/NASA%20TP%203001%20-%20Evaluation%20of%20Various%20Thrust%20Calibration%20Techniques%20on%20an%20F404%20Engine%20%28April%201990%29.md) | R. J. Ray | 1990 | NASA TP-3001 (Errata May 1990) | NASA Lewis PSL Cell 4 (S/N 215-209) and X-29A flight test | Load-cell scale thrust calibration, ComDev SGTM algorithm, GE IFT gas generator deck |
+| [Johnson (1990)](md/NASA%20TM-4240%20-%20A%20simple%20Dynamic%20Engine%20Model%20for%20Use%20in%20a%20Real-time%20Aircraft%20Simulation%20with%20Thrust%20Vectoring.md) | S. A. Johnson | 1990 | NASA TM-4240 / AIAA-90-2166 | F-18 HARV thrust-vectoring simulation at NASA Ames-Dryden | Real-time dynamic engine surrogate, 3D look-up tables, PLA lag filters, HARV vane drag penalties |
+| [Yuhas & Ray (1992)](md/Yuhas%201992%20-%20Effects%20of%20Bleed%20ir%20Extraction%20of%20Thrust%20Levels%20of%20the%20F404-GE-400%20Turbofan%20Engine.md) | A. J. Yuhas | 1992 | NASA TM-104247 / AIAA 92-3092 | F/A-18 HARV ground test on EAFB Universal Horizontal Thrust Stand | HPC customer bleed extraction, linear thrust penalty slopes, control nozzle modulation |
+| [Ennix et al. (1993)](md/NASA%20TM%204538%20-%20Flight-Determine%20Engine%20Exhaust%20Characteristics%20of%20an%20F404%20Engine%20in%20an%20F-18%20Airplane.md) | K. A. Ennix | 1993 | NASA TM-4538 / AIAA-93-2543 | F-18 subsonic flyovers over Rogers Dry Lake for HSCT jet noise | In-flight exhaust gas properties, C-D nozzle expansion states, invariant exit Mach number |
+| [Hadzic et al. (2010)](md/Hadzic%202010%20-%20Limited%20Qualification%20Tests%20of%20an%20F404%20Engine%20with%20Blended%20FT-SPK%20and%20NATO%20F-34%20Fuel.md) | R. Hadzic | 2010 | ASME GT2010-23402 | NRC Canada Test Cell #4 qualification campaign (CF-18) | 50/50 FT-SPK synthetic kerosene blend, fuel density effects, spool match invariance, acoustic stability |
+| [F404 Family Data Sheet (2006)](pdf/F404%20Family%20Data%20Sheet_UPDATED.pdf) | GEAE | 2006 | OEM Product Sheet | Commercial and military marketing specifications | Unconverted PDF summary for F404-GE-402, F404-GE-102, and RM12 ratings |
 
 ---
 
@@ -71,8 +71,8 @@ Key vault conventions:
 
 ### 1. Frith (1985) - Baseline Cycle Architecture and RAAF Induction
 
-- **Note**: [[ADA164562 The General Electric F404 - Engine of the RAAF's New Fighter|ADA164562 The General Electric F404 - Engine of the RAAF's New Fighter.md]]
-- **Source PDF**: `pdf/ADA164562 The General Electric F404 - Engine of the RAAF's New Fighter.pdf`
+- **Note**: [ADA164562 The General Electric F404 - Engine of the RAAF's New Fighter.md](md/ADA164562%20The%20General%20Electric%20F404%20-%20Engine%20of%20the%20RAAF%27s%20New%20Fighter.md)
+- **Source PDF**: [ADA164562 The General Electric F404 - Engine of the RAAF's New Fighter.pdf](pdf/ADA164562%20The%20General%20Electric%20F404%20-%20Engine%20of%20the%20RAAF%27s%20New%20Fighter.pdf)
 - **Citation**: D. A. Frith, *The General Electric F404 - Engine of the RAAF's New Fighter*, Aeronautical Research Laboratories, Melbourne, Australia, Report ARL-AERO-PROP-TM-426 (AD-A164 562), July 1985.
 - **Context**: Technical orientation for the Royal Australian Air Force induction of the McDonnell Douglas F/A-18 Hornet. Details development history from the YJ101 prototype, full-scale development milestones, and component aerothermodynamics.
 
@@ -125,8 +125,8 @@ Frith supplies the foundation for 0D thermodynamic station modeling: 3 fan stage
 
 ### 2. Walton & Burcham (1986) - Exhaust-Gas Pressure and Temperature Surveys
 
-- **Note**: [[Exhaust-Gas P & T Survey of F404-GE-400 engine|Exhaust-Gas P & T Survey of F404-GE-400 engine.md]]
-- **Source PDF**: `pdf/Exhaust-Gas P & T Survey of F404-GE-400 engine.pdf`
+- **Note**: [Exhaust-Gas P & T Survey of F404-GE-400 engine.md](md/Exhaust-Gas%20P%20%26%20T%20Survey%20of%20F404-GE-400%20engine.md)
+- **Source PDF**: [Exhaust-Gas P & T Survey of F404-GE-400 engine.pdf](pdf/Exhaust-Gas%20P%20%26%20T%20Survey%20of%20F404-GE-400%20engine.pdf)
 - **Citation**: James T. Walton and Frank W. Burcham, Jr., *Exhaust-Gas Pressure and Temperature Survey of F404-GE-400 Turbofan Engine*, NASA TM-88273, December 1986.
 - **Context**: Ground altitude tests in NASA Lewis Propulsion System Laboratory Test Cell 4 using F404-GE-400 engine S/N 215209 (from the X-29A program). The data established exhaust plume gradients to design post-exit thrust-vectoring vanes for the F-18 HARV.
 
@@ -159,8 +159,8 @@ Frith supplies the foundation for 0D thermodynamic station modeling: 3 fan stage
 
 ### 3. Conners (1989) - Measurement Error Effects on In-Flight Thrust
 
-- **Note**: [[NASA TM 4140 - Measurement Effects on the Calculation of In-Flight Thrust for an F404 turbofan engine|NASA TM 4140 - Measurement Effects on the Calculation of In-Flight Thrust for an F404 turbofan engine.md]]
-- **Source PDF**: `pdf/NASA TM 4140 - Measurement Effects on the Calculation of In-Flight Thrust for an F404 turbofan engine.pdf`
+- **Note**: [NASA TM 4140 - Measurement Effects on the Calculation of In-Flight Thrust for an F404 turbofan engine.md](md/NASA%20TM%204140%20-%20Measurement%20Effects%20on%20the%20Calculation%20of%20In-Flight%20Thrust%20for%20an%20F404%20turbofan%20engine.md)
+- **Source PDF**: [NASA TM 4140 - Measurement Effects on the Calculation of In-Flight Thrust for an F404 turbofan engine.pdf](pdf/NASA%20TM%204140%20-%20Measurement%20Effects%20on%20the%20Calculation%20of%20In-Flight%20Thrust%20for%20an%20F404%20turbofan%20engine.pdf)
 - **Citation**: Timothy R. Conners, *Measurement Effects on the Calculation of In-Flight Thrust for an F404 Turbofan Engine*, NASA TM-4140 / AIAA-89-2364, September 1989.
 - **Context**: Evaluation of sensor error propagation through the General Electric In-Flight Thrust (IFT) program (Program 83112) for the X-29A flight research program at NASA Ames-Dryden.
 
@@ -214,8 +214,8 @@ Frith supplies the foundation for 0D thermodynamic station modeling: 3 fan stage
 
 ### 4. Powel (1990) - Fleet Maturity and Family Growth Roadmap
 
-- **Note**: [[Powel 1990 - On the Leading Edge, Combining Maturity and Advanced Technology on the F404 Turbofan Engine|Powel 1990 - On the Leading Edge, Combining Maturity and Advanced Technology on the F404 Turbofan Engine.md]]
-- **Source PDF**: `pdf/Powel 1990 - On the Leading Edge, Combining Maturity and Advanced Technology on the F404 Turbofan Engine.pdf`
+- **Note**: [Powel 1990 - On the Leading Edge, Combining Maturity and Advanced Technology on the F404 Turbofan Engine.md](md/Powel%201990%20-%20On%20the%20Leading%20Edge%2C%20Combining%20Maturity%20and%20Advanced%20Technology%20on%20the%20F404%20Turbofan%20Engine.md)
+- **Source PDF**: [Powel 1990 - On the Leading Edge, Combining Maturity and Advanced Technology on the F404 Turbofan Engine.pdf](pdf/Powel%201990%20-%20On%20the%20Leading%20Edge%2C%20Combining%20Maturity%20and%20Advanced%20Technology%20on%20the%20F404%20Turbofan%20Engine.pdf)
 - **Citation**: S. F. Powel IV, *On the Leading Edge: Combining Maturity and Advanced Technology on the F404 Turbofan Engine*, ASME Paper 90-GT-149, June 1990.
 - **Context**: Programmatic and technical review by the Manager of F404 Advanced Programs at GE Aircraft Engines. Reviews operational experience across 2,000 deliveries and 2 million flight hours, presenting technology scaling paths.
 
@@ -249,8 +249,8 @@ Frith supplies the foundation for 0D thermodynamic station modeling: 3 fan stage
 
 ### 5. Ray (1990) - Ground and Flight Thrust Calculation Benchmark
 
-- **Note**: [[NASA TP 3001 - Evaluation of Various Thrust Calibration Techniques on an F404 Engine (April 1990)|NASA TP 3001 - Evaluation of Various Thrust Calibration Techniques on an F404 Engine (April 1990).md]]
-- **Source PDF**: `pdf/NASA TP 3001 - Evaluation of Various Thrust Calibration Techniques on an F404 Engine (April 1990).pdf`
+- **Note**: [NASA TP 3001 - Evaluation of Various Thrust Calibration Techniques on an F404 Engine (April 1990).md](md/NASA%20TP%203001%20-%20Evaluation%20of%20Various%20Thrust%20Calibration%20Techniques%20on%20an%20F404%20Engine%20%28April%201990%29.md)
+- **Source PDF**: [NASA TP 3001 - Evaluation of Various Thrust Calibration Techniques on an F404 Engine (April 1990).pdf](pdf/NASA%20TP%203001%20-%20Evaluation%20of%20Various%20Thrust%20Calibration%20Techniques%20on%20an%20F404%20Engine%20%28April%201990%29.pdf)
 - **Citation**: Ronald J. Ray, *Evaluation of Various Thrust Calibration Techniques on an F404 Engine*, NASA Technical Paper 3001 (Errata issued May 1990: title corrected to *Evaluation of Various Thrust Calculation Techniques on an F404 Engine*), April 1990.
 - **Context**: Investigation evaluating four thrust calculation techniques against load-cell thrust measurements in NASA Lewis PSL Test Cell 4 using F404-GE-400 engine S/N 215-209. Results were confirmed using X-29A flight test data.
 
@@ -293,8 +293,8 @@ Uncalibrated manufacturer specification models deviate from individual productio
 
 ### 6. Johnson (1990) - Dynamic Engine Simulation for Thrust Vectoring
 
-- **Note**: [[NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring|NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring.md]]
-- **Source PDF**: `pdf/NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring.pdf`
+- **Note**: [NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring.md](md/NASA%20TM-4240%20-%20A%20simple%20Dynamic%20Engine%20Model%20for%20Use%20in%20a%20Real-time%20Aircraft%20Simulation%20with%20Thrust%20Vectoring.md)
+- **Source PDF**: [NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring.pdf](pdf/NASA%20TM-4240%20-%20A%20simple%20Dynamic%20Engine%20Model%20for%20Use%20in%20a%20Real-time%20Aircraft%20Simulation%20with%20Thrust%20Vectoring.pdf)
 - **Citation**: Steven A. Johnson, *A Simple Dynamic Engine Model for Use in a Real-Time Aircraft Simulation With Thrust Vectoring*, NASA TM-4240 / AIAA-90-2166, October 1990.
 - **Context**: Development of a real-time dynamic engine model for the NASA F-18 HARV thrust-vectoring flight simulator at NASA Ames-Dryden. Replaced the iterative GE Dynamic Real Time Model with 3D table interpolation and dynamic filters.
 
@@ -342,8 +342,8 @@ At high speed and altitude, ram drag and installation increments consume substan
 
 ### 7. Yuhas & Ray (1992) - Compressor Bleed Extraction Thrust Penalties
 
-- **Note**: [[Yuhas 1992 - Effects of Bleed ir Extraction of Thrust Levels of the F404-GE-400 Turbofan Engine|Yuhas 1992 - Effects of Bleed ir Extraction of Thrust Levels of the F404-GE-400 Turbofan Engine.md]]
-- **Source PDF**: `pdf/Yuhas 1992 - Effects of Bleed ir Extraction of Thrust Levels of the F404-GE-400 Turbofan Engine.pdf`
+- **Note**: [Yuhas 1992 - Effects of Bleed ir Extraction of Thrust Levels of the F404-GE-400 Turbofan Engine.md](md/Yuhas%201992%20-%20Effects%20of%20Bleed%20ir%20Extraction%20of%20Thrust%20Levels%20of%20the%20F404-GE-400%20Turbofan%20Engine.md)
+- **Source PDF**: [Yuhas 1992 - Effects of Bleed ir Extraction of Thrust Levels of the F404-GE-400 Turbofan Engine.pdf](pdf/Yuhas%201992%20-%20Effects%20of%20Bleed%20ir%20Extraction%20of%20Thrust%20Levels%20of%20the%20F404-GE-400%20Turbofan%20Engine.pdf)
 - **Citation**: Andrew J. Yuhas and Ronald J. Ray, *Effects of Bleed Air Extraction on Thrust Levels of the F404-GE-400 Turbofan Engine*, NASA TM-104247 / AIAA-92-3092, July 1992.
 - **Context**: Installed static ground tests on the Universal Horizontal Thrust Stand at Edwards AFB using the NASA F/A-18 HARV. Evaluated using compressor bleed air to power pneumatic forebody flow control nozzles for yaw control at high angles of attack.
 
@@ -389,8 +389,8 @@ Distinguishes customer bleeds from internal turbine cooling bleeds. Customer ble
 
 ### 8. Ennix, Burcham, & Webb (1993) - Exhaust Characteristics in Flight
 
-- **Note**: [[NASA TM 4538 - Flight-Determine Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane|NASA TM 4538 - Flight-Determine Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane.md]]
-- **Source PDF**: `pdf/NASA TM 4538 - Flight-Determine Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane.pdf`
+- **Note**: [NASA TM 4538 - Flight-Determine Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane.md](md/NASA%20TM%204538%20-%20Flight-Determine%20Engine%20Exhaust%20Characteristics%20of%20an%20F404%20Engine%20in%20an%20F-18%20Airplane.md)
+- **Source PDF**: [NASA TM 4538 - Flight-Determine Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane.pdf](pdf/NASA%20TM%204538%20-%20Flight-Determine%20Engine%20Exhaust%20Characteristics%20of%20an%20F404%20Engine%20in%20an%20F-18%20Airplane.pdf)
 - **Citation**: Kimberly A. Ennix, Frank W. Burcham, Jr., and Lannie D. Webb, *Flight-Determined Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane*, NASA TM-4538 / AIAA-93-2543, October 1993.
 - **Context**: 95 flyovers of an F-18 over Rogers Dry Lake at Edwards AFB supporting High-Speed Civil Transport subsonic climb noise research. Processed recorded flight parameters through the GE In-Flight Thrust program (Program 83112) using 1D isentropic nozzle relations.
 
@@ -439,8 +439,8 @@ Distinguishes customer bleeds from internal turbine cooling bleeds. Customer ble
 
 ### 9. Hadzic et al. (2010) - Synthetic Fuel Blend Engine Qualification
 
-- **Note**: [[Hadzic 2010 - Limited Qualification Tests of an F404 Engine with Blended FT-SPK and NATO F-34 Fuel|Hadzic 2010 - Limited Qualification Tests of an F404 Engine with Blended FT-SPK and NATO F-34 Fuel.md]]
-- **Source PDF**: `pdf/Hadzic 2010 - Limited Qualification Tests of an F404 Engine with Blended FT-SPK and NATO F-34 Fuel.pdf`
+- **Note**: [Hadzic 2010 - Limited Qualification Tests of an F404 Engine with Blended FT-SPK and NATO F-34 Fuel.md](md/Hadzic%202010%20-%20Limited%20Qualification%20Tests%20of%20an%20F404%20Engine%20with%20Blended%20FT-SPK%20and%20NATO%20F-34%20Fuel.md)
+- **Source PDF**: [Hadzic 2010 - Limited Qualification Tests of an F404 Engine with Blended FT-SPK and NATO F-34 Fuel.pdf](pdf/Hadzic%202010%20-%20Limited%20Qualification%20Tests%20of%20an%20F404%20Engine%20with%20Blended%20FT-SPK%20and%20NATO%20F-34%20Fuel.pdf)
 - **Citation**: Rastko Hadzic, Jeffrey Bird, Wajid A. Chishty, Darrin Little, and Pierre Poitras, *Limited Qualification Tests of an F404 Engine with Blended Fischer Tropsch SPK and NATO F-34 Fuel*, ASME Paper GT2010-23402, June 2010.
 - **Context**: Tri-nation TTCP qualification testing in NRC Canada Test Cell #4 (Ottawa) using a Canadian Forces CF-18 F404-GE-400 engine. 56.1 total test cell hours (34.6 endurance hours) comparing 100% Jet A-1 against a 50/50 semi-synthetic blend with Fischer-Tropsch synthetic paraffinic kerosene (FT-SPK).
 
@@ -516,26 +516,26 @@ The table below correlates baseline design and operating metrics established acr
 Depending on your modeling or validation objective, consult the following specific papers:
 
 1. **Cycle Architecture, Station Geometries, and Bleed Fractions**:
-   - Consult [[ADA164562 The General Electric F404 - Engine of the RAAF's New Fighter|Frith (1985)]] for component pressure ratios, stage counts, HPT cooling bleed fractions (11% CDP), and physical dimensions.
+   - Consult [Frith (1985)](md/ADA164562%20The%20General%20Electric%20F404%20-%20Engine%20of%20the%20RAAF%27s%20New%20Fighter.md) for component pressure ratios, stage counts, HPT cooling bleed fractions (11% CDP), and physical dimensions.
 
 2. **In-Flight Thrust Calibration and Scale Thrust Verification**:
-   - Consult [[NASA TP 3001 - Evaluation of Various Thrust Calibration Techniques on an F404 Engine (April 1990)|Ray (1990)]] for load-cell test stand data, error bands of the ComDev SGTM pressure method vs GE IFT gas generator deck, and uncalibrated model errors.
+   - Consult [Ray (1990)](md/NASA%20TP%203001%20-%20Evaluation%20of%20Various%20Thrust%20Calibration%20Techniques%20on%20an%20F404%20Engine%20%28April%201990%29.md) for load-cell test stand data, error bands of the ComDev SGTM pressure method vs GE IFT gas generator deck, and uncalibrated model errors.
 
 3. **Sensor Sensitivity and Error Propagation**:
-   - Consult [[NASA TM 4140 - Measurement Effects on the Calculation of In-Flight Thrust for an F404 turbofan engine|Conners (1989)]] for numerical sensitivity derivatives ($C_i$) of net thrust with respect to all 10 engine sensors, and the error cancellation proof of the WT method.
+   - Consult [Conners (1989)](md/NASA%20TM%204140%20-%20Measurement%20Effects%20on%20the%20Calculation%20of%20In-Flight%20Thrust%20for%20an%20F404%20turbofan%20engine.md) for numerical sensitivity derivatives ($C_i$) of net thrust with respect to all 10 engine sensors, and the error cancellation proof of the WT method.
 
 4. **Exhaust Nozzle Flow Properties, Temperature Stratification, and Exit Mach Number**:
-   - Consult [[Exhaust-Gas P & T Survey of F404-GE-400 engine|Walton & Burcham (1986)]] for physical rake surveys, core centerline momentum defects, and peak 3,800 °R temperatures.
-   - Consult [[NASA TM 4538 - Flight-Determine Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane|Ennix et al. (1993)]] for tabulated climb-to-cruise exhaust data, nozzle pressure ratios, and proof of invariant $M_9 \approx 1.7 - 1.8$.
+   - Consult [Walton & Burcham (1986)](md/Exhaust-Gas%20P%20%26%20T%20Survey%20of%20F404-GE-400%20engine.md) for physical rake surveys, core centerline momentum defects, and peak 3,800 °R temperatures.
+   - Consult [Ennix et al. (1993)](md/NASA%20TM%204538%20-%20Flight-Determine%20Engine%20Exhaust%20Characteristics%20of%20an%20F404%20Engine%20in%20an%20F-18%20Airplane.md) for tabulated climb-to-cruise exhaust data, nozzle pressure ratios, and proof of invariant $M_9 \approx 1.7 - 1.8$.
 
 5. **Customer Bleed Extraction Modeling**:
-   - Consult [[Yuhas 1992 - Effects of Bleed ir Extraction of Thrust Levels of the F404-GE-400 Turbofan Engine|Yuhas & Ray (1992)]] for linear thrust loss slopes at dry and afterburning settings, customer bleed limits, and nozzle control coupling.
+   - Consult [Yuhas & Ray (1992)](md/Yuhas%201992%20-%20Effects%20of%20Bleed%20ir%20Extraction%20of%20Thrust%20Levels%20of%20the%20F404-GE-400%20Turbofan%20Engine.md) for linear thrust loss slopes at dry and afterburning settings, customer bleed limits, and nozzle control coupling.
 
 6. **Engine Sizing across Variants and Deterioration Control**:
-   - Consult [[Powel 1990 - On the Leading Edge, Combining Maturity and Advanced Technology on the F404 Turbofan Engine|Powel (1990)]] for the growth roadmap from F404-400 to F404-402 EPE, RM12, F412, and non-afterburning study engines, plus deterioration compensation via $A_8$ nozzle scheduling.
+   - Consult [Powel (1990)](md/Powel%201990%20-%20On%20the%20Leading%20Edge%2C%20Combining%20Maturity%20and%20Advanced%20Technology%20on%20the%20F404%20Turbofan%20Engine.md) for the growth roadmap from F404-400 to F404-402 EPE, RM12, F412, and non-afterburning study engines, plus deterioration compensation via $A_8$ nozzle scheduling.
 
 7. **Flight Simulation Surrogate Models and Installation Drag**:
-   - Consult [[NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring|Johnson (1990)]] for full flight envelope gross thrust look-up tables (0 to 50k ft, M 0 to 1.8), throttle rate limits and lag time constants, and thrust-vectoring vane drag penalties.
+   - Consult [Johnson (1990)](md/NASA%20TM-4240%20-%20A%20simple%20Dynamic%20Engine%20Model%20for%20Use%20in%20a%20Real-time%20Aircraft%20Simulation%20with%20Thrust%20Vectoring.md) for full flight envelope gross thrust look-up tables (0 to 50k ft, M 0 to 1.8), throttle rate limits and lag time constants, and thrust-vectoring vane drag penalties.
 
 8. **Alternative Fuels and Chemical Sensitivity**:
-   - Consult [[Hadzic 2010 - Limited Qualification Tests of an F404 Engine with Blended FT-SPK and NATO F-34 Fuel|Hadzic et al. (2010)]] for empirical evidence that turbomachinery aerodynamic matching remains invariant under synthetic kerosene blends.
+   - Consult [Hadzic et al. (2010)](md/Hadzic%202010%20-%20Limited%20Qualification%20Tests%20of%20an%20F404%20Engine%20with%20Blended%20FT-SPK%20and%20NATO%20F-34%20Fuel.md) for empirical evidence that turbomachinery aerodynamic matching remains invariant under synthetic kerosene blends.
