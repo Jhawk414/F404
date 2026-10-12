@@ -5,7 +5,7 @@ Entry points::
     f404 sweep  [--mode {dry,wet,both}] [--alt R] [--dts R] [--throttle R] [--out DIR]
     f404 design [--fn-target LBF] [--mil-tt4 DEGR] [--max-tt7 DEGR]
 
-``python -m F404_pycycle`` is equivalent to ``f404``. Every range flag takes one
+``python -m f404`` is equivalent to ``f404``. Every range flag takes one
 ``min,max,step`` triple (inclusive of ``max``), bare or bracketed.
 
 Input is validated eagerly: a malformed flag stops the run before any model is
@@ -281,7 +281,7 @@ def _run_sweep_command(args, parser):
     # Wet Tt7 needs no floor here: the physical one is the augmentor inlet
     # temperature, known only after a solve, and a point below it pins FAR_ab
     # at its bound and is dropped by SweepRunner's guards.
-    from F404_pycycle import sweep_full_envelope as sfe
+    from f404 import sweep_full_envelope as sfe
 
     throttle = {'dry': sfe.DEFAULT_DRY_POWERS, 'wet': sfe.DEFAULT_WET_POWERS}
     if args.throttle is not None:
@@ -301,7 +301,7 @@ def _run_sweep_command(args, parser):
 
 def _run_design_command(args, parser):
     import openmdao.api as om
-    from F404_pycycle.problems import build_problem
+    from f404.problems import build_problem
 
     targets = {name: value for name, value in (
         ('fn_target', args.fn_target), ('mil_Tt4', args.mil_tt4),

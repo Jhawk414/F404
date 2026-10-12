@@ -1,7 +1,7 @@
 # Run the F404 application test suite.
 #
 # Separate from pycycle_test_workflow.yml, which runs the vendored upstream
-# library's own suite under testflo. This one covers src/F404_pycycle/ only.
+# library's own suite under testflo. This one covers src/f404/ only.
 name: F404 Tests
 
 on:
@@ -51,4 +51,4 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest tests --cov=F404_pycycle --cov-report=term-missing -v
+          pytest tests --cov=f404 --cov-report=term-missing -v

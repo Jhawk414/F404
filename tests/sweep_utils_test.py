@@ -9,8 +9,8 @@ to call converged.
 """
 import pytest
 
-from F404_pycycle.problems import build_problem
-from F404_pycycle.sweep_utils import (
+from f404.problems import build_problem
+from f404.sweep_utils import (
     SweepConfigurationError,
     _BOUND_TOL_FRAC,
     _FROZEN_NEWTON,
@@ -432,7 +432,7 @@ def test_a_drifted_bounds_table_aborts_the_sweep():
 
     with pytest.raises(SweepConfigurationError, match='balance.nonexistent'):
         with_drift = dict(_OD_BOUNDS, **{'balance.nonexistent': (0., 1.)})
-        import F404_pycycle.sweep_utils as su
+        import f404.sweep_utils as su
         original, su._OD_BOUNDS = su._OD_BOUNDS, with_drift
         try:
             runner.run_sweep(build_snake_sweep([0.], [0.], [3100.]))

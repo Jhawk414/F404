@@ -9,8 +9,8 @@ these pin the format down.
 import pandas as pd
 import pytest
 
-from F404_pycycle.problems import build_problem
-from F404_pycycle.sweep_full_envelope import (
+from f404.problems import build_problem
+from f404.sweep_full_envelope import (
     DECK_HI_PRECISION_COLS,
     DECK_SCI_COLS,
     DEFAULT_ALTS,

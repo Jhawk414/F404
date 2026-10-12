@@ -1,6 +1,6 @@
-"""``python -m F404_pycycle`` — same as the ``f404`` console script."""
+"""``python -m f404`` — same as the ``f404`` console script."""
 import sys
 
-from F404_pycycle.cli import main
+from f404.cli import main
 
 sys.exit(main())

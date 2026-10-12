@@ -15,7 +15,7 @@ Wet sweep (OD_wet)
   - A8 is set by the nozzle control law (fan held on its design operating line)
   - Thrust is an output, not a target
 
-Usage (see F404_pycycle.cli for the full flag set):
+Usage (see f404.cli for the full flag set):
     f404 sweep                       # both modes, default grid
     f404 sweep --mode dry            # dry sweep only
     f404 sweep --mode wet --alt 0,10000,1000 --out decks/run1
@@ -28,8 +28,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from F404_pycycle.problems import build_problem, MAX_Tt7
-from F404_pycycle.sweep_utils import build_snake_sweep, SweepRunner, _scalar
+from f404.problems import build_problem, MAX_Tt7
+from f404.sweep_utils import build_snake_sweep, SweepRunner, _scalar
 
 # ── Default sweep grid (shared by both modes) ────────────────────────────────
 # Crawl-walk-run scope: low altitudes, static conditions on the runway.
@@ -188,8 +188,8 @@ def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
 
 
 if __name__ == "__main__":
-    # Kept so `python -m F404_pycycle.sweep_full_envelope [--mode ...]` still
+    # Kept so `python -m f404.sweep_full_envelope [--mode ...]` still
     # works; it is the same as `f404 sweep`.
     import sys
-    from F404_pycycle.cli import main
+    from f404.cli import main
     sys.exit(main(['sweep', *sys.argv[1:]]))
