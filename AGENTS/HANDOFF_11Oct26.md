@@ -95,7 +95,8 @@ Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18.
 | [#24](https://github.com/Jhawk414/F404/issues/24) | Single value = constant axis (`--alt 0`) | enhancement | small; same code as #22 |
 | [#27](https://github.com/Jhawk414/F404/issues/27) | Write failed sweep points to `deck/` | enhancement | small/medium |
 | [#13](https://github.com/Jhawk414/F404/issues/13) | CLI sweep ranges | enhancement | 🟡 alt/dTs/throttle done; **`--mach` open** (needs model work) |
-| *(no issue yet)* | `--pla` sweep axis | enhancement | see [open question](#open-question---pla) |
+| [#30](https://github.com/Jhawk414/F404/issues/30) | Define PLA in the cycle (blocks the `--pla` axis) | enhancement | decision first, then small; see [PLA](#pla-what-the-literature-says) |
+| [#31](https://github.com/Jhawk414/F404/issues/31) | CI: fast tests on PRs, full matrix on merge | housekeeping | small; independent |
 | [#17](https://github.com/Jhawk414/F404/issues/17) | Pydantic models for inputs | enhancement | medium |
 | [#8](https://github.com/Jhawk414/F404/issues/8) | PLA/T7-scheduled A8 | enhancement | large; state-of-play comment 10 Oct |
 | [#25](https://github.com/Jhawk414/F404/issues/25) | Define idle; calibrate dry part power to F404 data | enhancement | large; tune together with #8 |
@@ -105,7 +106,7 @@ Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18.
 
 ## Recommended order
 
-**#22 + #24 → #27 → #13 `--mach` → `--pla` → #17 → #8 + #25 (+ #3 re-measured) → #16 remainder → #10**
+**#31 (any time) → #22 + #24 → #27 → #13 `--mach` → #30 → `--pla` → #17 → #8 + #25 (+ #3 re-measured) → #16 remainder → #10**
 
 Plan: finish the sweep-axis side of the CLI before #8 and #25, so agents
 working those have `--mach` and `--pla` to sweep or turn.
@@ -122,8 +123,9 @@ working those have `--mach` and `--pla` to sweep or turn.
    a Mach dimension has to go into `build_snake_sweep` / `generate_bridge_points`
    in `sweep_utils.py`. Expect new non-convergence at the envelope edge; that
    is #3's problem, not a blocker (per #13's scope note).
-4. **`--pla`.** No issue filed yet; file one first and settle the mapping
-   question below.
+4. **#30, then `--pla`.** #30 settles what PLA commands (decision, ADR) and
+   gives a provisional schedule; the `--pla` flag is a thin layer on top.
+   Findings in [PLA](#pla-what-the-literature-says) below.
 
 **Stage 2: inputs as data**
 5. **#17 pydantic.** Not CLI, but placed before the solver cluster because #25
@@ -154,14 +156,20 @@ working those have `--mach` and `--pla` to sweep or turn.
 7. **#16 remainder: `init-config`/YAML**, after #17.
 8. **#10 creep/LCF.** Additive and independent; last, incrementally.
 
-### Open question: `--pla`
+### PLA: what the literature says
 
-PLA isn't modeled anywhere: sweeps drive Tt4 (dry) or Tt7 (wet) directly. A
-`--pla` axis needs a PLA → throttle mapping, which #8 lists as an unresolved
-prerequisite and which #25's idle definition feeds. Decide before building it:
-a provisional mapping (e.g. linear PLA → Tt4/Tt7, replaced when #8/#25 land)
-vs. waiting. `--throttle` should keep its temperature semantics; a PLA axis is
-a separate flag, as is a target-thrust OD mode (discussed 07 Oct, deferred).
+PLA isn't modeled: sweeps drive Tt4 (dry) or Tt7 (wet) directly. Full write-up
+in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
+- Landmarks: 31° flight idle, **87° MIL** (not 90°), 130° max AB.
+- Below MIL, PLA schedules `N2` and `A8`. At and above MIL it schedules AB fuel
+  flow, and `A8` is a trim holding a scheduled LPT-exit temperature (`T5.6`).
+  So PLA is not one cycle variable, and `OD_wet`'s `a8_ctrl` (Rline hold) is
+  the model's analogue of that trim.
+- One PLA axis spans dry and wet, so `--pla` works with `--mode both`, unlike
+  `--throttle`. `--throttle` keeps temperature semantics; `--pla` is a separate
+  flag, as is a target-thrust OD mode (discussed 07 Oct, deferred).
+- Open: dry commanded quantity (Tt4 vs `N2` vs thrust), light-off location,
+  schedule source (Ray's measured thrust vs PLA is the best candidate).
 
 ## Standing gotchas
 

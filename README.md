@@ -295,6 +295,8 @@ order:
       ranges ([#22](https://github.com/Jhawk414/F404/issues/22)), `--mach`
       (needs a Mach sweep dimension,
       [#13](https://github.com/Jhawk414/F404/issues/13)) and a PLA axis
+      (needs PLA defined in the cycle first,
+      [#30](https://github.com/Jhawk414/F404/issues/30))
 - [ ] Write failed sweep points to `deck/` beside each cycle deck
       ([#27](https://github.com/Jhawk414/F404/issues/27))
 - [ ] Pydantic models for design-point inputs, sweep points and the
