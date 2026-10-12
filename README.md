@@ -20,7 +20,9 @@ dry mil power, operated both dry (military power and below) and wet
 altitude/dTs/throttle sweep infrastructure, and an `f404` command line for
 sweeps and single design points. See [Current status](#current-status) for
 convergence coverage and [Roadmap](#roadmap) for planned work. Not yet
-validated against public F404 performance data.
+validated against public F404 performance data; the public reports are
+archived and indexed in
+[`docs/unclassified_perf_data/`](docs/unclassified_perf_data/README.md).
 
 ## Table of contents
 
@@ -52,7 +54,7 @@ vendored upstream `pycycle` library at the repo root (see
 | `src/f404/printer.py` | Console table formatter for DESIGN/OD results |
 | `tests/` | pytest suite, one `<module>_test.py` per module ([#5](https://github.com/Jhawk414/F404/issues/5)) |
 | `deck/` | Cycle-deck output CSVs |
-| `docs/` | System architecture diagrams (`f404_cycle.typ`, `f404_cycle.svg`), architecture decision records (`adr/`), planning docs (`improvements/`), and reference material (`unclassified_perf_data/`: source PDFs in `pdf/`, Obsidian-compatible markdown conversions with their figures in `md/`) |
+| `docs/` | System architecture diagrams (`f404_cycle.typ`, `f404_cycle.svg`), architecture decision records (`adr/`), planning docs (`improvements/`), and reference material (`unclassified_perf_data/`: an [index and cross-study reference map](docs/unclassified_perf_data/README.md) of published F404 performance data, with source PDFs in `pdf/` and Obsidian-compatible markdown conversions with their figures in `md/`) |
 | `AGENTS/` | Session handoff notes |
 | `meta/` | Vendored-library provenance (`LICENSE.txt`) |
 | `pycycle/`, `setup.py`, `pyproject.toml`, `example_cycles/` | Vendored upstream `pyCycle` library |
@@ -208,7 +210,7 @@ the same as `f404 sweep`.
 ## Testing
 
 ```bash
-pytest tests                    # full suite, ~1 min
+pytest tests                    # full suite, ~2 min
 pytest tests -m "not slow"      # structural and unit tests only, ~6 s
 ```
 
@@ -218,7 +220,7 @@ pure functions or build a model without solving it. `pytest` needs no prior
 install — `pythonpath` in `pyproject.toml` puts `src/` on the path — and runs
 in CI on Ubuntu (3.9, 3.12) and macOS (3.12).
 
-174 tests, 95% coverage. The driver and
+177 tests, 97% coverage. The driver and
 CLI are importable and covered; what remains uncovered is mostly
 `sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 
@@ -274,22 +276,39 @@ Done:
       points, wet A8 control law, max AB calibrated to 17,700 lbf
       ([#2](https://github.com/Jhawk414/F404/issues/2),
       [ADR-0001](docs/adr/0001-single-engine-sizing.md))
-
-Planned (see `docs/improvements/IMPROVEMENTS.md` for full detail):
-
-- [x] `src/` restructure: separate F404 app code from vendored pyCycle
-      library ([#4](https://github.com/Jhawk414/F404/issues/4))
-- [ ] Resolve remaining cold/high-alt/max-AB Newton convergence failures
-      ([#3](https://github.com/Jhawk414/F404/issues/3))
-- [ ] Sync vendored `pycycle/` against upstream
+- [x] `src/` restructure: F404 app code separated from the vendored pyCycle
+      library, now the `f404` package under `src/f404/`
+      ([#4](https://github.com/Jhawk414/F404/issues/4))
+- [x] Vendored `pycycle/` synced against upstream
       ([#6](https://github.com/Jhawk414/F404/issues/6))
-- [ ] CLI: `sweep` and `design` with `--alt` / `--dts` / `--throttle` ranges
-      are in; still to do are `--mach` (needs a Mach sweep dimension),
-      `init-config` and YAML configuration
-      ([#16](https://github.com/Jhawk414/F404/issues/16),
-      [#13](https://github.com/Jhawk414/F404/issues/13))
+- [x] `f404` CLI with `sweep` and `design` and `--alt` / `--dts` /
+      `--throttle` range flags
+- [x] Published F404 performance reports archived as Obsidian-compatible
+      markdown, with an index and cross-study reference map
+      ([`docs/unclassified_perf_data/`](docs/unclassified_perf_data/README.md))
+
+Planned (see `docs/improvements/IMPROVEMENTS.md` for full detail), roughly in
+order:
+
+- [ ] CLI sweep-axis follow-ups: single-value constant axis
+      ([#24](https://github.com/Jhawk414/F404/issues/24)), negative-start
+      ranges ([#22](https://github.com/Jhawk414/F404/issues/22)), `--mach`
+      (needs a Mach sweep dimension,
+      [#13](https://github.com/Jhawk414/F404/issues/13)) and a PLA axis
+- [ ] Write failed sweep points to `deck/` beside each cycle deck
+      ([#27](https://github.com/Jhawk414/F404/issues/27))
 - [ ] Pydantic models for design-point inputs, sweep points and the
       duplicated OD bounds table ([#17](https://github.com/Jhawk414/F404/issues/17))
+- [ ] PLA/T7-scheduled nozzle throat area
+      ([#8](https://github.com/Jhawk414/F404/issues/8)), together with
+      defining idle and calibrating the dry part-power end against the
+      published data ([#25](https://github.com/Jhawk414/F404/issues/25))
+- [ ] Resolve remaining cold/high-alt/max-AB Newton convergence failures
+      ([#3](https://github.com/Jhawk414/F404/issues/3))
+- [ ] CLI `init-config` and YAML configuration
+      ([#16](https://github.com/Jhawk414/F404/issues/16))
+- [ ] Inline creep/LCF life estimation
+      ([#10](https://github.com/Jhawk414/F404/issues/10))
 - [ ] `deck/` as a durable, reviewed home for cycle-deck CSVs + solver logs
 - [ ] YAML-driven run configuration (`run.yml`), on top of
       [#17](https://github.com/Jhawk414/F404/issues/17)'s models
