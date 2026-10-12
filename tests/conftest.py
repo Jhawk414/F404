@@ -11,7 +11,7 @@ nothing.
 """
 import pytest
 
-from F404_pycycle.problems import build_problem
+from f404.problems import build_problem
 
 
 @pytest.fixture(scope='session')

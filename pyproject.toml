@@ -3,7 +3,7 @@ build-backend = "setuptools.build_meta"
 requires = ["setuptools"]
 
 [tool.pytest.ini_options]
-# Tests import the F404 application code as the `F404_pycycle` package. Putting
+# Tests import the F404 application code as the `f404` package. Putting
 # src/ on the path here means `pytest` works from a fresh clone without an
 # editable install first, and keeps CI from depending on install mode.
 pythonpath = ["src"]
@@ -29,10 +29,10 @@ filterwarnings = [
     # will raise in a future NumPy. Reads go through sweep_utils._scalar —
     # promote the deprecation so a new bare float() can't slip back in.
     #
-    # Scoped to F404_pycycle by the trailing module pattern. The vendored
+    # Scoped to f404 by the trailing module pattern. The vendored
     # pycycle/ library triggers the same deprecation in its own numerics, and
     # an unscoped rule turns those into hard failures the moment anyone points
     # pytest at pycycle/ — upstream's warnings are #6's problem, not this
     # suite's to enforce.
-    "error:Conversion of an array with ndim > 0 to a scalar:DeprecationWarning:F404_pycycle.*",
+    "error:Conversion of an array with ndim > 0 to a scalar:DeprecationWarning:f404.*",
 ]

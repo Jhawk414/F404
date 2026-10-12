@@ -9,8 +9,8 @@ import importlib
 import pandas as pd
 import pytest
 
-from F404_pycycle import cli, sweep_full_envelope as sfe
-from F404_pycycle.cli import (
+from f404 import cli, sweep_full_envelope as sfe
+from f404.cli import (
     RangeError,
     alt_axis,
     dts_axis,
@@ -18,7 +18,7 @@ from F404_pycycle.cli import (
     parse_range,
     throttle_axis,
 )
-from F404_pycycle.sweep_full_envelope import (
+from f404.sweep_full_envelope import (
     DEFAULT_ALTS,
     DEFAULT_DRY_POWERS,
     DEFAULT_DTS,
@@ -219,9 +219,9 @@ def test_bad_design_arguments_fail_before_any_solve(capsys, argv, fragment):
 
 
 def test_python_dash_m_and_the_console_script_share_one_entry_point():
-    # setup.py registers f404=F404_pycycle.cli:main; __main__ calls the same.
-    assert importlib.import_module('F404_pycycle.cli').main is cli.main
-    assert "f404=F404_pycycle.cli:main" in open('setup.py').read()
+    # setup.py registers f404=f404.cli:main; __main__ calls the same.
+    assert importlib.import_module('f404.cli').main is cli.main
+    assert "f404=f404.cli:main" in open('setup.py').read()
 
 
 @pytest.mark.slow

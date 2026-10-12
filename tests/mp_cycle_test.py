@@ -11,7 +11,7 @@ import openmdao.api as om
 import pycycle.api as pyc
 import pytest
 
-from F404_pycycle.mp_cycle import MPMixedFlowTurbofan
+from f404.mp_cycle import MPMixedFlowTurbofan
 
 # Scaled map coordinates. Without these the OD point runs on unscaled
 # textbook maps instead of the sized engine's.

@@ -8,7 +8,7 @@ import openmdao.api as om
 import pycycle.api as pyc
 import pytest
 
-from F404_pycycle.engine_model import MixedFlowTurbofan
+from f404.engine_model import MixedFlowTurbofan
 
 DESIGN_BALANCES = {'W', 'BPR', 'FAR_core', 'hpt_PR', 'lpt_PR'}
 OD_BALANCES = {'W', 'BPR', 'FAR_core', 'LP_Nmech', 'HP_Nmech'}

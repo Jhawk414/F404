@@ -10,14 +10,14 @@ differences in BLAS/LAPACK across platforms.
 """
 import pytest
 
-from F404_pycycle.problems import (
+from f404.problems import (
     DRY_DSN_FN,
     MAX_AB_FN,
     MAX_Tt7,
     MIL_Tt4,
     build_problem,
 )
-from F404_pycycle.sweep_utils import _scalar
+from f404.sweep_utils import _scalar
 
 REL = 1e-4
 

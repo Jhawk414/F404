@@ -38,7 +38,7 @@ setup(name='om-pycycle',
           # F404 application code (src/ layout). Shares this distribution with
           # the vendored library rather than carrying a second setup.py, so a
           # single `pip install -e .` covers the whole repo.
-          'F404_pycycle',
+          'f404',
           'pycycle',
           'pycycle.elements',
           'pycycle.elements.test',
@@ -55,17 +55,17 @@ setup(name='om-pycycle',
       ],
       install_requires=[
         'openmdao>=3.10.0',
-        # numpy arrives transitively via openmdao, but F404_pycycle imports it
+        # numpy arrives transitively via openmdao, but f404 imports it
         # directly, so it is declared rather than relied on.
         'numpy',
-        # F404_pycycle only: SweepRunner collects results into a DataFrame and
+        # f404 only: SweepRunner collects results into a DataFrame and
         # write_deck_csv serialises the cycle deck from it.
         'pandas',
-        # F404_pycycle only: the f404 command's --help is rendered as rounded
+        # f404 only: the f404 command's --help is rendered as rounded
         # panels. Falls back to plain text when output isn't a terminal.
         'rich',
       ],
-    package_dir={'F404_pycycle': 'src/F404_pycycle'},
+    package_dir={'f404': 'src/f404'},
     package_data={
         'pycycle.elements.test': ['reg_data/*.csv'],
         'pycycle.thermo.test': ['*.csv'],
@@ -73,6 +73,6 @@ setup(name='om-pycycle',
     },
     extras_require=optional_dependencies,
     entry_points={
-        'console_scripts': ['f404=F404_pycycle.cli:main'],
+        'console_scripts': ['f404=f404.cli:main'],
     },
 )

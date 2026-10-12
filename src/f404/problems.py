@@ -11,8 +11,8 @@ import math
 
 import openmdao.api as om
 
-from F404_pycycle.mp_cycle import MPMixedFlowTurbofan
-from F404_pycycle.printer import page_viewer
+from f404.mp_cycle import MPMixedFlowTurbofan
+from f404.printer import page_viewer
 
 # ── Design-point targets ──────────────────────────────────────────────────────
 MIL_Tt4    = 3100.   # degR — core burner exit at mil power (throttle wall)

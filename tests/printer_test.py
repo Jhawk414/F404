@@ -10,7 +10,7 @@ import io
 
 import pytest
 
-from F404_pycycle.printer import page_viewer, print_perf
+from f404.printer import page_viewer, print_perf
 
 # One table per component family. A missing section means a name in
 # printer.py no longer matches the model.
