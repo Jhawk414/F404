@@ -495,35 +495,36 @@ Turbomachinery component matching ($N_1/N_2$ spool split, airflow vs corrected s
 
 ---
 
-## Cross-Study Thermodynamic Reference Map
+## Cross-Study Multi-Condition Reference Map
 
-The table below correlates baseline design and operating metrics established across the corpus for the F404-GE-400 at sea level static, standard day conditions.
+The table below cross-indexes key performance metrics and aerothermodynamic parameters across the corpus for the F404-GE-400. Operating conditions vary across ground static test cells, altitude simulation chambers, and flight test installations. Each row identifies its operating environment and data provenance.
 
-| Parameter | Baseline Value | Literature Sources | Notes / Modeling Significance |
-| :--- | :--- | :--- | :--- |
-| **Max Augmented Thrust ($F_{\text{gross}}$)** | 16,000 lbf (71.2 kN) | Frith (1985), Powel (1990), Johnson (1990) | Uninstalled SLS design point |
-| **Max Dry Thrust (IRP)** | 10,600 lbf (47.2 kN) | Frith (1985), Powel (1990) | Uninstalled SLS dry military rating |
-| **Augmented Specific Fuel Consumption** | 1.84 to 1.85 lb/(hr·lbf) | Frith (1985) | SLS Max A/B |
-| **Dry Specific Fuel Consumption** | 0.78 to 0.81 lb/(hr·lbf) | Frith (1985) | SLS IRP rating |
-| **Engine Mass Airflow** | 142 to 145 lb/s (64.4 to 65.8 kg/s) | Frith (1985), Powel (1990) | 142 lb/s design (Frith); 145 lb/s nominal (Powel) |
-| **Bypass Ratio (BPR)** | 0.34 | Frith (1985) | Mixer bypass-to-core flow ratio |
-| **Overall Pressure Ratio (OPR)** | 25.0:1 | Frith (1985), Powel (1990) | Design point cycle pressure ratio |
-| **Fan Pressure Ratio (FPR)** | 4.1:1 (nominal 4:1) | Frith (1985), Powel (1990) | 3-stage fan |
-| **Compressor Pressure Ratio (HPC PR)** | 6.0:1 (nominal 6.3:1) | Frith (1985) | 7-stage core compressor |
-| **Design Fan Rotor Speed ($N_1$)** | 13,270 rpm | Frith (1985), Conners (1989) | 100% mechanical speed |
-| **Design Core Rotor Speed ($N_2$)** | 16,810 rpm | Frith (1985) | 100% mechanical speed |
-| **Turbine Inlet Temperature (TIT)** | 1,390 °C (2,994 °R / 1,663 K) | Frith (1985) | Design point hot gas temperature |
-| **TIT Control Limit Ceiling** | 2,980 °R (1,382 °C / 1,656 K) | Frith (1985) | Flat-rated temperature ceiling |
-| **HPT Vane Cooling Bleed** | 11% of CDP | Frith (1985) | Compressor discharge air to 1st stage NGV |
-| **Dry Nozzle Throat Temperature ($T_8$)** | 1,683 to 1,719 °R (935 to 955 K) | Ennix (1993), Walton (1986) | Intermediate power nozzle throat state |
-| **Max A/B Flame Temperature ($T_8 / T_9$)** | 3,750 to 3,800 °R (2,083 to 2,111 K) | Walton (1986) | Core afterburning peak temperature |
-| **Nozzle Throat Area ($A_8$) Span** | 215 to 420 in² | Ray (1990), Conners (1989), Johnson (1990) | ~215 in² at IRP; opens to ~420 in² at Max A/B |
-| **Nozzle Expansion Area Ratio ($AE_9/AE_8$)** | 1.24 to 1.49 | Ennix (1993), Walton (1986) | Kinematic cam linkage constraint |
-| **Nozzle Exit Mach Number ($M_9$)** | 1.69 to 1.81 | Ennix (1993), Walton (1986) | Invariant across speeds, altitudes, and throttles |
-| **Customer Bleed Thrust Penalty** | -177 to -189 lbf / (lb/s bleed) | Yuhas & Ray (1992) | Military power; doubles to -344 to -371 lbf at Max A/B |
-| **Customer Bleed Rule of Thumb** | ~2% thrust loss per 1% bleed | Yuhas & Ray (1992) | Military power HPC bleed extraction |
-| **Thrust Calculation Uncertainty** | WT: 3.19% avg; AP: 6.11% avg | Conners (1989), Ray (1990) | In-flight net thrust error bounds |
-| **Uncalibrated Model Error** | $\pm 8.74\%$ random error; -29.7% at idle | Ray (1990) | Scatter of standard manufacturer deck |
+| Parameter | Value (US / SI Units) | Operating Condition | Provenance & Sources | Modeling Significance |
+| :--- | :--- | :--- | :--- | :--- |
+| **Max Augmented Thrust ($FG$)** | 16,000 lbf (71.2 kN) | Sea Level Static, Standard Day | [M-SPEC] Frith (1985), Powel (1990); [M-MOD] Johnson (1990) | Uninstalled SLS sizing point |
+| **Max Dry Thrust (IRP)** | 10,600 lbf (47.2 kN) | Sea Level Static, Standard Day | [M-SPEC] Frith (1985), Powel (1990) | Uninstalled SLS dry military rating |
+| **Max A/B Specific Fuel Consumption** | 1.84 to 1.85 lb/(hr·lbf) (52.1 g/(kN·s)) | Sea Level Static, Standard Day | [M-SPEC] Frith (1985) | SLS Max A/B fuel economy |
+| **Dry Specific Fuel Consumption** | 0.78 to 0.81 lb/(hr·lbf) (22.1 g/(kN·s)) | Sea Level Static, Standard Day | [M-SPEC] Frith (1985) | SLS IRP fuel economy |
+| **Engine Mass Airflow** | 142 to 145 lb/s (64.4 to 65.8 kg/s) | Sea Level Static, Standard Day | [M-SPEC] Frith (1985) (142 lb/s), Powel (1990) (145 lb/s) | Inlet sizing mass flow |
+| **Bypass Ratio (BPR)** | 0.34 | Sea Level Static, Design Point | [M-SPEC] Frith (1985) | Mixer bypass-to-core flow ratio |
+| **Overall Pressure Ratio (OPR)** | 25.0:1 | Sea Level Static, Design Point | [M-SPEC] Frith (1985), Powel (1990) | Design cycle pressure ratio |
+| **Fan Pressure Ratio (FPR)** | 4.1:1 (nominal 4:1) | Sea Level Static, Design Point | [M-SPEC] Frith (1985), Powel (1990) | 3-stage fan pressure ratio |
+| **High-Pressure Compressor PR (HPC PR)** | 6.0:1 (nominal 6.3:1) | Sea Level Static, Design Point | [M-SPEC] Frith (1985) | 7-stage core compressor pressure ratio |
+| **Fan Rotor Speed ($N_1$)** | 13,270 rpm | Sea Level Static, Design Point | [M-SPEC] Frith (1985); [M-DIR] Conners (1989) | 100% mechanical LP spool speed |
+| **Core Rotor Speed ($N_2$)** | 16,810 rpm | Sea Level Static, Design Point | [M-SPEC] Frith (1985) | 100% mechanical HP spool speed |
+| **Turbine Inlet Temperature (TIT)** | 1,390 °C (2,994 °R / 1,663 K) | Sea Level Static, Design Point | [M-SPEC] Frith (1985) | Hot gas path thermodynamic design point |
+| **TIT Control Limit Ceiling** | 2,980 °R (1,382 °C / 1,656 K) | Flat-rated temperature ceiling | [M-SPEC] Frith (1985) | Flat-rated combustor exit limit |
+| **HPT Vane Cooling Bleed** | 11% of CDP | Sea Level Static, Max Dry | [M-SPEC] Frith (1985) | Compressor discharge air to 1st stage NGV |
+| **Dry Nozzle Throat Total Temp ($T_8$)** | 1,683 to 1,690 °R (935 to 939 K) | Climb Flight (M 0.32-0.89, 3.8k-32.3k ft, PLA 102°) | [M-MOD] Ennix et al. (1993, Table 2 via GE IFT) | Intermediate power 1D nozzle throat bulk temperature |
+| **Local Peak Plume Stagnation Temp** | 3,750 to 3,800 °R (2,083 to 2,111 K) | Altitude Chamber (M 0.30 at 30k ft, M 0.87 at 24k ft, Max A/B) | [M-DIR] Walton & Burcham (1986, Rake at Station 9+2in) | Local flame peak 1.0 to 2.5 in inside lip; NOT bulk 1D throat temperature |
+| **Centerline Plume Pressure Defect** | 20% to 45% total pressure drop | Altitude Chamber (M 0.30 at 30k ft, M 0.87 at 24k ft) | [M-DIR] Walton & Burcham (1986, Figures 9-11) | Turbine centerbody wake defect persisting through nozzle |
+| **Nozzle Throat Area ($A_8$) Span** | ~215 to 420 in² | Across flight and ground envelope | [M-DIR] Ray (1990), Conners (1989); [M-MOD] Johnson (1990) | Modulates from ~215 in² at IRP to ~420 in² at Max A/B |
+| **Nozzle Expansion Ratio ($AE_9/AE_8$)** | 1.24 to 1.49 | Across flight and ground envelope | [M-MOD] Ennix et al. (1993); [M-DIR] Walton & Burcham (1986) | Kinematic cam linkage limits |
+| **Nozzle Exit Mach Number ($M_9$)** | 1.69 to 1.81 | Flight climb and speed sweeps (M 0.32-0.92, 3.8k-32.3k ft) | [M-MOD] Ennix et al. (1993, Tables 2-4 via GE IFT) | Invariant supersonic nozzle exit Mach number |
+| **Customer Bleed Thrust Penalty** | -177 to -189 lbf / (lb/s bleed) | Edwards AFB Ground Stand (2,100 ft MSL, hot day, Military power) | [M-DIR] Yuhas & Ray (1992, Table 2) | HPC Station 3 customer bleed; doubles to -344 to -371 lbf at Max A/B |
+| **Customer Bleed Percentage Rule** | ~2% net thrust loss per 1% bleed | Edwards AFB Ground Stand (Military power) | [M-DIR] Yuhas & Ray (1992) | Sensitivity rule of thumb for customer extraction |
+| **In-Flight Net Thrust Uncertainty** | WT: 3.19% avg; AP: 6.11% avg | X-29A Flight Envelope (10k-40k ft, M 0.4-1.6) | [M-MOD] Conners (1989, Table 4 via GE IFT) | Mass Flow-Temp (WT) vs Area-Pressure (AP) error bounds |
+| **Uncalibrated Spec Model Error** | 2σ = ±8.74% (range 40°-130°); -29.7% at idle | NASA Lewis PSL Cell 4 (11 flight conditions) | [M-DIR / M-MOD Comparison] Ray (1990, Table 6) | Scatter of standard manufacturer engine deck vs test stand |
 
 ---
 
