@@ -14,6 +14,7 @@ docs/unclassified_perf_data/
 │   │   ├── ada164562/             # Figures for Frith (1985)
 │   │   ├── exhaust-gas-pt-survey/ # Figures for Walton & Burcham (1986)
 │   │   ├── hadzic-2010/           # Figures for Hadzic et al. (2010)
+│   │   ├── henry-1988/            # Figures for Henry & Moffatt (1988)
 │   │   ├── nasa-tm-4140/          # Figures for Conners (1989)
 │   │   ├── nasa-tm-4240/          # Figures for Johnson (1990)
 │   │   ├── nasa-tm-4538/          # Figures for Ennix et al. (1993)
@@ -23,6 +24,7 @@ docs/unclassified_perf_data/
 │   ├── ADA164562 The General Electric F404 - Engine of the RAAF's New Fighter.md
 │   ├── Exhaust-Gas P & T Survey of F404-GE-400 engine.md
 │   ├── Hadzic 2010 - Limited Qualification Tests of an F404 Engine with Blended FT-SPK and NATO F-34 Fuel.md
+│   ├── Henry 1988 - Transient Performance Trending for a Turbofan Engine.md
 │   ├── NASA TM 4140 - Measurement Effects on the Calculation of In-Flight Thrust for an F404 turbofan engine.md
 │   ├── NASA TM 4538 - Flight-Determine Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane.md
 │   ├── NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring.md
@@ -34,6 +36,7 @@ docs/unclassified_perf_data/
     ├── Exhaust-Gas P & T Survey of F404-GE-400 engine.pdf
     ├── F404 Family Data Sheet_UPDATED.pdf
     ├── Hadzic 2010 - Limited Qualification Tests of an F404 Engine with Blended FT-SPK and NATO F-34 Fuel.pdf
+    ├── Henry 1988 - Transient Performance Trending for a Turbofan Engine.pdf
     ├── NASA TM 4140 - Measurement Effects on the Calculation of In-Flight Thrust for an F404 turbofan engine.pdf
     ├── NASA TM 4538 - Flight-Determine Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane.pdf
     ├── NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring.pdf
@@ -74,6 +77,7 @@ Numerical values throughout this index carry explicit provenance classifications
 | [Yuhas & Ray (1992)](md/Yuhas%201992%20-%20Effects%20of%20Bleed%20ir%20Extraction%20of%20Thrust%20Levels%20of%20the%20F404-GE-400%20Turbofan%20Engine.md) | A. J. Yuhas | 1992 | NASA TM-104247 / AIAA 92-3092 | F/A-18 HARV ground test on EAFB Universal Horizontal Thrust Stand | HPC customer bleed extraction, linear thrust penalty slopes, control nozzle modulation |
 | [Ennix et al. (1993)](md/NASA%20TM%204538%20-%20Flight-Determine%20Engine%20Exhaust%20Characteristics%20of%20an%20F404%20Engine%20in%20an%20F-18%20Airplane.md) | K. A. Ennix | 1993 | NASA TM-4538 / AIAA-93-2543 | F-18 subsonic flyovers over Rogers Dry Lake for HSCT jet noise | In-flight exhaust gas properties, C-D nozzle expansion states, invariant exit Mach number |
 | [Hadzic et al. (2010)](md/Hadzic%202010%20-%20Limited%20Qualification%20Tests%20of%20an%20F404%20Engine%20with%20Blended%20FT-SPK%20and%20NATO%20F-34%20Fuel.md) | R. Hadzic | 2010 | ASME GT2010-23402 | NRC Canada Test Cell #4 qualification campaign (CF-18) | 50/50 FT-SPK synthetic kerosene blend, fuel density effects, spool match invariance, acoustic stability |
+| [Henry & Moffatt (1988)](md/Henry%201988%20-%20Transient%20Performance%20Trending%20for%20a%20Turbofan%20Engine.md) | J. R. Henry | 1988 | ASME 88-GT-222 | Canadian Forces CF-18 takeoff slam accelerations | Takeoff transient repeatability, cross-plotted operating lines, LPT inlet temperature ($T_5$), HPC blade damage signatures |
 | [F404 Family Data Sheet (2006)](pdf/F404%20Family%20Data%20Sheet_UPDATED.pdf) | GEAE | 2006 | OEM Product Sheet | Commercial and military marketing specifications | Unconverted PDF summary for F404-GE-402, F404-GE-102, and RM12 ratings |
 
 ---
@@ -495,6 +499,58 @@ Turbomachinery component matching ($N_1/N_2$ spool split, airflow vs corrected s
 
 ---
 
+### 10. Henry & Moffatt (1988) - Transient Performance Trending and Gas Path Dynamics
+
+- **Note**: [Henry 1988 - Transient Performance Trending for a Turbofan Engine.md](md/Henry%201988%20-%20Transient%20Performance%20Trending%20for%20a%20Turbofan%20Engine.md)
+- **Source PDF**: [Henry 1988 - Transient Performance Trending for a Turbofan Engine.pdf](pdf/Henry%201988%20-%20Transient%20Performance%20Trending%20for%20a%20Turbofan%20Engine.pdf)
+- **Citation**: J. R. Henry and W. C. Moffatt, *Transient Performance Trending for a Turbofan Engine*, ASME Paper 88-GT-222, June 1988.
+- **Context**: Inflight Engine Condition Monitoring System (IECMS) magnetic tape records from Canadian Forces CF-18 Hornets during takeoff slam accelerations (ground idle to Military power, throttle rates exceeding 45 deg/s). Investigates transient repeatability, cross-plotted parameter trajectories, and gas-path fault detection on production F404-GE-400 engines.
+
+#### Test Scope and Operational Conditions
+- Analyzed takeoff acceleration records from CF-18 operational flights at CFB Cold Lake and CFB Bagotville.
+- Conducted controlled ground slam accelerations with dedicated 5-minute cool-down intervals between runs.
+- Investigated operator and environmental variables: throttle overshoot into afterburner, intake foreign object screens, insufficient cool-down time (reslam), throttle movement rate, and ambient temperature variations (270 K vs 285 K).
+- Evaluated Engine 376020 before and after repair of foreign object damage caused by a failed hook-bolt locking tab that damaged 117 High Pressure Compressor blades.
+
+#### Instrumentation and Station Nomenclature
+- *Critical Station Distinction*: Henry and Moffatt define $T_5$ as the **Low Pressure Turbine (LPT) Inlet Total Temperature** (SAE and pyCycle station 4.5, $Tt_{45}$, between the HPT rotor exit and LPT stator inlet). This differs from the turbine exhaust and mixer inlet temperature ($T_{56}$ or station 5.5). In cycle modeling, this signal validates `trb.Fl_O:stat:T` or `lpt.Fl_I:stat:T`.
+- *Data Capture Window*: Throttle advance rates above 45 deg/s drive the hydromechanical Main Fuel Control against its acceleration fuel schedule limit. This removes pilot throttle handling as a transient variable. The Variable Exhaust Nozzle (VEN) drives to its mechanical minimum area stop within 1 second and remains clamped shut for 4 seconds. Restricting data capture to this 4-second window fixes nozzle throat area ($A_8$).
+- *Data Repeatability*: When operators satisfy these window criteria, transient parameter scatter remains within $\pm 1\%$ across nominal accelerations.
+
+#### Transient Operating Line Data Compilation
+
+#### Cross-Plotted Dry Slam Trajectory ([M-PLOT] Figs 2, 3, 7, 8, 9, 10 of ASME 88-GT-222)
+
+| Corrected CDP ($PS_3/\delta$, psia) | Corrected Fan Speed ($XN1/\sqrt{\theta}$, rpm) | Corrected Core Speed ($XN2/\sqrt{\theta}$, rpm) | Corrected LPT Inlet Temp ($T_5/\theta$, K) | Nominal Expansion Ratio ($PS_3/P_5$) | Corrected LPT Inlet Press ($P_5/\delta$, psia) | Operational State |
+| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| 100 | ~7,400 to 7,900 | ~12,680 | ~730 to 740 (ground) / ~895 (flight) | ~4.2 to 4.5 | ~22 to 24 | Low power initial transient |
+| 150 | ~9,600 to 9,700 | ~13,550 | ~790 (ground) / ~945 (flight) | ~4.8 to 5.0 | ~30 to 31 | Mid power; FVG activation begins at 9,500 rpm |
+| 200 | ~11,100 to 11,200 | ~13,900 to 14,000 | ~840 (ground) / ~1,000 (flight) | ~5.3 to 5.5 | ~37 to 38 | High power spool acceleration |
+| 220 | ~11,400 to 11,450 | ~14,100 | ~880 (ground) / ~1,030 (flight) | ~5.6 to 5.7 | ~39 to 40 | High power transient |
+| 250 | ~11,800 to 12,100 | ~14,200 to 14,700 | ~910 (ground) / ~1,065 (flight) | ~5.8 to 5.9 | ~42 to 43 | Near Military power rating endpoint |
+| 270 to 272 | ~12,200 | ~14,800 to 14,900 | ~965 (ground) / ~1,115 (flight) | ~5.9 to 6.0 | ~45 to 46 | Peak Military takeoff transient endpoint |
+
+#### Compressor Damage Baseline Shift Summary ([M-DIR] Table 3 of ASME 88-GT-222, Engine 376020)
+
+| Dependent Parameter ($Y$) | Independent Target ($X$) | Target $X$ Value | Measured Shift in $Y$ | Nominal Scatter Band | Fault Diagnosis Indication |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| $P_5/\delta$ | $PS_3/\delta$ | 125.0 psia | +2% | $\pm 1.0\%$ | Elevated turbine inlet pressure at given CDP |
+| $T_5/\theta$ | $PS_3/\delta$ | 150.0 psia | +3% | $\pm 0.8\%$ | Higher interturbine temperature from lost compressor efficiency |
+| $XN2/\sqrt{\theta}$ | $PS_3/P_5$ | 5.25 | +3% | $\pm 3.0\%$ | Core spool speed increase at fixed core expansion ratio |
+| $T_5/\theta$ | $PS_3/P_5$ | 5.5 | +5% | $\pm 2.0\%$ | Strongest thermal fault signature |
+| $T_5/\theta$ | $P_5/\delta$ | 35.0 psia | +2% | $\pm 0.8\%$ | Turbine temperature rise at fixed interturbine pressure |
+| $T_5/\theta$ | $XN1/\sqrt{\theta}$ | 11,000 rpm | +2% | $\pm 0.8\%$ | Thermal penalty at fixed fan rotor speed |
+
+#### Key Conclusions and Modeling Relevance
+- Dynamic spool trajectories trace a repeatable operating line when cross-plotted against combustor exit static pressure ($PS_3$). Eliminating time removes throttle synchronization errors.
+- Fuel control schedules Fan Variable Geometry (FVG) at a corrected fan speed breakpoint of $XN1/\sqrt{\theta} = 9,500$ rpm. Variable guide vanes remain stationary below this threshold.
+- Exhaust nozzle throat area ($A_8$) clamps against its lower mechanical stop for 4 seconds during rapid dry accelerations. Transient cycle decks can assume frozen minimum nozzle throat area throughout dry takeoff spool-up.
+- Overall pressure ratio reaches 17.0 to 18.5 at sea level static Military takeoff endpoint ($PS_3/\delta = 250$ to $272$ psia against standard ambient 14.696 psia).
+- Core expansion ratio ($PS_3/P_5$) spans from 4.2 at idle to 5.9 at Military power, yielding $P_5/\delta = 42$ to $46$ psia at the military endpoint. This anchors bypass mixer balance pressure and fan pressure ratio.
+- HPC damage shifts interturbine temperature ($T_5$) up by 2% to 5% and core speed ($N_2$) up by 3% at constant pressure ratios. These shifts provide benchmark derivatives for degraded compressor off-design modeling.
+
+---
+
 ## Cross-Study Multi-Condition Reference Map
 
 The table below cross-indexes key performance metrics and aerothermodynamic parameters across the corpus for the F404-GE-400. Operating conditions vary across ground static test cells, altitude simulation chambers, and flight test installations. Each row identifies its operating environment and data provenance.
@@ -525,6 +581,9 @@ The table below cross-indexes key performance metrics and aerothermodynamic para
 | **Customer Bleed Percentage Rule** | ~2% net thrust loss per 1% bleed | Edwards AFB Ground Stand (Military power) | [M-DIR] Yuhas & Ray (1992) | Sensitivity rule of thumb for customer extraction |
 | **In-Flight Net Thrust Uncertainty** | WT: 3.19% avg; AP: 6.11% avg | X-29A Flight Envelope (10k-40k ft, M 0.4-1.6) | [M-MOD] Conners (1989, Table 4 via GE IFT) | Mass Flow-Temp (WT) vs Area-Pressure (AP) error bounds |
 | **Uncalibrated Spec Model Error** | 2σ = ±8.74% (range 40°-130°); -29.7% at idle | NASA Lewis PSL Cell 4 (11 flight conditions) | [M-DIR / M-MOD Comparison] Ray (1990, Table 6) | Scatter of standard manufacturer engine deck vs test stand |
+| **LPT Inlet Total Temperature ($T_5$)** | 1,692 to 1,746 °R (940 to 970 K) ground; 1,917 °R (1,065 K) flight | Sea Level Static Takeoff Roll (Military power, $PS_3/\delta = 250\text{ psia}$) | [M-PLOT] Henry & Moffatt (1988, Figs 3, 8) | Gas path Station 4.5 ($Tt_{45}$) between HPT and LPT; distinct from exhaust $T_{56}$ |
+| **Combustor-to-Turbine Expansion Ratio ($PS_3/P_5$)** | 4.2 to 5.9 (idle to Military) | Sea Level Static Takeoff Slam Accelerations | [M-PLOT] Henry & Moffatt (1988, Fig 9) | Core expansion ratio; fixes $P_5/\delta = 42\text{ to }46\text{ psia}$ at military endpoint |
+| **Transient Military Takeoff OPR** | 17.0 to 18.5:1 ($PS_3/\delta = 250\text{ to }272\text{ psia}$) | Sea Level Static Takeoff Roll (Military power endpoint) | [M-PLOT] Henry & Moffatt (1988, Figs 2, 7) | Operational transient compressor pressure ratio vs 25:1 design rating |
 
 ---
 
@@ -556,3 +615,6 @@ Depending on your modeling or validation objective, consult the following specif
 
 8. **Alternative Fuels and Chemical Sensitivity**:
    - Consult [Hadzic et al. (2010)](md/Hadzic%202010%20-%20Limited%20Qualification%20Tests%20of%20an%20F404%20Engine%20with%20Blended%20FT-SPK%20and%20NATO%20F-34%20Fuel.md) for empirical evidence that turbomachinery aerodynamic matching remains invariant under synthetic kerosene blends.
+
+9. **Transient Gas Path Dynamics, Two-Spool Acceleration Lines, and Interturbine Temperature ($T_5$)**:
+   - Consult [Henry & Moffatt (1988)](md/Henry%201988%20-%20Transient%20Performance%20Trending%20for%20a%20Turbofan%20Engine.md) for continuous dry takeoff operating lines ($N_1$, $N_2$, $T_5$, $PS_3$, $P_5$), Low Pressure Turbine inlet total temperature (station 4.5), expansion ratios across the core, and component deterioration shift signatures.
