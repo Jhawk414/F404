@@ -6,7 +6,8 @@ Entry points::
     f404 design [--fn-target LBF] [--mil-tt4 DEGR] [--max-tt7 DEGR]
 
 ``python -m f404`` is equivalent to ``f404``. Every range flag takes one
-``min,max,step`` triple (inclusive of ``max``), bare or bracketed.
+``min,max,step`` triple (inclusive of ``max``), bare or bracketed, or a single
+value to hold the axis constant.
 
 Input is validated eagerly: a malformed flag stops the run before any model is
 built. A partial or misread range that silently swept the wrong envelope would
@@ -14,6 +15,7 @@ only be discovered later, in a deck that doesn't match what was asked for.
 """
 import argparse
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -31,6 +33,9 @@ _STEP_TOL = 1e-9
 def parse_range(text):
     """Parse ``'min,max,step'`` (optionally in ``[...]``) into three floats.
 
+    A single value (``'0'``) holds the axis constant and parses as
+    ``(value, value, 1)``.
+
     The order is fixed at min, max, step: a step in any other position can't be
     told apart from a bound without a marker, so it is not accepted.
 
@@ -47,10 +52,13 @@ def parse_range(text):
         text = text[1:-1]
 
     parts = [p.strip() for p in text.split(',')]
+    if len(parts) == 1:
+        parts = parts * 2 + ['1']
     if len(parts) != 3:
         raise RangeError(
             f"expected exactly 3 values as min,max,step, got {len(parts)} in "
-            f"{raw!r}. Example: 0,10000,1000"
+            f"{raw!r}. Example: 0,10000,1000. For a constant axis pass a "
+            f"single value, e.g. 0"
         )
 
     try:
@@ -63,10 +71,10 @@ def parse_range(text):
     if not all(math.isfinite(v) for v in (lo, hi, step)):
         raise RangeError(f"min,max,step must be finite, got {raw!r}")
     if step <= 0:
-        raise RangeError(
-            f"step must be positive, got {step:g} in {raw!r}. The order is "
-            f"min,max,step; sweeps are built from min up to max."
-        )
+        hint = (f"For a constant axis pass a single value, e.g. {lo:g}."
+                if lo == hi else
+                "The order is min,max,step; sweeps are built from min up to max.")
+        raise RangeError(f"step must be positive, got {step:g} in {raw!r}. {hint}")
     if lo > hi:
         raise RangeError(
             f"min ({lo:g}) must not exceed max ({hi:g}) in {raw!r}. The order "
@@ -125,6 +133,8 @@ def throttle_axis(text):
 
 
 # ── argparse wiring ───────────────────────────────────────────────────────────
+
+_RANGE_FLAGS = ('--alt', '--dts', '--throttle')
 
 def _axis_arg(builder):
     """Adapt an axis builder to argparse's ``type=``.
@@ -193,7 +203,8 @@ class _PanelHelpParser(argparse.ArgumentParser):
         from rich.text import Text
 
         console = Console(file=file, highlight=False)
-        console.print(Text(self.format_usage().rstrip()))
+        label, _, synopsis = self.format_usage().rstrip().partition(' ')
+        console.print(Text.assemble((label, 'bold'), ' ', (synopsis, 'cyan')))
         if self.description:
             console.print()
             console.print(Text(self.description))
@@ -223,9 +234,7 @@ def build_parser():
         'sweep',
         help="run the alt/dTs/throttle sweep and write cycle decks",
         description="Sweep the sized engine over altitude, temperature offset "
-                    "and throttle, writing one CSV deck per mode. Each range "
-                    "flag takes min,max,step (inclusive of max), bare or "
-                    "bracketed; omitted flags keep the default grid.",
+                    "and throttle, writing one CSV deck per mode.",
     )
     sweep.add_argument(
         '--mode', choices=['dry', 'wet', 'both'], default='both',
@@ -233,16 +242,18 @@ def build_parser():
              "(default: both)")
     sweep.add_argument(
         '--alt', type=_axis_arg(alt_axis), metavar='MIN,MAX,STEP',
-        help="altitude, ft (default: 0,5000,2500)")
+        help="altitude, ft; a single value holds it constant "
+             "(default: 0,5000,2500)")
     sweep.add_argument(
         '--dts', type=_axis_arg(dts_axis), metavar='MIN,MAX,STEP',
-        help="ISA temperature offset, degR; swept hot side first "
-             "(default: -50,50,10)")
+        help="ISA temperature offset, degR; swept hot side first; a "
+             "single value holds it constant (default: -50,50,10)")
     sweep.add_argument(
         '--throttle', type=_axis_arg(throttle_axis), metavar='MIN,MAX,STEP',
-        help="Tt4 in dry mode, Tt7 in wet mode, degR; swept high to low "
-             "(default: 2500,3100,200 dry / 3008,3608,200 wet). Requires "
-             "--mode dry or wet, since the two are different temperatures")
+        help="Tt4 in dry mode, Tt7 in wet mode, degR; swept high to low; "
+             "a single value holds it constant (default: 2500,3100,200 dry "
+             "/ 3008,3608,200 wet). Requires --mode dry or wet, since the "
+             "two are different temperatures")
     sweep.add_argument(
         '--out', type=Path, default=Path('.'), metavar='DIR',
         help="directory for the decks, created if missing (default: .)")
@@ -318,10 +329,31 @@ def _run_design_command(args, parser):
     return 0
 
 
+def _join_negative_ranges(argv):
+    """Glue ``--dts -20,20,10`` into ``--dts=-20,20,10``.
+
+    argparse reads any ``-``-prefixed token that isn't a plain number as a flag,
+    so a range starting with a minus sign (the ``--dts`` default included)
+    would be rejected as "expected one argument". Abbreviated flags
+    (``--dt``) are joined too, as argparse accepts them.
+    """
+    out = []
+    for token in argv:
+        prev = out[-1] if out else ''
+        if (re.match(r'-[\d.]', token) and prev.startswith('--')
+                and '=' not in prev
+                and any(flag.startswith(prev) for flag in _RANGE_FLAGS)):
+            out[-1] = f'{prev}={token}'
+        else:
+            out.append(token)
+    return out
+
+
 def main(argv=None):
     """Run the CLI and return its exit status."""
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(_join_negative_ranges(
+        sys.argv[1:] if argv is None else argv))
     return args.handler(args, parser)
 
 

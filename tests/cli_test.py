@@ -41,8 +41,10 @@ def test_bare_bracketed_and_spaced_forms_parse_identically(text):
 
 @pytest.mark.parametrize('text, fragment', [
     ('0,10000', 'exactly 3 values'),
-    ('0', 'exactly 3 values'),
-    ('', 'exactly 3 values'),
+    ('', 'must all be numbers'),
+    ('ten', 'must all be numbers'),
+    ('inf', 'finite'),
+    ('5,', 'exactly 3 values'),
     ('0,10000,1000,5', 'exactly 3 values'),
     ('[0,10000]', 'exactly 3 values'),
     ('0,,1000', 'must all be numbers'),
@@ -50,6 +52,7 @@ def test_bare_bracketed_and_spaced_forms_parse_identically(text):
     ('nan,10,1', 'finite'),
     ('0,inf,1', 'finite'),
     ('0,10,0', 'step must be positive'),
+    ('0,0,0', 'pass a single value, e.g. 0'),
     ('0,10,-1', 'step must be positive'),
     ('10,0,1', 'must not exceed max'),
     ('0,1000,300', 'does not divide'),
@@ -77,6 +80,22 @@ def test_range_error_is_a_value_error():
 
 
 # ── expand_range ──────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize('text', ['0', '[0]', ' 0 ', '0.0'])
+def test_a_single_value_is_a_constant_axis(text):
+    assert expand_range(*parse_range(text)) == [0.]
+
+
+def test_the_constant_axis_hint_is_in_the_wrong_arity_message():
+    with pytest.raises(RangeError, match='single value'):
+        parse_range('0,10000')
+
+
+def test_single_values_work_on_every_axis_builder():
+    assert alt_axis('2500') == [2500.]
+    assert dts_axis('-20') == [-20.]
+    assert throttle_axis('3100') == [3100.]
+
 
 def test_expand_range_includes_both_endpoints():
     assert expand_range(0., 5000., 2500.) == [0., 2500., 5000.]
@@ -167,6 +186,31 @@ def test_a_wet_throttle_range_feeds_the_wet_powers(recorded):
     _, kw = recorded[0]
     assert kw['wet_powers'] == [3500., 3400., 3300.]
     assert kw['dry_powers'] == DEFAULT_DRY_POWERS
+
+
+@pytest.mark.parametrize('flag', ['--dts', '--dt'])
+def test_a_negative_start_range_is_accepted_as_a_separate_token(recorded, flag):
+    cli.main(['sweep', flag, '-20,20,20'])
+
+    _, kw = recorded[0]
+    assert kw['dTs_vals'] == [0., 20., -20.]
+
+
+def test_single_values_hold_axes_constant_in_a_sweep(recorded):
+    cli.main(['sweep', '--mode', 'dry', '--alt', '0', '--dts', '-20',
+              '--throttle', '3100'])
+
+    _, kw = recorded[0]
+    assert kw['alts'] == [0.]
+    assert kw['dTs_vals'] == [-20.]
+    assert kw['dry_powers'] == [3100.]
+
+
+def test_the_default_dts_range_can_be_typed_back_in(recorded):
+    cli.main(['sweep', '--dts', '-50,50,10'])
+
+    _, kw = recorded[0]
+    assert kw['dTs_vals'] == DEFAULT_DTS
 
 
 def fails(capsys, argv, fragment):
@@ -285,6 +329,26 @@ def test_sweep_help_documents_every_flag_with_its_default(capsys):
                      '--dts MIN,MAX,STEP', '--throttle MIN,MAX,STEP',
                      '--out DIR', '0,5000,2500', '-50,50,10'):
         assert fragment in out, fragment
+
+
+def test_every_range_flag_says_a_single_value_holds_it_constant(capsys):
+    out = ' '.join(help_text(capsys, 'sweep').split())
+
+    assert out.count('a single value holds it constant') == 3
+
+
+def test_usage_line_is_styled_on_a_terminal(capsys, monkeypatch):
+    # Rich also honours TERM=dumb and NO_COLOR; pin them so the caller's
+    # environment can't switch the colour off.
+    monkeypatch.setenv('FORCE_COLOR', '1')
+    monkeypatch.setenv('TERM', 'xterm')
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    parser = cli._PanelHelpParser(prog='x')
+
+    parser.print_help()
+
+    out = capsys.readouterr().out
+    assert out.startswith('\x1b[1musage:\x1b[0m \x1b[36m')
 
 
 def test_help_says_when_no_flag_is_required(capsys):

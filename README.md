@@ -143,6 +143,7 @@ and needs no install beyond the package being importable.
 ```bash
 f404 sweep                      # dry + wet, default grid, decks in the cwd
 f404 sweep --mode wet           # one mode only
+f404 sweep --alt 0 --dts -20,20,10   # one altitude, a dTs range
 f404 design                     # solve and print DESIGN, OD_dry and OD_wet
 f404 --help                     # and `f404 sweep --help`, `f404 design --help`
                                 # (rich panels; plain argparse text for usage errors)
@@ -174,8 +175,10 @@ to get the same T7 values.
 
 - Each range is one `min,max,step` triple, inclusive of `max`, bare or
   bracketed (`--alt [0,10000,1000]`). The order is fixed.
-- A range starting with a negative number needs `=` or brackets
-  (`--dts=-20,20,10`); argparse otherwise reads it as a flag
+- A single value holds the axis constant (`--alt 0`, `--throttle 3100`).
+  Step 0 is not a constant axis; it is an error.
+- A range may start with a negative number (`--dts -20,20,10`). `main()` joins
+  it to its flag before argparse, which would otherwise read it as a flag
   ([#22](https://github.com/Jhawk414/F404/issues/22)).
 - Axes are walked in the order the solver's warm-starting expects, whatever
   the flag order: `--dts` hot side first (0, +10 … then −10 …), `--throttle`
@@ -211,16 +214,21 @@ the same as `f404 sweep`.
 
 ```bash
 pytest tests                    # full suite, ~2 min
-pytest tests -m "not slow"      # structural and unit tests only, ~6 s
+pytest tests -m "not slow"      # structural and unit tests only, ~7 s
 ```
 
 One `tests/<module>_test.py` per module ([#5](https://github.com/Jhawk414/F404/issues/5)).
 Tests marked `slow` build and solve a full `om.Problem`; the rest either use
 pure functions or build a model without solving it. `pytest` needs no prior
-install — `pythonpath` in `pyproject.toml` puts `src/` on the path — and runs
-in CI on Ubuntu (3.9, 3.12) and macOS (3.12).
+install — `pythonpath` in `pyproject.toml` puts `src/` on the path.
 
-177 tests, 97% coverage. The driver and
+CI ([#31](https://github.com/Jhawk414/F404/issues/31)): a PR runs only the fast
+tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
+(3.9, 3.12) and macOS (3.12) runs on every push to `main`, on manual dispatch,
+and on a PR carrying the `full-ci` label. Apply that label when the PR is about
+to merge: the golden baselines and convergence regressions are all `slow`.
+
+190 tests (155 fast), 97% coverage. The driver and
 CLI are importable and covered; what remains uncovered is mostly
 `sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 
@@ -282,7 +290,11 @@ Done:
 - [x] Vendored `pycycle/` synced against upstream
       ([#6](https://github.com/Jhawk414/F404/issues/6))
 - [x] `f404` CLI with `sweep` and `design` and `--alt` / `--dts` /
-      `--throttle` range flags
+      `--throttle` range flags; single-value constant axes
+      ([#24](https://github.com/Jhawk414/F404/issues/24)) and negative-start
+      ranges ([#22](https://github.com/Jhawk414/F404/issues/22))
+- [x] CI: fast tests on PRs, full matrix on merge or the `full-ci` label
+      ([#31](https://github.com/Jhawk414/F404/issues/31))
 - [x] Published F404 performance reports archived as Obsidian-compatible
       markdown, with an index and cross-study reference map
       ([`docs/unclassified_perf_data/`](docs/unclassified_perf_data/README.md))
@@ -290,10 +302,7 @@ Done:
 Planned (see `docs/improvements/IMPROVEMENTS.md` for full detail), roughly in
 order:
 
-- [ ] CLI sweep-axis follow-ups: single-value constant axis
-      ([#24](https://github.com/Jhawk414/F404/issues/24)), negative-start
-      ranges ([#22](https://github.com/Jhawk414/F404/issues/22)), `--mach`
-      (needs a Mach sweep dimension,
+- [ ] CLI sweep-axis follow-ups: `--mach` (needs a Mach sweep dimension,
       [#13](https://github.com/Jhawk414/F404/issues/13)) and a PLA axis
       (needs PLA defined in the cycle first,
       [#30](https://github.com/Jhawk414/F404/issues/30))
