@@ -41,8 +41,10 @@ def test_bare_bracketed_and_spaced_forms_parse_identically(text):
 
 @pytest.mark.parametrize('text, fragment', [
     ('0,10000', 'exactly 3 values'),
-    ('0', 'exactly 3 values'),
-    ('', 'exactly 3 values'),
+    ('', 'must all be numbers'),
+    ('ten', 'must all be numbers'),
+    ('inf', 'finite'),
+    ('5,', 'exactly 3 values'),
     ('0,10000,1000,5', 'exactly 3 values'),
     ('[0,10000]', 'exactly 3 values'),
     ('0,,1000', 'must all be numbers'),
@@ -50,6 +52,7 @@ def test_bare_bracketed_and_spaced_forms_parse_identically(text):
     ('nan,10,1', 'finite'),
     ('0,inf,1', 'finite'),
     ('0,10,0', 'step must be positive'),
+    ('0,0,0', 'pass a single value, e.g. 0'),
     ('0,10,-1', 'step must be positive'),
     ('10,0,1', 'must not exceed max'),
     ('0,1000,300', 'does not divide'),
@@ -77,6 +80,22 @@ def test_range_error_is_a_value_error():
 
 
 # ── expand_range ──────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize('text', ['0', '[0]', ' 0 ', '0.0'])
+def test_a_single_value_is_a_constant_axis(text):
+    assert expand_range(*parse_range(text)) == [0.]
+
+
+def test_the_constant_axis_hint_is_in_the_wrong_arity_message():
+    with pytest.raises(RangeError, match='single value'):
+        parse_range('0,10000')
+
+
+def test_single_values_work_on_every_axis_builder():
+    assert alt_axis('2500') == [2500.]
+    assert dts_axis('-20') == [-20.]
+    assert throttle_axis('3100') == [3100.]
+
 
 def test_expand_range_includes_both_endpoints():
     assert expand_range(0., 5000., 2500.) == [0., 2500., 5000.]
@@ -175,6 +194,16 @@ def test_a_negative_start_range_is_accepted_as_a_separate_token(recorded, flag):
 
     _, kw = recorded[0]
     assert kw['dTs_vals'] == [0., 20., -20.]
+
+
+def test_single_values_hold_axes_constant_in_a_sweep(recorded):
+    cli.main(['sweep', '--mode', 'dry', '--alt', '0', '--dts', '-20',
+              '--throttle', '3100'])
+
+    _, kw = recorded[0]
+    assert kw['alts'] == [0.]
+    assert kw['dTs_vals'] == [-20.]
+    assert kw['dry_powers'] == [3100.]
 
 
 def test_the_default_dts_range_can_be_typed_back_in(recorded):
