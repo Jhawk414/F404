@@ -338,7 +338,11 @@ def test_every_range_flag_says_a_single_value_holds_it_constant(capsys):
 
 
 def test_usage_line_is_styled_on_a_terminal(capsys, monkeypatch):
+    # Rich also honours TERM=dumb and NO_COLOR; pin them so the caller's
+    # environment can't switch the colour off.
     monkeypatch.setenv('FORCE_COLOR', '1')
+    monkeypatch.setenv('TERM', 'xterm')
+    monkeypatch.delenv('NO_COLOR', raising=False)
     parser = cli._PanelHelpParser(prog='x')
 
     parser.print_help()
