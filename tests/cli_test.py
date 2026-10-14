@@ -169,6 +169,21 @@ def test_a_wet_throttle_range_feeds_the_wet_powers(recorded):
     assert kw['dry_powers'] == DEFAULT_DRY_POWERS
 
 
+@pytest.mark.parametrize('flag', ['--dts', '--dt'])
+def test_a_negative_start_range_is_accepted_as_a_separate_token(recorded, flag):
+    cli.main(['sweep', flag, '-20,20,20'])
+
+    _, kw = recorded[0]
+    assert kw['dTs_vals'] == [0., 20., -20.]
+
+
+def test_the_default_dts_range_can_be_typed_back_in(recorded):
+    cli.main(['sweep', '--dts', '-50,50,10'])
+
+    _, kw = recorded[0]
+    assert kw['dTs_vals'] == DEFAULT_DTS
+
+
 def fails(capsys, argv, fragment):
     """Assert argv exits with usage error 2 and a message containing fragment."""
     with pytest.raises(SystemExit) as exc:

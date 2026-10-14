@@ -14,6 +14,7 @@ only be discovered later, in a deck that doesn't match what was asked for.
 """
 import argparse
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -125,6 +126,8 @@ def throttle_axis(text):
 
 
 # ── argparse wiring ───────────────────────────────────────────────────────────
+
+_RANGE_FLAGS = ('--alt', '--dts', '--throttle')
 
 def _axis_arg(builder):
     """Adapt an axis builder to argparse's ``type=``.
@@ -318,10 +321,31 @@ def _run_design_command(args, parser):
     return 0
 
 
+def _join_negative_ranges(argv):
+    """Glue ``--dts -20,20,10`` into ``--dts=-20,20,10``.
+
+    argparse reads any ``-``-prefixed token that isn't a plain number as a flag,
+    so a range starting with a minus sign (the ``--dts`` default included)
+    would be rejected as "expected one argument". Abbreviated flags
+    (``--dt``) are joined too, as argparse accepts them.
+    """
+    out = []
+    for token in argv:
+        prev = out[-1] if out else ''
+        if (re.match(r'-[\d.]', token) and prev.startswith('--')
+                and '=' not in prev
+                and any(flag.startswith(prev) for flag in _RANGE_FLAGS)):
+            out[-1] = f'{prev}={token}'
+        else:
+            out.append(token)
+    return out
+
+
 def main(argv=None):
     """Run the CLI and return its exit status."""
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(_join_negative_ranges(
+        sys.argv[1:] if argv is None else argv))
     return args.handler(args, parser)
 
 
