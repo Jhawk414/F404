@@ -5,7 +5,7 @@ Supersedes `HANDOFF_10Oct26.md` (renamed to this file). Everything before the
 cheap for agents to read. Only the gotchas that still bite are kept, under
 [Standing gotchas](#standing-gotchas). Full history: `git log --follow -- AGENTS/`.
 
-## Session summary (10–11 Oct 26)
+## Session summary (10–13 Oct 26)
 
 ### 10 Oct — #2 single-engine sizing (PR #23)
 
@@ -34,8 +34,7 @@ Full write-up: [ADR-0001](../docs/adr/0001-single-engine-sizing.md), the first A
 5. A single A8 can't serve dry and wet (dry flow through the wet-sized throat
    leaves the map), so a per-mode A8 is a prerequisite for any one-engine design.
 
-**Current numbers (measured 11 Oct on `main`):** 177 tests, 97% coverage, all
-pass, no xfail; the full suite takes ~2 min locally.
+**Numbers at 11 Oct:** 177 tests, 97% coverage (190 tests as of 13 Oct, below).
 
 ### 11 Oct — docs and rename (two PRs, both merged to `main`)
 
@@ -85,56 +84,61 @@ Also: [PR #21](https://github.com/Jhawk414/F404/pull/21) (interactive browser GU
 **parked on purpose**. It waits until `--mach` and `--pla` exist. Don't review or
 rebase it as part of the next items.
 
+### 13 Oct — CI split and CLI axis fixes (one PR, three commits)
+
+- **#31:** PRs run only `pytest -m "not slow"` (Ubuntu 3.12, ~1 min). The full
+  3-job matrix runs on push to `main`, `workflow_dispatch`, and PRs labelled
+  `full-ci`. **Apply `full-ci` before merging**: the goldens and convergence
+  regressions are all `slow`. Superseded PR runs are cancelled.
+- **#22:** `cli.main()` joins `--dts -50,50,10` into `--dts=-50,50,10` before
+  argparse (abbreviated flags too).
+- **#24:** a single value is a constant axis (`--alt 0`); `0,0,0` now hints at it.
+- **Numbers (13 Oct):** 190 tests (155 fast), 97% coverage, full suite ~2 min.
+
 ## Open issues at a glance
 
-Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18.
+Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR).
 
 | # | Title | Type | Size / status |
 |---|---|---|---|
-| [#22](https://github.com/Jhawk414/F404/issues/22) | `--dts -50,50,10` parsed as a flag | bug | small |
-| [#24](https://github.com/Jhawk414/F404/issues/24) | Single value = constant axis (`--alt 0`) | enhancement | small; same code as #22 |
 | [#27](https://github.com/Jhawk414/F404/issues/27) | Write failed sweep points to `deck/` | enhancement | small/medium |
 | [#13](https://github.com/Jhawk414/F404/issues/13) | CLI sweep ranges | enhancement | 🟡 alt/dTs/throttle done; **`--mach` open** (needs model work) |
 | [#30](https://github.com/Jhawk414/F404/issues/30) | Define PLA in the cycle (blocks the `--pla` axis) | enhancement | decision first, then small; see [PLA](#pla-what-the-literature-says) |
-| [#31](https://github.com/Jhawk414/F404/issues/31) | CI: fast tests on PRs, full matrix on merge | housekeeping | small; independent |
 | [#17](https://github.com/Jhawk414/F404/issues/17) | Pydantic models for inputs | enhancement | medium |
 | [#8](https://github.com/Jhawk414/F404/issues/8) | PLA/T7-scheduled A8 | enhancement | large; state-of-play comment 10 Oct |
 | [#25](https://github.com/Jhawk414/F404/issues/25) | Define idle; calibrate dry part power to F404 data | enhancement | large; tune together with #8 |
 | [#3](https://github.com/Jhawk414/F404/issues/3) | Cold / high-alt / max-AB non-convergence | bug | large; body numbers stale (now 118 dry / 100 wet) |
 | [#16](https://github.com/Jhawk414/F404/issues/16) | CLI entry point | enhancement | 🟡 `sweep`/`design` done; **`init-config`/YAML open** (needs #17) |
-| [#10](https://github.com/Jhawk414/F404/issues/10) | Inline creep/LCF life estimate | enhancement | large/exploratory |
+| [#10](https://github.com/Jhawk414/F404/issues/10) | Inline creep/LCF life estimate | enhancement | exploratory |
 
 ## Recommended order
 
-**#31 (any time) → #22 + #24 → #27 → #13 `--mach` → #30 → `--pla` → #17 → #8 + #25 (+ #3 re-measured) → #16 remainder → #10**
+**#27 → #13 `--mach` → #30 → `--pla` → #17 → #8 + #25 (+ #3 re-measured) → #16 remainder → #10**
 
 Plan: finish the sweep-axis side of the CLI before #8 and #25, so agents
 working those have `--mach` and `--pla` to sweep or turn.
 
 **Stage 1: sweep axes (CLI)**
-1. **#22 + #24 together.** Both live in `cli.py` (`parse_range`/`expand_range`,
-   the axis builders), and #24 notes a negative single value (`--dts -20`) hits
-   #22's argparse problem. Cheap, and makes every later flag easier to type.
-2. **#27, failure CSV.** Before `--mach`: a Mach sweep will surface new
+1. **#27, failure CSV.** Before `--mach`: a Mach sweep will surface new
    failures, and without a record of which points failed and why, a missing
    row can't be told apart from a point nobody asked for. It is also #3's
    measurable baseline and the input for the planned coverage plot.
-3. **#13 `--mach`.** Not just a flag: Mach is pinned at 0.001 in `SweepRunner`;
+2. **#13 `--mach`.** Not just a flag: Mach is pinned at 0.001 in `SweepRunner`;
    a Mach dimension has to go into `build_snake_sweep` / `generate_bridge_points`
    in `sweep_utils.py`. Expect new non-convergence at the envelope edge; that
    is #3's problem, not a blocker (per #13's scope note).
-4. **#30, then `--pla`.** #30 settles what PLA commands (decision, ADR) and
+3. **#30, then `--pla`.** #30 settles what PLA commands (decision, ADR) and
    gives a provisional schedule; the `--pla` flag is a thin layer on top.
    Findings in [PLA](#pla-what-the-literature-says) below.
 
 **Stage 2: inputs as data**
-5. **#17 pydantic.** Not CLI, but placed before the solver cluster because #25
+4. **#17 pydantic.** Not CLI, but placed before the solver cluster because #25
    edits the DESIGN defaults in `problems._apply_design_inputs`, which #17
    turns into data; #17's own text asks to land before #2/#3/#8 churn the
    same signatures. It also unblocks `init-config`/YAML (#16).
 
 **Stage 3: coupled physics cluster (one effort)**
-6. **#8 + #25 together, with #3 measured alongside.** #8 and #3 are the same
+5. **#8 + #25 together, with #3 measured alongside.** #8 and #3 are the same
    problem from two angles (confirmed by 89 → 100/132 from #2). #25 says
    explicitly to tune with #8: a dry PLA → A8 schedule moves the fan operating
    line, BPR and spool speeds at exactly the low-Tt4 end #25 is calibrating.
@@ -153,8 +157,8 @@ working those have `--mach` and `--pla` to sweep or turn.
    - Define idle by an observable (ground-idle thrust or N2 %), not a Tt4 floor.
 
 **Stage 4: the rest**
-7. **#16 remainder: `init-config`/YAML**, after #17.
-8. **#10 creep/LCF.** Additive and independent; last, incrementally.
+6. **#16 remainder: `init-config`/YAML**, after #17.
+7. **#10 creep/LCF.** Additive and independent; last, incrementally.
 
 ### PLA: what the literature says
 
@@ -209,11 +213,15 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
   quantities, 2 for thrust and temperatures).
 
 **CLI behaviour**
+- A range flag takes `min,max,step` or a single value (constant axis). A
+  negative-start range works as a separate token; `main()` rewrites it to the
+  `--flag=value` form. A new range flag must be added to `_RANGE_FLAGS` in
+  `cli.py` or it won't get this.
 - Axis order is fixed regardless of flag order: `--dts` hot side first, then
   cold; `--throttle` high power to low. The warm-start was built around it.
   `-50,50,10`, `2500,3100,200`, `3200,3800,200` reproduce the old default
   grids exactly (pinned by tests). A `--mach` axis needs an equivalent rule.
-- Validation fails before OpenMDAO loads (exit 2): not exactly three finite
+- Validation fails before OpenMDAO loads (exit 2): not one or three finite
   numbers, step ≤ 0, min > max, a step that doesn't divide `max − min`,
   `--throttle` with `--mode both`, wet `--throttle` ≤ fixed Tt4, `--out` is a
   file. A non-converging `design` exits 1.
