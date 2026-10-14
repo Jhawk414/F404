@@ -331,6 +331,22 @@ def test_sweep_help_documents_every_flag_with_its_default(capsys):
         assert fragment in out, fragment
 
 
+def test_every_range_flag_says_a_single_value_holds_it_constant(capsys):
+    out = ' '.join(help_text(capsys, 'sweep').split())
+
+    assert out.count('a single value holds it constant') == 3
+
+
+def test_usage_line_is_styled_on_a_terminal(capsys, monkeypatch):
+    monkeypatch.setenv('FORCE_COLOR', '1')
+    parser = cli._PanelHelpParser(prog='x')
+
+    parser.print_help()
+
+    out = capsys.readouterr().out
+    assert out.startswith('\x1b[1musage:\x1b[0m \x1b[36m')
+
+
 def test_help_says_when_no_flag_is_required(capsys):
     assert 'No flag is required' in help_text(capsys, 'sweep')
     assert 'No flag is required' in help_text(capsys, 'design')

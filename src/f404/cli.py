@@ -203,7 +203,8 @@ class _PanelHelpParser(argparse.ArgumentParser):
         from rich.text import Text
 
         console = Console(file=file, highlight=False)
-        console.print(Text(self.format_usage().rstrip()))
+        label, _, synopsis = self.format_usage().rstrip().partition(' ')
+        console.print(Text.assemble((label, 'bold'), ' ', (synopsis, 'cyan')))
         if self.description:
             console.print()
             console.print(Text(self.description))
@@ -233,10 +234,7 @@ def build_parser():
         'sweep',
         help="run the alt/dTs/throttle sweep and write cycle decks",
         description="Sweep the sized engine over altitude, temperature offset "
-                    "and throttle, writing one CSV deck per mode. Each range "
-                    "flag takes min,max,step (inclusive of max), bare or "
-                    "bracketed, or a single value to hold that axis "
-                    "constant; omitted flags keep the default grid.",
+                    "and throttle, writing one CSV deck per mode.",
     )
     sweep.add_argument(
         '--mode', choices=['dry', 'wet', 'both'], default='both',
@@ -244,16 +242,18 @@ def build_parser():
              "(default: both)")
     sweep.add_argument(
         '--alt', type=_axis_arg(alt_axis), metavar='MIN,MAX,STEP',
-        help="altitude, ft (default: 0,5000,2500)")
+        help="altitude, ft; a single value holds it constant "
+             "(default: 0,5000,2500)")
     sweep.add_argument(
         '--dts', type=_axis_arg(dts_axis), metavar='MIN,MAX,STEP',
-        help="ISA temperature offset, degR; swept hot side first "
-             "(default: -50,50,10)")
+        help="ISA temperature offset, degR; swept hot side first; a "
+             "single value holds it constant (default: -50,50,10)")
     sweep.add_argument(
         '--throttle', type=_axis_arg(throttle_axis), metavar='MIN,MAX,STEP',
-        help="Tt4 in dry mode, Tt7 in wet mode, degR; swept high to low "
-             "(default: 2500,3100,200 dry / 3008,3608,200 wet). Requires "
-             "--mode dry or wet, since the two are different temperatures")
+        help="Tt4 in dry mode, Tt7 in wet mode, degR; swept high to low; "
+             "a single value holds it constant (default: 2500,3100,200 dry "
+             "/ 3008,3608,200 wet). Requires --mode dry or wet, since the "
+             "two are different temperatures")
     sweep.add_argument(
         '--out', type=Path, default=Path('.'), metavar='DIR',
         help="directory for the decks, created if missing (default: .)")
