@@ -49,44 +49,15 @@ DEFAULT_WET_POWERS = [MAX_Tt7 - 200. * k for k in range(4)]   # Tt7, degR
 BRIDGE_THRESHOLD = {'alt': 2000, 'dTs': 30, 'power': 100}
 MAX_BRIDGE_STEPS = 5
 
-# Columns serialized with 4 decimals rather than the 2-decimal default: rates,
-# ratios, bypass ratio, spool speeds and Mach — the continuous quantities a
-# downstream tool or optimizer would ingest, where extra resolution is cheap and
-# useful. Thrust, temperatures and flight conditions stay at 2 decimals.
-DECK_HI_PRECISION_COLS = {
-    'MN', 'TSFC', 'W', 'BPR',
-    'OPR', 'fan_PR', 'hpc_PR', 'hpt_PR', 'lpt_PR',
-    'LP_Nmech', 'HP_Nmech', 'Wf_core', 'Wf_ab',
-}
-
-# Fuel-air ratios sit around 0.03–0.04, so a fixed-decimal format wastes its
-# shown digits on the leading zeros: at %.4f the small dTs-driven variation in
-# augmentor/core fueling (5th–6th decimal) flattens to a constant. Scientific
-# notation spends every shown digit on significant figures instead, so the
-# point-to-point change stays visible.
-DECK_SCI_COLS = {'FAR_core', 'FAR_ab'}
-
-
 def write_deck_csv(df, path):
-    """Write a cycle-deck DataFrame to CSV at capped precision.
+    """Write a cycle-deck DataFrame to CSV at full float64 precision.
 
-    The single writer for every deck (dry, wet, combined). The raw float64 repr
-    (15+ significant figures) is meaningless for engine performance data — no
-    model input or sensor is accurate to that precision — and bloats the deck as
-    sweeps scale up. pandas' float_format is global, so per-column precision is
-    applied here before writing: scientific %.4e for DECK_SCI_COLS, 4 decimals
-    for DECK_HI_PRECISION_COLS, 2 decimals otherwise.
+    The single writer for every deck (dry, wet, combined). Every float is
+    written as its shortest round-trip repr, so a re-read deck is bit-identical
+    to the solve. Deck-to-deck comparisons (spikes, PR proof) then measure the
+    model rather than the rounding.
     """
-    out = df.copy()
-    for col in out.select_dtypes('number'):
-        if col in DECK_SCI_COLS:
-            fmt = '%.4e'
-        elif col in DECK_HI_PRECISION_COLS:
-            fmt = '%.4f'
-        else:
-            fmt = '%.2f'
-        out[col] = out[col].map(fmt.__mod__)
-    out.to_csv(path, index=False)
+    df.to_csv(path, index=False, float_format=None)
 
 
 def configure_runtime():
