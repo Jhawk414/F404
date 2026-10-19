@@ -91,7 +91,9 @@ def compare_decks(base, new, columns=None):
         One row per compared column and kind: ``kind`` is '%' over points
         with a non-zero base and 'abs' over points whose base is ~0. Then
         ``min``, ``max``, ``max_abs`` and ``worst`` (the (alt, dTs, throttle)
-        of ``max_abs``), in base column order. Then the keys only in base, and
+        of ``max_abs``), in base column order. A column with blank or
+        non-finite values in either deck also gets an 'invalid' row:
+        ``max_abs`` is the number of such points and ``worst`` the first. Then the keys only in base, and
         the keys only in new.
     """
     mode = _mode(base, 'BASE')
@@ -122,12 +124,19 @@ def compare_decks(base, new, columns=None):
         bv, nv = b[col].to_numpy(float), n[col].to_numpy(float)
         # Points whose base is ~0 get their own absolute row, so a column that
         # is 0 at some points (dry ab_dPqP) never hides a change there.
+        # A blank or non-finite cell is reported, never read as "no change".
+        finite = np.isfinite(bv) & np.isfinite(nv)
         near_zero = np.abs(bv) < NEAR_ZERO
         with np.errstate(divide='ignore', invalid='ignore'):
             pct = 100. * (nv - bv) / bv
-        for kind, mask, diff in (('%', ~near_zero, pct), ('abs', near_zero, nv - bv)):
+        for kind, mask, diff in (('%', finite & ~near_zero, pct),
+                                 ('abs', finite & near_zero, nv - bv)):
             if mask.any():
                 rows.append(_summary(col, kind, diff[mask], common[mask]))
+        if not finite.all():
+            rows.append({'column': col, 'kind': 'invalid', 'min': np.nan,
+                         'max': np.nan, 'max_abs': float((~finite).sum()),
+                         'worst': _point(common[~finite][0])})
     table = pd.DataFrame(rows, columns=['column', 'kind', 'min', 'max', 'max_abs', 'worst'])
     return table, [_point(k) for k in only_base], [_point(k) for k in only_new]
 
@@ -145,6 +154,10 @@ def format_report(table, only_base, only_new, n_base, n_new, changed_only=False)
     lines += ['', '| column | min | max | max abs | worst (alt, dTs, throttle) |',
               '|---|---|---|---|---|']
     for r in table.itertuples():
+        if r.kind == 'invalid':
+            lines.append(f'| {r.column} (invalid) | non-finite | in | '
+                         f'{int(r.max_abs)} points | first {r.worst} |')
+            continue
         unit = ' %' if r.kind == '%' else ' (abs)'
         lines.append(f'| {r.column}{unit} | {r.min:+.3g} | {r.max:+.3g} | '
                      f'{r.max_abs:.3g} | {r.worst} |')

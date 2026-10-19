@@ -153,3 +153,14 @@ def test_a_change_where_the_base_is_zero_is_reported_beside_the_percent_row():
     assert rows.loc['%', 'max_abs'] == 0
     assert rows.loc['abs', 'max_abs'] == pytest.approx(0.02)
     assert rows.loc['abs', 'worst'] == (0, 0, 3100)
+
+
+def test_a_blank_result_is_reported_not_read_as_unchanged():
+    table, _, _ = compare_decks(deck('dry'), deck('dry', Fn=[11000., float('nan')]))
+
+    rows = table[table['column'] == 'Fn'].set_index('kind')
+    assert rows.loc['%', 'max_abs'] == 0          # the finite point
+    assert rows.loc['invalid', 'max_abs'] == 1
+    assert rows.loc['invalid', 'worst'] == (2500, 20, 2900)
+    report = format_report(table, [], [], 2, 2, changed_only=True)
+    assert '| Fn (invalid) |' in report

@@ -292,7 +292,8 @@ def build_parser():
         help="compare only these columns (default: every shared column)")
     compare.add_argument(
         '--changed-only', action='store_true',
-        help="omit columns that match exactly")
+        help="omit columns that match exactly (columns with blank or "
+             "non-finite values are always shown, and exit 1)")
     compare.set_defaults(handler=_run_compare_command)
     return parser
 
@@ -362,6 +363,10 @@ def _run_compare_command(args, parser):
         parser.error(str(exc))
     print(format_report(table, only_base, only_new, len(base), len(new),
                         changed_only=args.changed_only))
+    invalid = table.loc[table['kind'] == 'invalid', 'column'].tolist()
+    if invalid:
+        print(f"f404 compare: non-finite values in {invalid}", file=sys.stderr)
+        return 1
     return 0
 
 

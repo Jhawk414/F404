@@ -416,3 +416,15 @@ def test_compare_prints_the_markdown_report(tmp_path, capsys):
 def test_compare_rejects_a_missing_deck(capsys, tmp_path):
     fails(capsys, ['compare', str(tmp_path / 'nope.csv'), str(tmp_path / 'nope.csv')],
           'is not a file')
+
+
+def test_compare_exits_1_when_a_deck_has_a_blank_value(tmp_path, capsys):
+    base = pd.DataFrame({'alt': [0.], 'dTs': [0.], 'T4': [3100.], 'T7': [1500.],
+                         'Fn': [11000.], 'FAR_ab': [0.], 'mode': ['dry']})
+    base.to_csv(tmp_path / 'a.csv', index=False)
+    base.assign(Fn=[None]).to_csv(tmp_path / 'b.csv', index=False)
+
+    status = cli.main(['compare', str(tmp_path / 'a.csv'), str(tmp_path / 'b.csv')])
+
+    assert status == 1
+    assert "non-finite values in ['Fn']" in capsys.readouterr().err
