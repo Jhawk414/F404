@@ -1,7 +1,8 @@
 # Handoff: F404 — Recommended Issue Order
 
-Supersedes `HANDOFF_10Oct26.md` (renamed to this file). Everything before the
-10 Oct 26 session is deliberately **not** carried forward, to keep this file
+Supersedes `HANDOFF_11Oct26.md` (renamed to this file; before that,
+`HANDOFF_10Oct26.md`). Everything before the 10 Oct 26 session is
+deliberately **not** carried forward, to keep this file
 cheap for agents to read. Only the gotchas that still bite are kept, under
 [Standing gotchas](#standing-gotchas). Full history: `git log --follow -- AGENTS/`.
 
