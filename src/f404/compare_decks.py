@@ -23,10 +23,20 @@ def read_deck(path):
     return pd.read_csv(path, float_precision='round_trip')
 
 
-def _keyed(df):
-    wet = df['mode'].eq('wet').all() if 'mode' in df else df['FAR_ab'].max() > 1e-6
+def _mode(df, label):
+    """The one mode a deck holds: from its ``mode`` column, else from FAR_ab."""
+    if 'mode' in df:
+        modes = sorted(df['mode'].dropna().unique())
+        if len(modes) != 1:
+            raise ValueError(f"{label} deck holds modes {modes}; compare one mode "
+                             f"at a time (cycle_deck_dry.csv or cycle_deck_wet.csv)")
+        return modes[0]
+    return 'wet' if df['FAR_ab'].max() > 1e-6 else 'dry'
+
+
+def _keyed(df, mode):
     out = df.copy()
-    out['throttle'] = out['T7' if wet else 'T4']
+    out['throttle'] = out['T7' if mode == 'wet' else 'T4']
     for col in _KEY:
         out[col] = out[col].round().astype(int)
     return out.set_index(_KEY).sort_index()
@@ -42,6 +52,11 @@ def compare_decks(base, new, columns=None):
     columns : iterable of str, optional
         Restrict the comparison to these columns.
 
+    Raises
+    ------
+    ValueError
+        If either deck mixes modes, or the two decks are different modes.
+
     Returns
     -------
     (pandas.DataFrame, list, list)
@@ -50,7 +65,11 @@ def compare_decks(base, new, columns=None):
         ``max_abs``), in base column order. Then the keys only in base, and
         the keys only in new.
     """
-    b, n = _keyed(base), _keyed(new)
+    mode = _mode(base, 'BASE')
+    if _mode(new, 'NEW') != mode:
+        raise ValueError(f"BASE is a {mode} deck and NEW is a {_mode(new, 'NEW')} "
+                         f"deck; their throttles (T4 vs T7) are different points")
+    b, n = _keyed(base, mode), _keyed(new, mode)
     common = b.index.intersection(n.index)
     only_base = b.index.difference(n.index).tolist()
     only_new = n.index.difference(b.index).tolist()

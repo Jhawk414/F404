@@ -356,7 +356,10 @@ def _run_compare_command(args, parser):
 
     base, new = read_deck(args.base), read_deck(args.new)
     columns = args.cols.split(',') if args.cols else None
-    table, only_base, only_new = compare_decks(base, new, columns)
+    try:
+        table, only_base, only_new = compare_decks(base, new, columns)
+    except ValueError as exc:
+        parser.error(str(exc))
     print(format_report(table, only_base, only_new, len(base), len(new),
                         changed_only=args.changed_only))
     return 0

@@ -87,3 +87,16 @@ def test_adjacent_float64_values_read_back_distinct(tmp_path):
     table, _, _ = compare_decks(read_deck(tmp_path / 'a.csv'), read_deck(tmp_path / 'b.csv'))
 
     assert row(table, 'Fn')['max_abs'] > 0
+
+
+def test_a_dry_deck_is_not_compared_with_a_wet_one():
+    # Dry T4 = 3100 and wet T7 = 3100 would otherwise share a key.
+    with pytest.raises(ValueError, match='BASE is a dry deck and NEW is a wet deck'):
+        compare_decks(deck('dry'), deck('wet'))
+
+
+def test_a_mixed_mode_deck_is_rejected():
+    mixed = deck('dry').assign(mode=['dry', 'wet'])
+
+    with pytest.raises(ValueError, match="BASE deck holds modes"):
+        compare_decks(mixed, deck('dry'))
