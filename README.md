@@ -215,20 +215,27 @@ the same as `f404 sweep`.
 ### `f404 compare`
 
 Compares two decks of the same mode, `NEW` against `BASE`, and prints a
-markdown table: for every shared column, the min and max % change, the
-largest |%|, and the point where it occurs.
+markdown table. For every shared column it gives the min and max % change,
+the largest |%|, and the point where that occurs.
 
 ```bash
 f404 compare deck/cycle_deck_wet.csv /tmp/run1/cycle_deck_wet.csv
 f404 compare old.csv new.csv --cols Fn,TSFC,BPR --changed-only
 ```
 
-- Rows match on (alt, dTs, throttle), with throttle being T4 for a dry deck
-  and T7 for a wet one, rounded to 1 R. Points in only one deck are listed.
-- A column whose base value is ~0 (e.g. dry `FAR_ab`) is compared in absolute
-  terms, marked `(abs)`.
-- This is the intended proof for a model change: sweep before and after, then
-  compare. The decks are full precision, so a 0 means bit-identical.
+- **Matching.** Rows match on (alt, dTs, throttle). alt and dTs match at
+  1e-6, so fractional grids stay distinct. The throttle is the solved T4 for
+  a dry deck or T7 for a wet one, matched to 1 R. Points in only one deck are
+  listed.
+- **Errors (exit 2).** Two rows on one key, a mixed-mode deck, a dry deck
+  against a wet one, and `--cols` naming a column either deck lacks.
+- **Near-zero base values.** Points whose base value is ~0 (dry `FAR_ab`, a
+  zero loss) are compared in absolute terms, on a separate `(abs)` row.
+- **Missing values.** Blank or non-finite values are reported on an
+  `(invalid)` row and the command exits 1. A missing result never reads as
+  "no change".
+- **Proof for a model change.** Sweep before and after, then compare. Decks
+  are read back at round-trip precision, so a 0 means bit-identical.
 
 ## Testing
 
@@ -248,7 +255,7 @@ tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-195 tests (160 fast), 97% coverage. The driver and
+207 tests (172 fast), 97% coverage. The driver and
 CLI are importable and covered; what remains uncovered is mostly
 `sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 

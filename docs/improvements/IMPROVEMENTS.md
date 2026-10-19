@@ -2,8 +2,8 @@
 
 Architectural changes first discussed after closing out
 `feature/alt-mach-sweep`. This is a historical roadmap: items 1, 2 and 6 are
-done, 3 and 8 are filed as #17 and #16, and the single-engine work in item 4
-landed as #2 (ADR-0001). Each section carries a status note where it has one.
+done, 3, 8 and 9 are filed as #17, #16 and #35, and the single-engine work in
+item 4 landed as #2 (ADR-0001). Each section carries a status note where it has one.
 Open work is tracked in GitHub issues; the AGENTS/ handoffs record what
 shipped.
 
@@ -309,3 +309,34 @@ Sequence after item 1 (so the CLI and service layer live in `src/
 f404/` from the start, not at the root needing another move) and
 after/alongside item 7 (so `run`/`init-config` have a config schema to
 target).
+
+## 9. Combustion efficiency in the burners
+
+> **Status: filed** as [#35](https://github.com/Jhawk414/F404/issues/35).
+
+pyCycle's `Combustor` burns all of the fuel it meters. There is no efficiency
+input, and the only loss is a constant `dPqP`, so both of the model's burners
+are 100 % efficient everywhere. That is a small error for the main burner
+(about 99–99.9 %), but a large one for the afterburner.
+- **TF30-P-3 (NASA TN D-6839):** 0.91 at Reynolds-number index 0.80, falling
+  to 0.68 at 0.25.
+- **1950s NASA single-zone rigs:** 0.6–0.95, depending on fuel-air ratio,
+  pressure and velocity.
+
+Wet TSFC is therefore optimistic, most of all at altitude and at partial AB.
+The max-AB calibration (Tt7, augmentor loss) silently absorbs the gap.
+
+Shape of the change:
+- Meter fuel at `FAR` and release heat for `eff × FAR`. `Wfuel` and TSFC
+  count all of the fuel, so a lower efficiency costs fuel, not temperature.
+- Start with a constant efficiency per burner. Then move to an afterburner
+  efficiency driven by loading (inlet pressure, FAR_ab, approach velocity),
+  fitted to TN D-6839 Fig. 6 and the NASA RMs.
+- Decide between changing the vendored `pycycle/` `Combustor` and adding an
+  F404 wrapper element, given that #6 keeps `pycycle/` synced with upstream.
+- Re-calibrate max AB after it lands, together with #33's loss model. Add
+  efficiency columns to the deck so `f404 compare` shows the effect.
+- Related: TN D-6839 puts the TF30 pilot zone's lean limit near f/a 0.006 on
+  unburned air, about FAR_ab 0.005 as the model defines it. That is a
+  candidate floor on the commanded Tt7, and efficiency falls off steeply in
+  the same region.

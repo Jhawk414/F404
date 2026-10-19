@@ -5,7 +5,7 @@ Supersedes `HANDOFF_10Oct26.md` (renamed to this file). Everything before the
 cheap for agents to read. Only the gotchas that still bite are kept, under
 [Standing gotchas](#standing-gotchas). Full history: `git log --follow -- AGENTS/`.
 
-## Session summary (10–13 Oct 26)
+## Session summary (10–18 Oct 26)
 
 ### 10 Oct — #2 single-engine sizing (PR #23)
 
@@ -68,10 +68,15 @@ place to look before calibrating anything (#25) or validating a result.
   | Airflow | 142–145 lbm/s | 144.2 |
   | HPT cooling bleed | 11% of CDP | 11.0% |
 
-- Also there: customer-bleed thrust slopes (Yuhas), nozzle A8 span (~215 →
-  ~420 in²) and expansion ratio (relevant to #8), and a flight-envelope
+- Also there: customer-bleed thrust slopes (Yuhas), nozzle A8 span and
+  expansion ratio (relevant to #8), and a flight-envelope
   max-A/B gross-thrust grid (Johnson). An unconverted `F404 Family Data Sheet`
   PDF sits in `pdf/`.
+- **A8 span, checked 18 Oct.** The index's "~215 in² at IRP" has no source in
+  the papers. Sourced values (GE-model-derived unless noted): about 400 in² at
+  flight idle (Johnson, GE model), 232–249 in² at MIL (TM-4140 at 30k ft;
+  TM-4538 ground), and 420 in² at max AB, 30k ft, M 1.2 (TM-4140, measured
+  in flight). A9/A8 is 1.24–1.49 (TM-4538). Use these, not 215, for #8.
 
 **[PR #29](https://github.com/Jhawk414/F404/pull/29) — package rename `src/F404_pycycle` → `src/f404`**, to match the
 repo name. `python -m f404`, `f404.cli:main`, and the `filterwarnings` scope
@@ -95,9 +100,30 @@ rebase it as part of the next items.
 - **#24:** a single value is a constant axis (`--alt 0`); `0,0,0` now hints at it.
 - **Numbers (13 Oct):** 190 tests (155 fast), 97% coverage, full suite ~2 min.
 
+### 18 Oct — full-precision decks and `f404 compare` (PR #34)
+
+- **Decks are now full float64 precision**, with 56 columns (the original
+  22, then station data). The columns are `DECK_COLUMNS` in `sweep_utils.py`.
+  The decks were regenerated from the unchanged model, with the same 118 dry
+  and 100 wet points.
+- **`f404 compare BASE NEW`** (`compare_decks.py`) is the standard proof for
+  a model change: sweep before and after, then compare.
+  - It raises on mixed or mismatched modes, duplicate keys and unknown
+    `--cols`.
+  - It reports zero-base points in absolute terms.
+  - It flags blank or non-finite values and exits 1.
+- **Filed [#35](https://github.com/Jhawk414/F404/issues/35)**: both burners
+  are 100 % efficient, because pyCycle's `Combustor` has no efficiency
+  input. NASA TN D-6839 (TF30) puts afterburner efficiency at 0.91 → 0.68
+  from Reynolds-number index 0.80 to 0.25. The same report puts the pilot
+  zone's lean limit near f/a 0.006 on unburned air, about FAR_ab 0.005 on
+  the model's definition.
+- **Numbers (18 Oct):** 207 tests (172 fast), 97 % coverage.
+
 ## Open issues at a glance
 
 Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR).
+New since: #33 (augmentor loss) and #35 (combustion efficiency).
 
 | # | Title | Type | Size / status |
 |---|---|---|---|
@@ -109,6 +135,8 @@ Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #2
 | [#25](https://github.com/Jhawk414/F404/issues/25) | Define idle; calibrate dry part power to F404 data | enhancement | large; tune together with #8 |
 | [#3](https://github.com/Jhawk414/F404/issues/3) | Cold / high-alt / max-AB non-convergence | bug | large; body numbers stale (now 118 dry / 100 wet) |
 | [#16](https://github.com/Jhawk414/F404/issues/16) | CLI entry point | enhancement | 🟡 `sweep`/`design` done; **`init-config`/YAML open** (needs #17) |
+| [#33](https://github.com/Jhawk414/F404/issues/33) | Closed-form dry/wet augmentor pressure loss | enhancement | medium; Kumar form needs the *flameholder-plane* Mach (~0.2–0.36 on the RM12), not MN6 (0.446) or the AB exit station (0.1025) |
+| [#35](https://github.com/Jhawk414/F404/issues/35) | Combustion efficiency in both burners | enhancement | medium; vendored `Combustor` change or F404 wrapper; calibrate max AB after it |
 | [#10](https://github.com/Jhawk414/F404/issues/10) | Inline creep/LCF life estimate | enhancement | exploratory |
 
 ## Recommended order
@@ -155,6 +183,13 @@ working those have `--mach` and `--pla` to sweep or turn.
    - Use the published-data table above and the index README for targets
      (MIL TSFC, airflow, idle thrust, N1, N2).
    - Define idle by an observable (ground-idle thrust or N2 %), not a Tt4 floor.
+   - The model's part-power BPR (~0.95 at Tt4 2500 R) is far above the
+     published 0.34, and the OD `BPR` balance's upper bound of 1.0 is
+     reachable there. Opening the dry A8 at a fixed Tt4 raises BPR further.
+     The F404 commands N2 below MIL, not Tt4 (#30), which is part of the same
+     calibration problem.
+   - **#33 and #35 sit with this cluster.** Both change the augmentor's
+     thrust and fuel, so calibrate max AB once, after both.
 
 **Stage 4: the rest**
 6. **#16 remainder: `init-config`/YAML**, after #17.
@@ -210,8 +245,7 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
 - Decks are full float64 precision (`write_deck_csv()`), with columns from
   `DECK_COLUMNS` in `sweep_utils.py`. Decks written before 18 Oct 26 were
   rounded to 2–4 decimals, so they can't resolve differences below about
-  0.01 %; regenerate rather than compare against one. A dry sweep writes a
-  solved FAR_ab of ~1e-18 on the single-OD spike, not a literal 0.
+  0.01 %; regenerate rather than compare against one.
 
 **CLI behaviour**
 - A range flag takes `min,max,step` or a single value (constant axis). A
