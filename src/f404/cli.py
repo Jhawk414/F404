@@ -276,6 +276,24 @@ def build_parser():
         '--max-tt7', type=float, metavar='DEGR',
         help="max-afterburner exit temperature, degR (default: 3608)")
     design.set_defaults(handler=_run_design_command)
+
+    compare = sub.add_parser(
+        'compare',
+        help="compare two cycle decks column by column",
+        description="Match the rows of two decks on (alt, dTs, throttle) and "
+                    "report the min, max and largest % change of every shared "
+                    "column, NEW against BASE. Columns whose base is ~0 are "
+                    "compared in absolute terms.",
+    )
+    compare.add_argument('base', type=Path, metavar='BASE', help="reference deck CSV")
+    compare.add_argument('new', type=Path, metavar='NEW', help="deck CSV to compare")
+    compare.add_argument(
+        '--cols', metavar='A,B,...',
+        help="compare only these columns (default: every shared column)")
+    compare.add_argument(
+        '--changed-only', action='store_true',
+        help="omit columns that match exactly")
+    compare.set_defaults(handler=_run_compare_command)
     return parser
 
 
@@ -326,6 +344,22 @@ def _run_design_command(args, parser):
         print(f"f404 design: the solve did not converge: {exc}",
               file=sys.stderr)
         return 1
+    return 0
+
+
+def _run_compare_command(args, parser):
+    for path in (args.base, args.new):
+        if not path.is_file():
+            parser.error(f"{path} is not a file")
+
+    import pandas as pd
+    from f404.compare_decks import compare_decks, format_report
+
+    base, new = pd.read_csv(args.base), pd.read_csv(args.new)
+    columns = args.cols.split(',') if args.cols else None
+    table, only_base, only_new = compare_decks(base, new, columns)
+    print(format_report(table, only_base, only_new, len(base), len(new),
+                        changed_only=args.changed_only))
     return 0
 
 
