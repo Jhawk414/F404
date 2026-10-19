@@ -15,6 +15,7 @@ from f404.problems import (
     MAX_AB_FN,
     MAX_Tt7,
     MIL_Tt4,
+    MaxTt7TooLowError,
     build_problem,
 )
 from f404.sweep_utils import _scalar
@@ -100,6 +101,16 @@ def test_augmentor_target_below_core_temperature_still_burns_fuel():
     prob, mp = build_problem(max_Tt7=MIL_Tt4 - 92., verbose=False)
 
     assert _scalar(prob.get_val(f"{mp.od_pt}.balance.FAR_ab")) > 1e-3
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize('max_Tt7', [1000., 1500.])
+def test_max_ab_target_at_or_below_the_augmentor_inlet_is_rejected(max_Tt7):
+    # The OD point reads any Tt7 command at or below Tt6 (~1502 R at SLS mil)
+    # as dry. build_problem() promises max AB, so it must raise rather than
+    # hand back a dry engine with no error.
+    with pytest.raises(MaxTt7TooLowError, match=r'max_Tt7 must exceed .* Tt6 = 150\d\.\d R'):
+        build_problem(max_Tt7=max_Tt7, verbose=False)
 
 
 def test_validation_errors_name_the_offending_value_and_the_expected_range():

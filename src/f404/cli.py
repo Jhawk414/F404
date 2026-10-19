@@ -340,7 +340,9 @@ def _run_design_command(args, parser):
     try:
         build_problem(**targets)
     except ValueError as exc:
-        parser.error(str(exc))
+        # A named subclass (e.g. MaxTt7TooLowError) says what was wrong.
+        name = type(exc).__name__
+        parser.error(str(exc) if name == 'ValueError' else f"{name}: {exc}")
     except om.AnalysisError as exc:
         print(f"f404 design: the solve did not converge: {exc}",
               file=sys.stderr)
