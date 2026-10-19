@@ -207,10 +207,11 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
   the grid.** A near-empty deck usually means this, not "the model broke".
 - `printer.py` takes a `file` argument because pyCycle's `print_*` helpers
   bind `sys.stdout` at import, which defeats `capsys`.
-- Don't reformat a reduced-precision deck to raise precision; the digits are
-  gone. Regenerate from the model (`write_deck_csv()` sets per-column
-  precision: `%.4e` for the fuel-air ratios, 4 decimals for dimensionless
-  quantities, 2 for thrust and temperatures).
+- Decks are full float64 precision (`write_deck_csv()`), with columns from
+  `DECK_COLUMNS` in `sweep_utils.py`. Decks written before 18 Oct 26 were
+  rounded to 2–4 decimals, so they can't resolve differences below about
+  0.01 %; regenerate rather than compare against one. A dry sweep writes a
+  solved FAR_ab of ~1e-18 on the single-OD spike, not a literal 0.
 
 **CLI behaviour**
 - A range flag takes `min,max,step` or a single value (constant axis). A

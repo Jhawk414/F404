@@ -52,6 +52,7 @@ vendored upstream `pycycle` library at the repo root (see
 | `src/f404/cli.py` | `f404` command line: `sweep` and `design` subcommands, `min,max,step` range parsing and validation |
 | `src/f404/sweep_full_envelope.py` | Sweep driver: default grid, `run_sweeps()` for dry, wet, or both modes, and the cycle-deck CSV writer |
 | `src/f404/printer.py` | Console table formatter for DESIGN/OD results |
+| `src/f404/compare_decks.py` | Column-by-column deck comparison behind `f404 compare` |
 | `tests/` | pytest suite, one `<module>_test.py` per module ([#5](https://github.com/Jhawk414/F404/issues/5)) |
 | `deck/` | Cycle-deck output CSVs |
 | `docs/` | System architecture diagrams (`f404_cycle.typ`, `f404_cycle.svg`), architecture decision records (`adr/`), planning docs (`improvements/`), and reference material (`unclassified_perf_data/`: an [index and cross-study reference map](docs/unclassified_perf_data/README.md) of published F404 performance data, with source PDFs in `pdf/` and Obsidian-compatible markdown conversions with their figures in `md/`) |
@@ -145,6 +146,7 @@ f404 sweep                      # dry + wet, default grid, decks in the cwd
 f404 sweep --mode wet           # one mode only
 f404 sweep --alt 0 --dts -20,20,10   # one altitude, a dTs range
 f404 design                     # solve and print DESIGN, OD_dry and OD_wet
+f404 compare old.csv new.csv    # % change of every deck column, new vs old
 f404 --help                     # and `f404 sweep --help`, `f404 design --help`
                                 # (rich panels; plain argparse text for usage errors)
 ```
@@ -210,6 +212,24 @@ A non-converging solve exits 1 with the solver's message.
 `python -m f404.sweep_full_envelope [--mode ...]` still works and is
 the same as `f404 sweep`.
 
+### `f404 compare`
+
+Compares two decks of the same mode, `NEW` against `BASE`, and prints a
+markdown table: for every shared column, the min and max % change, the
+largest |%|, and the point where it occurs.
+
+```bash
+f404 compare deck/cycle_deck_wet.csv /tmp/run1/cycle_deck_wet.csv
+f404 compare old.csv new.csv --cols Fn,TSFC,BPR --changed-only
+```
+
+- Rows match on (alt, dTs, throttle), with throttle being T4 for a dry deck
+  and T7 for a wet one, rounded to 1 R. Points in only one deck are listed.
+- A column whose base value is ~0 (e.g. dry `FAR_ab`) is compared in absolute
+  terms, marked `(abs)`.
+- This is the intended proof for a model change: sweep before and after, then
+  compare. The decks are full precision, so a 0 means bit-identical.
+
 ## Testing
 
 ```bash
@@ -228,7 +248,7 @@ tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-190 tests (155 fast), 97% coverage. The driver and
+195 tests (160 fast), 97% coverage. The driver and
 CLI are importable and covered; what remains uncovered is mostly
 `sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 
@@ -244,7 +264,11 @@ alt ∈ {0, 2500, 5000} ft, dTs ∈ {0, ±10, ±20, ±30, ±40, ±50} R, static
 | Wet | 100 / 132 | Tt7 3608 → 3008 R (Tt4 fixed at 3100 R MIL) |
 
 Decks: [`deck/cycle_deck_dry.csv`](deck/cycle_deck_dry.csv),
-[`deck/cycle_deck_wet.csv`](deck/cycle_deck_wet.csv).
+[`deck/cycle_deck_wet.csv`](deck/cycle_deck_wet.csv). Every value is written
+at full float64 precision (shortest round-trip repr). Columns are
+`DECK_COLUMNS` in `sweep_utils.py`: the original 22 performance columns
+first, then fan and HPC operating point and stall margin, T3/T45/T5,
+augmentor inlet state and loss, and the nozzle inlet and exit states.
 
 Where the failures are, tracked in
 [issue #3](https://github.com/Jhawk414/F404/issues/3):
@@ -274,9 +298,10 @@ Done:
 - [x] Repo-root cleanup: removed the superseded `MFTF_od_CRZ.py` monolith
       and unused vendor/CI cruft (`release_notes.md`, `.travis.yml`,
       `.bumpversion.cfg`), moved reference PDFs into `docs/unclassified_perf_data/`
-- [x] Cap cycle-deck CSV precision — single `write_deck_csv()` writer with
-      per-column decimals (scientific `%.4e` for the fuel-air ratios)
-      ([#12](https://github.com/Jhawk414/F404/issues/12))
+- [x] Single `write_deck_csv()` writer for every deck
+      ([#12](https://github.com/Jhawk414/F404/issues/12)), now at full
+      float64 precision with 56 columns, station data included, so deck-to-deck
+      comparisons measure the model rather than the rounding
 - [x] Per-module test suite (`tests/<module>_test.py`), 87% coverage, with
       golden DESIGN/OD baselines and regression cover on the
       false-convergence guards ([#5](https://github.com/Jhawk414/F404/issues/5))
