@@ -151,7 +151,7 @@ def test_mixer_streams_are_pressure_matched_at_design(problem):
 
 @pytest.mark.slow
 def test_dry_off_design_reproduces_the_design_point(dry_mil):
-    """OD, unlit at design conditions, must recover the design solve.
+    """OD, dry at design conditions, must recover the design solve.
 
     Both points are set to the same altitude, Mach and power targets, so any
     disagreement means the design-to-off-design handoff — map scalars, station
@@ -196,15 +196,15 @@ def test_max_afterburner_is_calibrated_to_the_wet_thrust_target(problem):
 
 
 @pytest.mark.slow
-def test_augmentor_loss_is_the_flameholder_loss_unlit_plus_rayleigh_lit(problem, dry_mil):
+def test_augmentor_loss_is_the_flameholder_loss_dry_plus_rayleigh_wet(problem, dry_mil):
     # About 2.1% cold at the design augmentor inlet (also in the DESIGN
     # sizing), about 6.6% at SLS max AB (#33).
     (wet, mp), (dry, _) = problem, dry_mil
     od = mp.od_pt
 
-    unlit = _scalar(dry.get_val(f"{od}.afterburner.dPqP"))
-    assert unlit == pytest.approx(_scalar(dry.get_val(f"{od}.aug_ctrl.dPqP_unlit")))
-    assert unlit == pytest.approx(0.021, abs=5e-4)
+    cold = _scalar(dry.get_val(f"{od}.afterburner.dPqP"))
+    assert cold == pytest.approx(_scalar(dry.get_val(f"{od}.aug_ctrl.dPqP_dry")))
+    assert cold == pytest.approx(0.021, abs=5e-4)
     assert _scalar(wet.get_val(f"{od}.afterburner.dPqP")) == pytest.approx(0.066, abs=5e-4)
 
 
@@ -250,17 +250,17 @@ def test_lighting_the_afterburner_leaves_the_gas_generator_where_dry_put_it(
 
 
 @pytest.mark.slow
-def test_augmentor_burns_fuel_only_when_lit(problem, dry_mil):
+def test_augmentor_burns_fuel_only_when_wet(problem, dry_mil):
     (wet, mp), (dry, _) = problem, dry_mil
 
     assert _scalar(wet.get_val(f"{mp.od_pt}.balance.FAR_ab")) > 0.
-    # Unlit, the balance root sits on its zero lower bound.
+    # When dry, the balance root sits on its zero lower bound.
     assert _scalar(dry.get_val(f"{mp.od_pt}.balance.FAR_ab")) == \
         pytest.approx(0., abs=1e-12)
 
 
 @pytest.mark.slow
-def test_unlit_nozzle_holds_the_design_throat(dry_mil):
+def test_dry_nozzle_holds_the_design_throat(dry_mil):
     prob, mp = dry_mil
 
     assert _scalar(prob.get_val(f"{mp.od_pt}.a8_sched.A8")) == pytest.approx(

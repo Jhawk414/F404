@@ -155,7 +155,7 @@ def build_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, max_Tt7=MAX_Tt7,
     od = mp.od_pt
     _apply_design_inputs(prob, fn_target, mil_Tt4)
     _apply_od_inputs(prob, od, mil_Tt4)
-    prob.set_val(od + '.aug_ctrl.Tt7_cmd', 0., units='degR')   # unlit
+    prob.set_val(od + '.aug_ctrl.Tt7_cmd', 0., units='degR')   # dry
 
     prob.set_solver_print(level=-1)
     if verbose:

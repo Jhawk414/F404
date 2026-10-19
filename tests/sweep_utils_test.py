@@ -207,9 +207,9 @@ def test_saturated_state_is_flagged(state_var, value):
 
 
 @pytest.mark.parametrize('afterburn', [False, True])
-def test_far_ab_on_its_zero_lower_bound_is_the_unlit_solution(afterburn):
-    # Unlit, the FAR_ab root sits on its lower bound of exactly 0. That is
-    # not saturation. A lit point pinned there misses its Tt7 target instead,
+def test_far_ab_on_its_zero_lower_bound_is_the_dry_solution(afterburn):
+    # When dry, the FAR_ab root sits on its lower bound of exactly 0. That is
+    # not saturation. A wet point pinned there misses its Tt7 target instead,
     # and _target_met catches it.
     state = dict(CLEAN_STATE, **{f'{OD}.balance.FAR_ab': 0.})
 
@@ -318,7 +318,7 @@ def test_od_bounds_table_matches_the_bounds_the_model_declares(problem):
 # ── End to end ────────────────────────────────────────────────────────────────
 
 def dry_point(mp):
-    """SweepRunner kwargs that drive the OD point unlit."""
+    """SweepRunner kwargs that drive the OD point dry."""
     return dict(od_pt=mp.od_pt)
 
 

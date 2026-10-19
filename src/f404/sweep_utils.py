@@ -33,7 +33,7 @@ _OD_BOUNDS = {
     'balance.FAR_core':  (1e-4,  0.06),
     'balance.LP_Nmech':  (500.,  None),  # no upper bound in BalanceComp
     'balance.HP_Nmech':  (500.,  None),
-    # Lower bound 0 is the unlit solution, not saturation; a lit point pinned
+    # Lower bound 0 is the dry solution, not saturation; a wet point pinned
     # there misses its Tt7 target and fails _target_met instead.
     'balance.FAR_ab':    (None,  0.06),
 }
@@ -238,7 +238,7 @@ class SweepRunner:
         Mach number to use for all sweep points.
     afterburn : bool
         True = wet mode: 'power' in sweep points is T7 (degR); Tt4 is fixed at mil_Tt4.
-        False = dry mode: 'power' in sweep points is Tt4 (degR); afterburner unlit.
+        False = dry mode: 'power' in sweep points is Tt4 (degR); afterburner dry.
     mil_Tt4 : float
         Core burner exit temp (degR) held fixed during a wet sweep (mil power).
         Ignored in dry mode.
@@ -297,7 +297,7 @@ class SweepRunner:
         """Set flight conditions and power level on the OD point.
 
         In dry mode, 'power' is the Tt4 target (degR) and the afterburner is
-        unlit (Tt7 command 0).
+        dry (Tt7 command 0).
         In wet mode, 'power' is the T7 (Tt7) target (degR); Tt4 is fixed at mil_Tt4.
         """
         pt = self.od_pt

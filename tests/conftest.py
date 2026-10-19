@@ -22,7 +22,7 @@ def problem():
 
 @pytest.fixture(scope='session')
 def dry_mil():
-    """The same engine with OD re-solved unlit, at SLS mil. Read-only."""
+    """The same engine with OD re-solved dry, at SLS mil. Read-only."""
     prob, mp = build_problem(verbose=False)
     prob.set_val(f'{mp.od_pt}.aug_ctrl.Tt7_cmd', 0., units='degR')
     prob.run_model()

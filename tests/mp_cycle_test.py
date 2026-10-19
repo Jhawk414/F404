@@ -95,7 +95,7 @@ def test_every_frozen_station_area_reaches_the_off_design_point(wiring):
 
 
 def test_nozzle_throat_is_the_design_throat_scaled_by_the_schedule(model):
-    # The schedule holds the DESIGN A8 unlit and opens it lit: a hot augmented
+    # The schedule holds the DESIGN A8 dry and opens it wet: a hot augmented
     # flow through the dry throat would back-pressure the fan off its map,
     # and holding the wet point to the DESIGN area is what left single-engine
     # Options 1 and 2 with no dry solution (ADR-0001).
@@ -107,7 +107,7 @@ def test_nozzle_throat_is_the_design_throat_scaled_by_the_schedule(model):
 
 
 def test_augmentor_loss_constants_reach_both_points():
-    # DESIGN's Duct carries the same flameholder loss as OD unlit, so the
+    # DESIGN's Duct carries the same flameholder loss as OD dry, so the
     # sizing and the dry deck see one loss model.
     prob = om.Problem()
     prob.model = MPMixedFlowTurbofan()
@@ -121,7 +121,7 @@ def test_augmentor_loss_constants_reach_both_points():
         == 'DESIGN.aug_ctrl.dPqP'
 
 
-def test_design_sizes_the_engine_with_the_afterburner_unlit(model):
+def test_design_sizes_the_engine_with_the_afterburner_dry(model):
     # Dry mil is the sizing point: one engine, which the wet point then lights.
     design = model._get_subsystem('DESIGN')
 

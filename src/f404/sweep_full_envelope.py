@@ -6,7 +6,7 @@ one off-design point of the same om.Problem.
 
 Dry sweep
 ---------
-  - afterburner unlit (Tt7 command 0); 'power' in sweep points = Tt4 target (degR)
+  - afterburner dry (Tt7 command 0); 'power' in sweep points = Tt4 target (degR)
 
 Wet sweep
 ---------
