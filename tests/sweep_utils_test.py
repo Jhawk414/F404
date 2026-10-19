@@ -11,6 +11,7 @@ import pytest
 
 from f404.problems import build_problem
 from f404.sweep_utils import (
+    DECK_COLUMNS,
     SweepConfigurationError,
     _BOUND_TOL_FRAC,
     _FROZEN_NEWTON,
@@ -144,18 +145,14 @@ def test_bridge_points_empty_when_no_steps_requested():
 # ── extract_od_results ────────────────────────────────────────────────────────
 
 def _results_state(**overrides):
-    state = {
-        f'{OD}.fc.alt': 5000., f'{OD}.fc.dTs': -10., f'{OD}.fc.MN': 0.001,
-        f'{OD}.perf.Fn': 9000., f'{OD}.perf.Fg': 9500., f'{OD}.perf.TSFC': 0.62,
-        f'{OD}.balance.W': 144.18, f'{OD}.balance.BPR': 0.7528,
-        f'{OD}.balance.FAR_core': 0.025, f'{OD}.balance.FAR_ab': 0.035,
+    # Every column the deck reads, at a distinct value, then the overrides.
+    state = {f'{OD}.{spec[0]}': float(i)
+             for i, spec in enumerate(DECK_COLUMNS.values()) if spec}
+    state.update({
         f'{OD}.fan.PR': 4.1, f'{OD}.hpc.PR': 6.5,
-        f'{OD}.hpt.PR': 2.523, f'{OD}.lpt.PR': 2.401,
-        f'{OD}.burner.Fl_O:tot:T': 3100., f'{OD}.afterburner.Fl_O:tot:T': 3800.,
-        f'{OD}.balance.LP_Nmech': 10000., f'{OD}.balance.HP_Nmech': 14000.,
         f'{OD}.burner.Wfuel': 2.42, f'{OD}.afterburner.Wfuel': 4.1,
         f'{OD}.mixed_nozz.Throat:stat:area': 380.,
-    }
+    })
     state.update(overrides)
     return state
 
@@ -191,8 +188,16 @@ def test_extract_od_results_schema_matches_between_modes():
     dry = extract_od_results(StubProblem(_results_state()), OD, afterburn=False)
     wet = extract_od_results(StubProblem(_results_state()), OD, afterburn=True)
 
-    assert dry.keys() == wet.keys()
+    assert list(dry) == list(wet) == list(DECK_COLUMNS)
     assert all(type(v) is float for v in wet.values())
+
+
+def test_deck_keeps_the_original_columns_first_and_in_order():
+    # Readers of the pre-#12 decks index these by position.
+    assert list(DECK_COLUMNS)[:22] == [
+        'alt', 'dTs', 'MN', 'Fn', 'Fg', 'TSFC', 'W', 'BPR', 'FAR_core', 'FAR_ab',
+        'OPR', 'fan_PR', 'hpc_PR', 'hpt_PR', 'lpt_PR', 'T4', 'T7',
+        'LP_Nmech', 'HP_Nmech', 'Wf_core', 'Wf_ab', 'A8']
 
 
 # ── SweepRunner._state_at_bounds ──────────────────────────────────────────────

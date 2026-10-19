@@ -276,6 +276,25 @@ def build_parser():
         '--max-tt7', type=float, metavar='DEGR',
         help="max-afterburner exit temperature, degR (default: 3608)")
     design.set_defaults(handler=_run_design_command)
+
+    compare = sub.add_parser(
+        'compare',
+        help="compare two cycle decks column by column",
+        description="Match the rows of two decks on (alt, dTs, throttle) and "
+                    "report the min, max and largest % change of every shared "
+                    "column, NEW against BASE. Columns whose base is ~0 are "
+                    "compared in absolute terms.",
+    )
+    compare.add_argument('base', type=Path, metavar='BASE', help="reference deck CSV")
+    compare.add_argument('new', type=Path, metavar='NEW', help="deck CSV to compare")
+    compare.add_argument(
+        '--cols', metavar='A,B,...',
+        help="compare only these columns (default: every shared column)")
+    compare.add_argument(
+        '--changed-only', action='store_true',
+        help="omit columns that match exactly (columns with blank or "
+             "non-finite values are always shown, and exit 1)")
+    compare.set_defaults(handler=_run_compare_command)
     return parser
 
 
@@ -325,6 +344,28 @@ def _run_design_command(args, parser):
     except om.AnalysisError as exc:
         print(f"f404 design: the solve did not converge: {exc}",
               file=sys.stderr)
+        return 1
+    return 0
+
+
+def _run_compare_command(args, parser):
+    for path in (args.base, args.new):
+        if not path.is_file():
+            parser.error(f"{path} is not a file")
+
+    from f404.compare_decks import compare_decks, format_report, read_deck
+
+    base, new = read_deck(args.base), read_deck(args.new)
+    columns = args.cols.split(',') if args.cols else None
+    try:
+        table, only_base, only_new = compare_decks(base, new, columns)
+    except ValueError as exc:
+        parser.error(str(exc))
+    print(format_report(table, only_base, only_new, len(base), len(new),
+                        changed_only=args.changed_only))
+    invalid = table.loc[table['kind'] == 'invalid', 'column'].tolist()
+    if invalid:
+        print(f"f404 compare: non-finite values in {invalid}", file=sys.stderr)
         return 1
     return 0
 

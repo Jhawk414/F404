@@ -135,9 +135,76 @@ def generate_bridge_points(pt_from, pt_to, n_steps):
     return bridges
 
 
+# Deck columns read straight off the OD point: name -> (path under the point,
+# units). The first block is the original deck schema, in its original order;
+# the rest add the station data that downstream work reads: augmentor inlet
+# (#33), compressor operating point and stall margin (#8), turbine exit
+# temperatures (T5 is the F404's T5.6 control temperature), and the nozzle
+# inlet and exit states a method-of-characteristics nozzle tool needs.
+DECK_COLUMNS = {
+    'alt':      ('fc.alt', 'ft'),
+    'dTs':      ('fc.dTs', 'degR'),
+    'MN':       ('fc.MN', None),
+    'Fn':       ('perf.Fn', 'lbf'),
+    'Fg':       ('perf.Fg', 'lbf'),
+    'TSFC':     ('perf.TSFC', None),
+    'W':        ('balance.W', 'lbm/s'),
+    'BPR':      ('balance.BPR', None),
+    'FAR_core': ('balance.FAR_core', None),
+    'FAR_ab':   ('balance.FAR_ab', None),
+    'OPR':      None,  # fan PR x HPC PR, derived below
+    'fan_PR':   ('fan.PR', None),
+    'hpc_PR':   ('hpc.PR', None),
+    'hpt_PR':   ('hpt.PR', None),
+    'lpt_PR':   ('lpt.PR', None),
+    'T4':       ('burner.Fl_O:tot:T', 'degR'),
+    'T7':       ('afterburner.Fl_O:tot:T', 'degR'),
+    'LP_Nmech': ('balance.LP_Nmech', 'rpm'),
+    'HP_Nmech': ('balance.HP_Nmech', 'rpm'),
+    'Wf_core':  ('burner.Wfuel', 'lbm/s'),
+    'Wf_ab':    ('afterburner.Wfuel', 'lbm/s'),
+    'A8':       ('mixed_nozz.Throat:stat:area', 'inch**2'),
+
+    'Ps_amb':   ('fc.Fl_O:stat:P', 'psi'),
+    'F_ram':    ('inlet.F_ram', 'lbf'),
+    'Tt2':      ('inlet.Fl_O:tot:T', 'degR'),
+    'Pt2':      ('inlet.Fl_O:tot:P', 'psi'),
+    'fan_Rline': ('fan.map.RlineMap', None),
+    'fan_Nc':   ('fan.Nc', 'rpm'),
+    'fan_Wc':   ('fan.Wc', 'lbm/s'),
+    'fan_eff':  ('fan.eff', None),
+    'fan_SMN':  ('fan.SMN', None),
+    'fan_SMW':  ('fan.SMW', None),
+    'hpc_Rline': ('hpc.map.RlineMap', None),
+    'hpc_Nc':   ('hpc.Nc', 'rpm'),
+    'hpc_Wc':   ('hpc.Wc', 'lbm/s'),
+    'hpc_eff':  ('hpc.eff', None),
+    'hpc_SMN':  ('hpc.SMN', None),
+    'hpc_SMW':  ('hpc.SMW', None),
+    'Tt3':      ('hpc.Fl_O:tot:T', 'degR'),
+    'Pt3':      ('hpc.Fl_O:tot:P', 'psi'),
+    'Tt45':     ('hpt.Fl_O:tot:T', 'degR'),
+    'Tt5':      ('lpt.Fl_O:tot:T', 'degR'),
+    'Pt5':      ('lpt.Fl_O:tot:P', 'psi'),
+    'Tt6':      ('afterburner.Fl_I:tot:T', 'degR'),
+    'Pt6':      ('afterburner.Fl_I:tot:P', 'psi'),
+    'MN6':      ('afterburner.Fl_I:stat:MN', None),
+    'ab_dPqP':  ('afterburner.dPqP', None),
+    'Pt7':      ('afterburner.Fl_O:tot:P', 'psi'),
+    'W7':       ('afterburner.Fl_O:stat:W', 'lbm/s'),
+    'gamma7':   ('afterburner.Fl_O:tot:gamma', None),
+    'R7':       ('afterburner.Fl_O:tot:R', 'ft*lbf/(lbm*degR)'),
+    'nozz_PR':  ('mixed_nozz.PR', None),
+    'A9':       ('mixed_nozz.Fl_O:stat:area', 'inch**2'),
+    'MN9':      ('mixed_nozz.Fl_O:stat:MN', None),
+    'Ps9':      ('mixed_nozz.Fl_O:stat:P', 'psi'),
+    'V9':       ('mixed_nozz.Fl_O:stat:V', 'ft/s'),
+}
+
+
 def extract_od_results(prob, pt, afterburn=True):
     """
-    Extract key performance parameters from a converged OD solution.
+    Extract the deck row (``DECK_COLUMNS``) from a converged OD solution.
 
     Parameters
     ----------
@@ -152,32 +219,19 @@ def extract_od_results(prob, pt, afterburn=True):
     Returns
     -------
     dict
-        Performance results.
+        Performance results, in ``DECK_COLUMNS`` order.
     """
-    return {
-        'alt':       _scalar(prob.get_val(f'{pt}.fc.alt', units='ft')),
-        'dTs':       _scalar(prob.get_val(f'{pt}.fc.dTs', units='degR')),
-        'MN':        _scalar(prob.get_val(f'{pt}.fc.MN')),
-        'Fn':        _scalar(prob.get_val(f'{pt}.perf.Fn', units='lbf')),
-        'Fg':        _scalar(prob.get_val(f'{pt}.perf.Fg', units='lbf')),
-        'TSFC':      _scalar(prob.get_val(f'{pt}.perf.TSFC')),
-        'W':         _scalar(prob.get_val(f'{pt}.balance.W', units='lbm/s')),
-        'BPR':       _scalar(prob.get_val(f'{pt}.balance.BPR')),
-        'FAR_core':  _scalar(prob.get_val(f'{pt}.balance.FAR_core')),
-        'FAR_ab':    _scalar(prob.get_val(f'{pt}.balance.FAR_ab')) if afterburn else 0.0,
-        'OPR':       _scalar(prob[f'{pt}.fan.PR'] * prob[f'{pt}.hpc.PR']),
-        'fan_PR':    _scalar(prob[f'{pt}.fan.PR']),
-        'hpc_PR':    _scalar(prob[f'{pt}.hpc.PR']),
-        'hpt_PR':    _scalar(prob[f'{pt}.hpt.PR']),
-        'lpt_PR':    _scalar(prob[f'{pt}.lpt.PR']),
-        'T4':        _scalar(prob.get_val(f'{pt}.burner.Fl_O:tot:T', units='degR')),
-        'T7':        _scalar(prob.get_val(f'{pt}.afterburner.Fl_O:tot:T', units='degR')),
-        'LP_Nmech':  _scalar(prob.get_val(f'{pt}.balance.LP_Nmech', units='rpm')),
-        'HP_Nmech':  _scalar(prob.get_val(f'{pt}.balance.HP_Nmech', units='rpm')),
-        'Wf_core':   _scalar(prob.get_val(f'{pt}.burner.Wfuel', units='lbm/s')),
-        'Wf_ab':     _scalar(prob.get_val(f'{pt}.afterburner.Wfuel', units='lbm/s')) if afterburn else 0.0,
-        'A8':        _scalar(prob.get_val(f'{pt}.mixed_nozz.Throat:stat:area', units='inch**2')),
-    }
+    dry_zeros = () if afterburn else ('FAR_ab', 'Wf_ab')
+    row = {}
+    for name, spec in DECK_COLUMNS.items():
+        if spec is None:
+            row[name] = _scalar(prob[f'{pt}.fan.PR'] * prob[f'{pt}.hpc.PR'])
+        elif name in dry_zeros:
+            row[name] = 0.0
+        else:
+            path, units = spec
+            row[name] = _scalar(prob.get_val(f'{pt}.{path}', units=units))
+    return row
 
 
 class SweepRunner:
