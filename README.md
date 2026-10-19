@@ -209,7 +209,9 @@ there is no `--mode`. Three flags override the targets:
 - `--mil-tt4`: core burner exit temperature.
 - `--max-tt7`: max-AB afterburner exit temperature.
 
-A non-converging solve exits 1 with the solver's message.
+A non-converging solve exits 1 with the solver's message. A `--max-tt7` at or
+below the SLS-mil augmentor inlet temperature (~1502 R) would leave the
+afterburner dry, so it exits 2 with `MaxTt7TooLowError`.
 
 `python -m f404.sweep_full_envelope [--mode ...]` still works and is
 the same as `f404 sweep`.
@@ -257,7 +259,7 @@ tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-216 tests (178 fast), 97% coverage. The driver and
+219 tests (178 fast), 97% coverage. The driver and
 CLI are importable and covered; what remains uncovered is mostly
 `sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 

@@ -158,7 +158,8 @@ partly superseded.
 4. A minimum wet FAR_ab of ~0.005 (TN D-6839) is the planned floor on
    `Tt7_cmd`, in a small follow-up PR.
 
-**Numbers (18 Oct, PR #36):** 216 tests (178 fast).
+**Numbers (18 Oct, PR #36):** 219 tests (178 fast). `build_problem()`
+raises `MaxTt7TooLowError` (a `ValueError`) if `max_Tt7` ≤ the solved Tt6.
 
 ## Open issues at a glance
 
