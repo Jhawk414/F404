@@ -14,6 +14,15 @@ NEAR_ZERO = 1e-9
 _KEY = ['alt', 'dTs', 'throttle']
 
 
+def read_deck(path):
+    """Read a deck CSV with every float exactly as written.
+
+    pandas' default parser can land one ULP off, which would make two
+    distinct float64 values compare equal and break "0 means bit-identical".
+    """
+    return pd.read_csv(path, float_precision='round_trip')
+
+
 def _keyed(df):
     wet = df['mode'].eq('wet').all() if 'mode' in df else df['FAR_ab'].max() > 1e-6
     out = df.copy()

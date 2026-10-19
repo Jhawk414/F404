@@ -352,10 +352,9 @@ def _run_compare_command(args, parser):
         if not path.is_file():
             parser.error(f"{path} is not a file")
 
-    import pandas as pd
-    from f404.compare_decks import compare_decks, format_report
+    from f404.compare_decks import compare_decks, format_report, read_deck
 
-    base, new = pd.read_csv(args.base), pd.read_csv(args.new)
+    base, new = read_deck(args.base), read_deck(args.new)
     columns = args.cols.split(',') if args.cols else None
     table, only_base, only_new = compare_decks(base, new, columns)
     print(format_report(table, only_base, only_new, len(base), len(new),

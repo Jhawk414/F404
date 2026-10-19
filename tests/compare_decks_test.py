@@ -7,7 +7,7 @@ different operating points.
 import pandas as pd
 import pytest
 
-from f404.compare_decks import compare_decks, format_report
+from f404.compare_decks import compare_decks, format_report, read_deck
 
 
 def deck(mode, **cols):
@@ -75,3 +75,15 @@ def test_report_lists_unmatched_points_and_can_hide_unchanged_columns():
     assert 'matched 1' in text
     assert 'only in base (alt, dTs, throttle): [(2500, 20, 2900)]' in text
     assert '| Fn % |' in text and '| T7' not in text
+
+
+def test_adjacent_float64_values_read_back_distinct(tmp_path):
+    # Default read_csv parses both of these to the same float; a one-ULP model
+    # change would then report as bit-identical.
+    for name, fn in (('a', '0.0272629812'), ('b', '0.027262981200000005')):
+        (tmp_path / f'{name}.csv').write_text(
+            f'alt,dTs,T4,T7,Fn,FAR_ab,mode\n0,0,3100,1500,{fn},0,dry\n')
+
+    table, _, _ = compare_decks(read_deck(tmp_path / 'a.csv'), read_deck(tmp_path / 'b.csv'))
+
+    assert row(table, 'Fn')['max_abs'] > 0
