@@ -1,6 +1,141 @@
+import numpy as np
 import openmdao.api as om
 
 import pycycle.api as pyc
+
+
+def _dynamic_head(g, m):
+    """Kumar (1980) Eq. 13: q/Pt at Mach ``m``, and its partials in g and m."""
+    x = 1. + 0.5 * (g - 1.) * m**2
+    e = -g / (g - 1.)
+    q = 0.5 * g * m**2 * x**e
+    dq_dm = g * m * x**e * (1. - 0.5 * g * m**2 / x)
+    dq_dg = q * (1. / g + np.log(x) / (g - 1.)**2 - 0.5 * g * m**2 / ((g - 1.) * x))
+    return q, dq_dg, dq_dm
+
+
+def _flow_function(g):
+    """Choked flow function Γ(γ) = √γ·(2/(γ+1))^((γ+1)/(2(γ−1))), and d ln Γ/dγ."""
+    r = 2. / (g + 1.)
+    gam = np.sqrt(g) * r**((g + 1.) / (2. * (g - 1.)))
+    dln = 0.5 / g - np.log(r) / (g - 1.)**2 - 0.5 / (g - 1.)
+    return gam, dln
+
+
+class AugmentorControl(om.ExplicitComponent):
+    """Afterburner command and pressure loss for one OD topology, unlit to max AB.
+
+    ``Tt7_cmd`` at or below the augmentor inlet temperature ``Tt_in`` (Tt6)
+    means unlit, so 0 is the dry command.
+
+    - ``Tt7 = max(Tt7_cmd, Tt_in)`` is the FAR_ab balance target. Unlit, it
+      drives FAR_ab to its lower bound of exactly 0, and the Combustor is a Duct.
+    - ``dPqP = q * (CD + eta * (tau - 1))``, ``tau = Tt7 / Tt_in``: a
+      flameholder drag loss plus a Rayleigh (momentum) loss that is 0 unlit.
+      ``q`` is the approach dynamic head over Pt at the flameholder Mach
+      ``k_M * MN_in`` (Kumar 1980, Eq. 13). ``dPqP_unlit = q * CD`` is the
+      loss the same inlet state would see unlit (``NozzleSchedule``).
+    """
+
+    def setup(self):
+        self.add_input('Tt7_cmd', val=0., units='degR')
+        self.add_input('Tt_in', val=1500., units='degR')
+        self.add_input('MN_in', val=0.45)
+        self.add_input('gamma_in', val=1.34)
+        self.add_input('k_M', val=0.5, desc='flameholder approach Mach / MN_in')
+        self.add_input('CD', val=0.65, desc='flameholder cold drag coefficient')
+        self.add_input('eta', val=1., desc='momentum (Rayleigh) loss factor')
+
+        self.add_output('Tt7', val=1500., units='degR')
+        self.add_output('dPqP', val=0.)
+        self.add_output('dPqP_unlit', val=0.)
+
+        self.declare_partials('Tt7', ['Tt7_cmd', 'Tt_in'])
+        self.declare_partials('dPqP', ['Tt7_cmd', 'Tt_in', 'MN_in', 'gamma_in',
+                                       'k_M', 'CD', 'eta'])
+        self.declare_partials('dPqP_unlit', ['MN_in', 'gamma_in', 'k_M', 'CD'])
+
+    def compute(self, inputs, outputs):
+        cmd, t_in = inputs['Tt7_cmd'], inputs['Tt_in']
+        tt7 = np.where(cmd.real > t_in.real, cmd, t_in)
+        q, _, _ = _dynamic_head(inputs['gamma_in'], inputs['k_M'] * inputs['MN_in'])
+        outputs['Tt7'] = tt7
+        outputs['dPqP_unlit'] = q * inputs['CD']
+        outputs['dPqP'] = q * (inputs['CD'] + inputs['eta'] * (tt7 / t_in - 1.))
+
+    def compute_partials(self, inputs, J):
+        cmd, t_in, k_m, mn = inputs['Tt7_cmd'], inputs['Tt_in'], inputs['k_M'], inputs['MN_in']
+        cd, eta = inputs['CD'], inputs['eta']
+        lit = (cmd > t_in).astype(float)
+        tau = np.where(lit, cmd / t_in, 1.)
+        q, dq_dg, dq_dm = _dynamic_head(inputs['gamma_in'], k_m * mn)
+        loss_per_q = cd + eta * (tau - 1.)
+
+        J['Tt7', 'Tt7_cmd'] = lit
+        J['Tt7', 'Tt_in'] = 1. - lit
+
+        J['dPqP', 'Tt7_cmd'] = lit * q * eta / t_in
+        J['dPqP', 'Tt_in'] = -lit * q * eta * cmd / t_in**2
+        J['dPqP', 'MN_in'] = loss_per_q * dq_dm * k_m
+        J['dPqP', 'k_M'] = loss_per_q * dq_dm * mn
+        J['dPqP', 'gamma_in'] = loss_per_q * dq_dg
+        J['dPqP', 'CD'] = q
+        J['dPqP', 'eta'] = q * (tau - 1.)
+
+        J['dPqP_unlit', 'MN_in'] = cd * dq_dm * k_m
+        J['dPqP_unlit', 'k_M'] = cd * dq_dm * mn
+        J['dPqP_unlit', 'gamma_in'] = cd * dq_dg
+        J['dPqP_unlit', 'CD'] = q
+
+
+class NozzleSchedule(om.ExplicitComponent):
+    """Nozzle throat area A8 for one OD topology, unlit to max AB (#8, wet half).
+
+    Choked-throat continuity with the unlit nozzle. The throat passes the lit
+    flow (``_out``, afterburner exit) at the gas-generator exit state
+    (``_in``, afterburner inlet) that the unlit nozzle would see::
+
+        A8 = A8_dsn * (W_out/W_in) * sqrt(R_out*Tt_out / (R_in*Tt_in))
+                    * Γ(gam_in)/Γ(gam_out) * (1 - dPqP_unlit)/(1 - dPqP)
+
+    Lighting the afterburner then leaves W and Pt6, and with them the whole
+    gas generator, where the dry engine put them. Unlit, the factor is 1 and
+    A8 is the DESIGN throat. A dry (part-power) opening waits for #25/#30.
+    """
+
+    def setup(self):
+        self.add_input('A8_dsn', val=200., units='inch**2')
+        for name, val, units in (('W_in', 150., 'lbm/s'), ('W_out', 150., 'lbm/s'),
+                                 ('Tt_in', 1500., 'degR'), ('Tt_out', 1500., 'degR'),
+                                 ('R_in', 53.3, 'ft*lbf/(lbm*degR)'),
+                                 ('R_out', 53.3, 'ft*lbf/(lbm*degR)'),
+                                 ('gam_in', 1.34, None), ('gam_out', 1.34, None),
+                                 ('dPqP', 0., None), ('dPqP_unlit', 0., None)):
+            self.add_input(name, val=val, units=units)
+        self.add_output('A8', val=200., units='inch**2')
+        self.declare_partials('A8', '*')
+
+    def compute(self, inputs, outputs):
+        flow_in, _ = _flow_function(inputs['gam_in'])
+        flow_out, _ = _flow_function(inputs['gam_out'])
+        outputs['A8'] = (inputs['A8_dsn'] * (inputs['W_out'] / inputs['W_in'])
+                         * np.sqrt(inputs['R_out'] * inputs['Tt_out']
+                                   / (inputs['R_in'] * inputs['Tt_in']))
+                         * flow_in / flow_out
+                         * (1. - inputs['dPqP_unlit']) / (1. - inputs['dPqP']))
+
+    def compute_partials(self, inputs, J):
+        out = {}
+        self.compute(inputs, out)
+        a8 = out['A8']
+        # A8 is a product of powers, so each partial is A8 * exponent / factor.
+        for name, power in (('A8_dsn', 1.), ('W_out', 1.), ('W_in', -1.),
+                            ('R_out', .5), ('Tt_out', .5), ('R_in', -.5), ('Tt_in', -.5)):
+            J['A8', name] = power * a8 / inputs[name]
+        J['A8', 'gam_in'] = a8 * _flow_function(inputs['gam_in'])[1]
+        J['A8', 'gam_out'] = -a8 * _flow_function(inputs['gam_out'])[1]
+        J['A8', 'dPqP_unlit'] = -a8 / (1. - inputs['dPqP_unlit'])
+        J['A8', 'dPqP'] = a8 / (1. - inputs['dPqP'])
 
 
 class MixedFlowTurbofan(pyc.Cycle):

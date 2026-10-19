@@ -7,8 +7,9 @@ debugging time and are easy to undo by accident. Each runs in milliseconds.
 import openmdao.api as om
 import pycycle.api as pyc
 import pytest
+from openmdao.utils.assert_utils import assert_check_partials
 
-from f404.engine_model import MixedFlowTurbofan
+from f404.engine_model import AugmentorControl, MixedFlowTurbofan, NozzleSchedule
 
 DESIGN_BALANCES = {'W', 'BPR', 'FAR_core', 'hpt_PR', 'lpt_PR'}
 OD_BALANCES = {'W', 'BPR', 'FAR_core', 'LP_Nmech', 'HP_Nmech'}
@@ -91,6 +92,86 @@ def test_only_a_wet_off_design_point_controls_the_nozzle_throat(
     model = cycle(design=design, afterburn=afterburn)
 
     assert ('a8_ctrl' in {s.name for s in model._subsystems_myproc}) is expected
+
+
+# ── Augmentor control and nozzle schedule ─────────────────────────────────────
+
+def solve_component(comp, **inputs):
+    prob = om.Problem()
+    prob.model.add_subsystem('c', comp, promotes=['*'])
+    prob.setup(force_alloc_complex=True)
+    for name, value in inputs.items():
+        prob.set_val(name, value)
+    prob.run_model()
+    return prob
+
+
+def augmentor(**inputs):
+    return solve_component(AugmentorControl(),
+                           **{'Tt_in': 1500., 'MN_in': 0.446, 'gamma_in': 1.341, **inputs})
+
+
+def kumar_q(g, m):
+    return g / 2 * m**2 * (1 + (g - 1) / 2 * m**2) ** (-g / (g - 1))
+
+
+def test_unlit_augmentor_targets_its_inlet_and_carries_only_the_flameholder_loss():
+    prob = augmentor(Tt7_cmd=0.)
+
+    assert prob['Tt7'] == 1500.          # FAR_ab balance target = inlet
+    assert prob['dPqP'] == pytest.approx(0.65 * kumar_q(1.341, 0.5 * 0.446))
+    assert prob['dPqP'] == prob['dPqP_unlit']
+
+
+def test_flameholder_loss_is_about_two_percent_at_the_design_augmentor_inlet():
+    # k_M * MN6 = 0.22, the RM12 rig's flameholder approach Mach, with
+    # C_D 0.65 gives the 1-3% cold loss of the NASA flameholder rigs (#33).
+    assert augmentor()['dPqP_unlit'] == pytest.approx(0.021, abs=5e-4)
+
+
+def test_lit_augmentor_adds_a_rayleigh_loss_proportional_to_heat_addition():
+    prob = augmentor(Tt7_cmd=3600.)
+    q = kumar_q(1.341, 0.5 * 0.446)
+
+    assert prob['Tt7'] == 3600.
+    assert prob['dPqP'] == pytest.approx(q * (0.65 + 1.0 * (3600. / 1500. - 1.)))
+    assert prob['dPqP_unlit'] == pytest.approx(q * 0.65)
+
+
+@pytest.mark.filterwarnings('ignore::openmdao.utils.om_warnings.DerivativesWarning')
+@pytest.mark.parametrize('Tt7_cmd', [0., 1500.5, 3600.])
+def test_augmentor_partials_match_complex_step(Tt7_cmd):
+    # The max() makes half the Tt7 partials zero on each side of light-off.
+    prob = augmentor(Tt7_cmd=Tt7_cmd)
+
+    assert_check_partials(prob.check_partials(method='cs', out_stream=None))
+
+
+NOZZLE_UNLIT = dict(A8_dsn=187.75, W_in=144., W_out=144., Tt_in=1502., Tt_out=1502.,
+                    R_in=53.35, R_out=53.35, gam_in=1.341, gam_out=1.341,
+                    dPqP=0.021, dPqP_unlit=0.021)
+NOZZLE_LIT = {**NOZZLE_UNLIT, 'W_out': 149.4, 'Tt_out': 3600., 'R_out': 53.4,
+              'gam_out': 1.27, 'dPqP': 0.065}
+
+
+def test_unlit_nozzle_is_the_design_throat():
+    assert solve_component(NozzleSchedule(), **NOZZLE_UNLIT)['A8'] == \
+        pytest.approx(187.75, rel=1e-12)
+
+
+def test_lit_nozzle_opens_to_pass_the_hotter_flow_at_the_same_pt6():
+    # Roughly √(Tt7/Tt6) for the temperature, times the fuel mass, the loss
+    # and the γ change: about 1.7x the dry throat at max AB.
+    a8 = solve_component(NozzleSchedule(), **NOZZLE_LIT)['A8']
+
+    assert 1.6 * 187.75 < a8 < 1.8 * 187.75
+
+
+@pytest.mark.parametrize('inputs', [NOZZLE_UNLIT, NOZZLE_LIT], ids=['unlit', 'lit'])
+def test_nozzle_partials_match_complex_step(inputs):
+    prob = solve_component(NozzleSchedule(), **inputs)
+
+    assert_check_partials(prob.check_partials(method='cs', out_stream=None))
 
 
 # ── Solver configuration ──────────────────────────────────────────────────────
