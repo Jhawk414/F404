@@ -141,3 +141,15 @@ def test_two_rows_on_one_key_are_rejected():
 
     with pytest.raises(ValueError, match=r"NEW deck has more than one row .*\(0, 0, 3100\)"):
         compare_decks(deck('dry'), crowded)
+
+
+def test_a_change_where_the_base_is_zero_is_reported_beside_the_percent_row():
+    # Dry ab_dPqP is 0 and wet is 0.054: a new cold loss at the dry point
+    # used to drop out of the % row, and --changed-only hid the column.
+    table, _, _ = compare_decks(deck('dry', ab_dPqP=[0., 0.054]),
+                                deck('dry', ab_dPqP=[0.02, 0.054]))
+
+    rows = table[table['column'] == 'ab_dPqP'].set_index('kind')
+    assert rows.loc['%', 'max_abs'] == 0
+    assert rows.loc['abs', 'max_abs'] == pytest.approx(0.02)
+    assert rows.loc['abs', 'worst'] == (0, 0, 3100)

@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 
 # A base value this close to zero is compared in absolute terms: a % change
-# against a solved FAR_ab of ~1e-18 is meaningless.
+# against a solved FAR_ab of ~1e-18 is meaningless. A column can have both
+# kinds of point, and then gets one row of each.
 NEAR_ZERO = 1e-9
 _KEY = ['alt', 'dTs', 'throttle']
 
@@ -54,6 +55,12 @@ def _keyed(df, mode, label):
     return out.set_index(_KEY).sort_index()
 
 
+def _summary(column, kind, diff, keys):
+    i = int(np.argmax(np.abs(diff)))
+    return {'column': column, 'kind': kind, 'min': diff.min(), 'max': diff.max(),
+            'max_abs': abs(diff[i]), 'worst': _point(keys[i])}
+
+
 def _point(key):
     """A key as plain numbers: ints where integral, for readable output."""
     return tuple(int(v) if float(v).is_integer() else float(v) for v in key)
@@ -81,9 +88,10 @@ def compare_decks(base, new, columns=None):
     Returns
     -------
     (pandas.DataFrame, list, list)
-        One row per shared numeric column: ``kind`` ('%' or 'abs'), ``min``,
-        ``max``, ``max_abs`` and ``worst`` (the (alt, dTs, throttle) of
-        ``max_abs``), in base column order. Then the keys only in base, and
+        One row per compared column and kind: ``kind`` is '%' over points
+        with a non-zero base and 'abs' over points whose base is ~0. Then
+        ``min``, ``max``, ``max_abs`` and ``worst`` (the (alt, dTs, throttle)
+        of ``max_abs``), in base column order. Then the keys only in base, and
         the keys only in new.
     """
     mode = _mode(base, 'BASE')
@@ -112,20 +120,14 @@ def compare_decks(base, new, columns=None):
                 or not pd.api.types.is_numeric_dtype(b[col])):
             continue
         bv, nv = b[col].to_numpy(float), n[col].to_numpy(float)
+        # Points whose base is ~0 get their own absolute row, so a column that
+        # is 0 at some points (dry ab_dPqP) never hides a change there.
         near_zero = np.abs(bv) < NEAR_ZERO
-        if near_zero.all():
-            kind, diff = 'abs', nv - bv
-        else:
-            kind = '%'
-            with np.errstate(divide='ignore', invalid='ignore'):
-                diff = np.where(near_zero, np.nan, 100. * (nv - bv) / bv)
-        if np.isnan(diff).all():
-            continue
-        i = int(np.nanargmax(np.abs(diff)))
-        rows.append({'column': col, 'kind': kind,
-                     'min': np.nanmin(diff), 'max': np.nanmax(diff),
-                     'max_abs': abs(diff[i]),
-                     'worst': _point(common[i])})
+        with np.errstate(divide='ignore', invalid='ignore'):
+            pct = 100. * (nv - bv) / bv
+        for kind, mask, diff in (('%', ~near_zero, pct), ('abs', near_zero, nv - bv)):
+            if mask.any():
+                rows.append(_summary(col, kind, diff[mask], common[mask]))
     table = pd.DataFrame(rows, columns=['column', 'kind', 'min', 'max', 'max_abs', 'worst'])
     return table, [_point(k) for k in only_base], [_point(k) for k in only_new]
 
