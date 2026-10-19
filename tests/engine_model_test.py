@@ -10,6 +10,7 @@ import pytest
 from openmdao.utils.assert_utils import assert_check_partials
 
 from f404.engine_model import AugmentorControl, MixedFlowTurbofan, NozzleSchedule
+from f404.sweep_utils import _scalar
 
 DESIGN_BALANCES = {'W', 'BPR', 'FAR_core', 'hpt_PR', 'lpt_PR'}
 OD_BALANCES = {'W', 'BPR', 'FAR_core', 'LP_Nmech', 'HP_Nmech'}
@@ -77,7 +78,7 @@ def test_far_ab_balance_reaches_zero_and_targets_the_augmentor_command(cycle):
     model = cycle(design=False)
     meta = model._get_subsystem('balance')._var_rel2meta['FAR_ab']
 
-    assert float(meta['lower']) == 0.
+    assert _scalar(meta['lower']) == 0.
     assert model._conn_global_abs_in2out['balance.rhs:FAR_ab'] == 'aug_ctrl.Tt7'
 
 
