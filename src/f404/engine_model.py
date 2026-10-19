@@ -139,16 +139,16 @@ class NozzleSchedule(om.ExplicitComponent):
 
 
 class MixedFlowTurbofan(pyc.Cycle):
+    """The F404 cycle. DESIGN is dry mil; OD runs every power setting.
 
-    def initialize(self):
-        self.options.declare('afterburn', default=True, types=bool,
-                             desc='True = FAR_ab balance active (wet/AB mode). '
-                                  'False = afterburner FAR fixed at 0 (dry mode).')
-        super().initialize()
+    The afterburner is a ``Duct`` at DESIGN, which never lights, and a
+    ``Combustor`` off-design, where ``aug_ctrl.Tt7_cmd`` selects the regime
+    (0 = dry) and ``a8_sched`` sets the nozzle throat.
+    """
 
     def setup(self):
         design = self.options['design']
-        afterburn = self.options['afterburn']
+        afterburn = not design
 
         USE_TABULAR = True
 
@@ -191,13 +191,16 @@ class MixedFlowTurbofan(pyc.Cycle):
         # Mixer component
         self.add_subsystem('mixer', pyc.Mixer(designed_stream=1))
         self.add_subsystem('mixer_duct', pyc.Duct())
-        # Afterburner Components — in dry mode it's just a pipe (Duct), not a
-        # Combustor. A Combustor with its fuel-air ratio fixed at zero produced
-        # a rank-deficient Jacobian that crashed the OD linear solve at
-        # part-power dry conditions. A FAR_ab balance allowed to reach zero
-        # avoids that (ADR-0001), but the Duct also carries no dry-mode state.
+        # Afterburner Components — a Duct at DESIGN, which never lights. Off
+        # design, a Combustor at every power setting. A Combustor with its
+        # fuel-air ratio *fixed* at zero produced a rank-deficient Jacobian at
+        # part-power dry conditions (51c9bb6). The OD Combustor instead carries
+        # a FAR_ab balance whose lower bound of exactly 0 is the unlit root
+        # (ADR-0002). aug_ctrl sets the augmentor loss on both points.
+        self.add_subsystem('aug_ctrl', AugmentorControl())
         if afterburn:
             self.add_subsystem('afterburner', pyc.Combustor(fuel_type=FUEL_TYPE))
+            self.add_subsystem('a8_sched', NozzleSchedule())
         else:
             self.add_subsystem('afterburner', pyc.Duct())
 
@@ -238,6 +241,11 @@ class MixedFlowTurbofan(pyc.Cycle):
         self.pyc_connect_flow('mixer.Fl_O', 'mixer_duct.Fl_I')
         # Afterburner
         self.pyc_connect_flow('mixer_duct.Fl_O','afterburner.Fl_I')
+
+        self.connect('mixer_duct.Fl_O:tot:T', 'aug_ctrl.Tt_in')
+        self.connect('mixer_duct.Fl_O:stat:MN', 'aug_ctrl.MN_in')
+        self.connect('mixer_duct.Fl_O:tot:gamma', 'aug_ctrl.gamma_in')
+        self.connect('aug_ctrl.dPqP', 'afterburner.dPqP')
 
         # Nozzle
         self.pyc_connect_flow('afterburner.Fl_O','mixed_nozz.Fl_I')
@@ -280,11 +288,6 @@ class MixedFlowTurbofan(pyc.Cycle):
             self.connect('balance.FAR_core', 'burner.Fl_I:FAR')
             self.connect('burner.Fl_O:tot:T', 'balance.lhs:FAR_core')
 
-            if afterburn:
-                balance.add_balance('FAR_ab', eq_units='degR', lower=1e-4, val=.017)
-                self.connect('balance.FAR_ab', 'afterburner.Fl_I:FAR')
-                self.connect('afterburner.Fl_O:tot:T', 'balance.lhs:FAR_ab')
-
             balance.add_balance('hpt_PR', val=2.0, lower=1.001, upper=3.0, eq_units='hp', use_mult=True, mult_val=-1)
             self.connect('balance.hpt_PR', 'hpt.PR')
             self.connect('hp_shaft.pwr_in', 'balance.lhs:hpt_PR')
@@ -302,17 +305,21 @@ class MixedFlowTurbofan(pyc.Cycle):
             self.connect('balance.W', 'fc.W')
             self.connect('mixed_nozz.Throat:stat:area', 'balance.lhs:W')
 
-            if afterburn:
-                # Augmentor nozzle control: A8 opens or closes to hold the fan
-                # on its design operating line, so lighting the afterburner
-                # doesn't back-pressure the gas generator. Dry points take A8
-                # from DESIGN instead (see mp_cycle.py). A separate BalanceComp
-                # because a balance output can't feed its own component.
-                a8 = self.add_subsystem('a8_ctrl', om.BalanceComp())
-                a8.add_balance('A8', units='inch**2', eq_units=None, lower=50., upper=800.,
-                               val=320., rhs_val=pyc.AXI5.defaults['RlineMap'])
-                self.connect('fan.map.RlineMap', 'a8_ctrl.lhs:A8')
-                self.connect('a8_ctrl.A8', 'balance.rhs:W')
+            # Nozzle schedule: the DESIGN throat unlit, opened lit just enough
+            # to pass the hotter flow at the unlit gas-generator state, so
+            # lighting the afterburner doesn't move the fan or the core.
+            self.connect('a8_sched.A8', 'balance.rhs:W')
+            for port, src in (('W_in', 'mixer_duct.Fl_O:stat:W'),
+                              ('W_out', 'afterburner.Fl_O:stat:W'),
+                              ('Tt_in', 'mixer_duct.Fl_O:tot:T'),
+                              ('Tt_out', 'afterburner.Fl_O:tot:T'),
+                              ('R_in', 'mixer_duct.Fl_O:tot:R'),
+                              ('R_out', 'afterburner.Fl_O:tot:R'),
+                              ('gam_in', 'mixer_duct.Fl_O:tot:gamma'),
+                              ('gam_out', 'afterburner.Fl_O:tot:gamma'),
+                              ('dPqP', 'aug_ctrl.dPqP'),
+                              ('dPqP_unlit', 'aug_ctrl.dPqP_unlit')):
+                self.connect(src, f'a8_sched.{port}')
 
             balance.add_balance('BPR', lower=0.1, upper=1.0, val=0.34, eq_units='psi')
             self.connect('balance.BPR', 'splitter.BPR')
@@ -323,10 +330,12 @@ class MixedFlowTurbofan(pyc.Cycle):
             self.connect('balance.FAR_core', 'burner.Fl_I:FAR')
             self.connect('burner.Fl_O:tot:T', 'balance.lhs:FAR_core')
 
-            if afterburn:
-                balance.add_balance('FAR_ab', eq_units='degR', lower=1e-4, upper=.06, val=.017)
-                self.connect('balance.FAR_ab', 'afterburner.Fl_I:FAR')
-                self.connect('afterburner.Fl_O:tot:T', 'balance.lhs:FAR_ab')
+            # Lower bound exactly 0: unlit, aug_ctrl targets the inlet
+            # temperature and the root sits on the bound.
+            balance.add_balance('FAR_ab', eq_units='degR', lower=0., upper=.06, val=0.)
+            self.connect('balance.FAR_ab', 'afterburner.Fl_I:FAR')
+            self.connect('afterburner.Fl_O:tot:T', 'balance.lhs:FAR_ab')
+            self.connect('aug_ctrl.Tt7', 'balance.rhs:FAR_ab')
 
             balance.add_balance('LP_Nmech', val=1., units='rpm', lower=500., eq_units='hp', use_mult=True, mult_val=-1)
             self.connect('balance.LP_Nmech', 'LP_Nmech')

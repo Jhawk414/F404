@@ -64,7 +64,7 @@ def test_default_grid_is_the_committed_envelope():
     assert DEFAULT_DTS == [0., 10., 20., 30., 40., 50.,
                            -10., -20., -30., -40., -50.]
     assert DEFAULT_DRY_POWERS == [3100., 2900., 2700., 2500.]
-    assert DEFAULT_WET_POWERS == [3608., 3408., 3208., 3008.]
+    assert DEFAULT_WET_POWERS == pytest.approx([3598.35, 3398.35, 3198.35, 2998.35])
 
 
 @pytest.mark.parametrize('call', [
@@ -105,7 +105,7 @@ def test_both_modes_sweep_one_problem_and_survive_a_failed_point(tmp_path):
     # --mode both sizes once and sweeps dry then wet on the same problem. The
     # dry grid opens with an unreachable point (800 R is below compressor
     # delivery), so the wet sweep only produces a row if the failure didn't
-    # leave the shared problem broken and the freeze/restore round-tripped.
+    # leave the shared OD point broken: each mode restarts from the SLS state.
     results = run_sweeps('both', alts=[0.], dTs_vals=[0.],
                          dry_powers=[800., 3100.], wet_powers=[3608.],
                          out_dir=tmp_path)

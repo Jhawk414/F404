@@ -17,43 +17,43 @@ OD_BALANCES = {'W', 'BPR', 'FAR_core', 'LP_Nmech', 'HP_Nmech'}
 
 @pytest.fixture
 def cycle():
-    """Build (but don't solve) a cycle at the requested design/afterburn mode."""
-    def build(design=True, afterburn=True):
+    """Build (but don't solve) a DESIGN or off-design cycle."""
+    def build(design=True):
         prob = om.Problem()
-        prob.model = MixedFlowTurbofan(design=design, thermo_method='TABULAR',
-                                       afterburn=afterburn)
+        prob.model = MixedFlowTurbofan(design=design, thermo_method='TABULAR')
         prob.setup()
         return prob.model
     return build
 
 
-# ── Afterburner mode ──────────────────────────────────────────────────────────
+# ── Afterburner ───────────────────────────────────────────────────────────────
 
-def test_dry_mode_uses_a_duct_for_the_afterburner(cycle):
+def test_design_uses_a_duct_for_the_afterburner(cycle):
     """Regression on 51c9bb6.
 
-    A Combustor with no fuel addition is rank-deficient — every output
-    equation collapses to a copy of its input — which crashes the OD linear
-    solve at part-power dry conditions. Dry mode has to substitute a Duct,
-    not a zero-FAR Combustor.
+    A Combustor with its FAR *fixed* at zero is rank-deficient — every output
+    equation collapses to a copy of its input — which crashed the OD linear
+    solve at part-power dry conditions. DESIGN never lights, so it keeps a
+    Duct; the OD Combustor gets a FAR_ab balance with a zero lower bound.
     """
-    model = cycle(afterburn=False)
+    model = cycle(design=True)
 
     assert isinstance(model._get_subsystem('afterburner'), pyc.Duct)
 
 
-def test_wet_mode_uses_a_combustor_for_the_afterburner(cycle):
-    model = cycle(afterburn=True)
+def test_off_design_uses_a_combustor_for_the_afterburner(cycle):
+    # One OD topology from dry to max AB (ADR-0002): unlit, the same
+    # Combustor burns no fuel.
+    model = cycle(design=False)
 
     assert isinstance(model._get_subsystem('afterburner'), pyc.Combustor)
 
 
-@pytest.mark.parametrize('afterburn, n_burners', [(False, 1), (True, 2)])
-def test_performance_counts_only_the_burners_that_burn(cycle, afterburn,
-                                                       n_burners):
-    # Dry mode's Duct produces no Wfuel, so a Performance expecting two fuel
+@pytest.mark.parametrize('design, n_burners', [(True, 1), (False, 2)])
+def test_performance_counts_only_the_burners_that_burn(cycle, design, n_burners):
+    # DESIGN's Duct produces no Wfuel, so a Performance expecting two fuel
     # flows would be left with an unconnected input.
-    model = cycle(afterburn=afterburn)
+    model = cycle(design=design)
 
     assert model._get_subsystem('perf').options['num_burners'] == n_burners
 
@@ -61,37 +61,43 @@ def test_performance_counts_only_the_burners_that_burn(cycle, afterburn,
 # ── Balance sets ──────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize('design, expected', [(True, DESIGN_BALANCES),
-                                              (False, OD_BALANCES)])
+                                              (False, OD_BALANCES | {'FAR_ab'})])
 def test_balance_set_matches_the_point_type(cycle, design, expected):
     # At DESIGN the turbine pressure ratios are solved and the spool speeds
     # are given; off-design it is the other way round. Mixing the two up
     # produces a model that is over- or under-determined.
-    model = cycle(design=design, afterburn=False)
+    model = cycle(design=design)
 
     assert set(model._get_subsystem('balance')._state_vars) == expected
 
 
+def test_far_ab_balance_reaches_zero_and_targets_the_augmentor_command(cycle):
+    # Unlit, aug_ctrl targets the augmentor inlet temperature, and the root
+    # is FAR_ab = 0 exactly, on the bound.
+    model = cycle(design=False)
+    meta = model._get_subsystem('balance')._var_rel2meta['FAR_ab']
+
+    assert float(meta['lower']) == 0.
+    assert model._conn_global_abs_in2out['balance.rhs:FAR_ab'] == 'aug_ctrl.Tt7'
+
+
 @pytest.mark.parametrize('design', [True, False])
-def test_far_ab_balance_exists_only_in_wet_mode(cycle, design):
-    # The balance is structural and can't be toggled after setup, which is
-    # why dry and wet run on separate OD points of the one problem.
-    wet = cycle(design=design, afterburn=True)
-    dry = cycle(design=design, afterburn=False)
+def test_both_points_take_the_augmentor_loss_from_aug_ctrl(cycle, design):
+    model = cycle(design=design)
 
-    assert 'FAR_ab' in wet._get_subsystem('balance')._state_vars
-    assert 'FAR_ab' not in dry._get_subsystem('balance')._state_vars
+    assert model._conn_global_abs_in2out['afterburner.p_loss.dPqP'] == 'aug_ctrl.dPqP'
 
 
-@pytest.mark.parametrize('design, afterburn, expected', [
-    (False, True, True), (False, False, False), (True, True, False),
-])
-def test_only_a_wet_off_design_point_controls_the_nozzle_throat(
-        cycle, design, afterburn, expected):
-    # DESIGN computes A8 and dry OD inherits it; only the wet point solves
-    # its own, holding the fan on its design operating line.
-    model = cycle(design=design, afterburn=afterburn)
+@pytest.mark.parametrize('design, expected', [(False, True), (True, False)])
+def test_only_off_design_schedules_the_nozzle_throat(cycle, design, expected):
+    # DESIGN computes A8. OD scales it explicitly, with no Newton state.
+    model = cycle(design=design)
+    names = {s.name for s in model._subsystems_myproc}
 
-    assert ('a8_ctrl' in {s.name for s in model._subsystems_myproc}) is expected
+    assert ('a8_sched' in names) is expected
+    assert 'a8_ctrl' not in names
+    if not design:
+        assert model._conn_global_abs_in2out['balance.rhs:W'] == 'a8_sched.A8'
 
 
 # ── Augmentor control and nozzle schedule ─────────────────────────────────────

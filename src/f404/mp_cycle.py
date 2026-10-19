@@ -2,26 +2,31 @@ import pycycle.api as pyc
 
 from f404.engine_model import MixedFlowTurbofan
 
+# Augmentor pressure loss, dPqP = q * (AB_CD + AB_ETA * (Tt7/Tt6 - 1)), with q
+# the dynamic head over Pt at the flameholder approach Mach AB_K_M * MN6
+# (Kumar 1980, Eq. 13; #33). Literature constants: the RM12 rig's approach
+# Mach is ~0.22 against MN6 = 0.446 here; C_D 0.6-0.7 at 29-31% blockage;
+# eta = 1 is small-Mach Rayleigh. The cold part (~2.1%) also applies to the
+# DESIGN Duct, so it is in the sizing. See docs/adr/0002-single-od-topology.md.
+AB_K_M = 0.5
+AB_CD = 0.65
+AB_ETA = 1.0
+
 
 class MPMixedFlowTurbofan(pyc.MPCycle):
-    """One sized engine, operated dry and wet.
+    """One sized engine and one off-design point for every power setting.
 
     DESIGN sizes the engine at dry mil power, with the afterburner as a Duct.
-    Two off-design points run on that geometry: ``OD_dry`` (Duct) and
-    ``OD_wet`` (Combustor, with A8 held by a nozzle control law). The dry
-    points use a Duct rather than an unlit Combustor: a zero-fuel Combustor
-    has hit Jacobian conditioning failures here before, and it would carry a
-    FAR_ab state with nothing to do in dry mode. (An always-live FAR_ab
-    balance with a zero lower bound did run cleanly in ADR-0001's study, so
-    this is a choice, not a hard limit.) A sweep drives one point and freezes
-    the other (see ``SweepRunner``). ``od_pts`` maps mode to point name.
+    ``OD`` runs on that geometry with the afterburner as a Combustor whose
+    commanded Tt7 (``aug_ctrl.Tt7_cmd``) selects the regime: 0, or anything
+    at or below the augmentor inlet temperature, is dry. See ADR-0002.
     """
 
-    od_pts = {'dry': 'OD_dry', 'wet': 'OD_wet'}
+    od_pt = 'OD'
 
     def setup(self):
         # Create design instance of model — dry mil sizes the gas generator
-        self.pyc_add_pnt('DESIGN', MixedFlowTurbofan(design=True, thermo_method='TABULAR', afterburn=False))
+        self.pyc_add_pnt('DESIGN', MixedFlowTurbofan(design=True, thermo_method='TABULAR'))
 
         # BPR balance drives mixer.ER (= Pt_core/Pt_bypass) to 1.0 — equal total
         # pressures at mixer inlet. The actual BPR falls out of the thermodynamics.
@@ -47,11 +52,6 @@ class MPMixedFlowTurbofan(pyc.MPCycle):
         self.set_input_defaults('DESIGN.LP_Nmech', 10000, units='rpm')
         self.set_input_defaults('DESIGN.HP_Nmech', 14000, units='rpm')
 
-        # Augmentor hot (Rayleigh + flameholder) pressure loss, from upstream
-        # pyCycle's mixedflow_turbofan example. Wet only: the dry points'
-        # afterburner Duct stays lossless, so the dry deck is unchanged.
-        self.set_input_defaults(self.od_pts['wet'] + '.afterburner.dPqP', 0.054)
-
         # Cycle parameters shared across all points
         self.pyc_add_cycle_param('hp_shaft.HPX', 250, units='hp')
         self.pyc_add_cycle_param('inlet.ram_recovery', 0.9990)
@@ -63,7 +63,9 @@ class MPMixedFlowTurbofan(pyc.MPCycle):
         self.pyc_add_cycle_param('lpt_duct.dPqP', 0.0107)
         self.pyc_add_cycle_param('bypass_duct.dPqP', 0.015) #0.0107
         self.pyc_add_cycle_param('mixer_duct.dPqP', 0.0107)
-        #self.pyc_add_cycle_param('afterburner.dPqP', 0.0540)
+        self.pyc_add_cycle_param('aug_ctrl.k_M', AB_K_M)
+        self.pyc_add_cycle_param('aug_ctrl.CD', AB_CD)
+        self.pyc_add_cycle_param('aug_ctrl.eta', AB_ETA)
         #self.pyc_add_cycle_param('mixed_nozz.Cfg', 0.9933)
         self.pyc_add_cycle_param('hpc.cool1:frac_W', 0.050708) #0.050708
         self.pyc_add_cycle_param('hpc.cool1:frac_P', 0.5)
@@ -73,10 +75,8 @@ class MPMixedFlowTurbofan(pyc.MPCycle):
         self.pyc_add_cycle_param('hpt.cool3:frac_P', 1.0)
         self.pyc_add_cycle_param('lpt.cool1:frac_P', 1.0)
 
-        # Off-design points — conditions set by the calling script via prob.set_val()
-        for mode, pt in self.od_pts.items():
-            self.pyc_add_pnt(pt, MixedFlowTurbofan(design=False, thermo_method='TABULAR',
-                                                   afterburn=(mode == 'wet')))
+        # Off-design point — conditions set by the calling script via prob.set_val()
+        self.pyc_add_pnt(self.od_pt, MixedFlowTurbofan(design=False, thermo_method='TABULAR'))
 
         # Map scalars: transfer design compressor/turbine map scaling to OD
         self.pyc_connect_des_od('fan.s_PR', 'fan.s_PR')
@@ -99,8 +99,8 @@ class MPMixedFlowTurbofan(pyc.MPCycle):
         self.pyc_connect_des_od('lpt.s_eff', 'lpt.s_eff')
         self.pyc_connect_des_od('lpt.s_Np', 'lpt.s_Np')
 
-        # Nozzle throat: dry runs the DESIGN A8; wet sets its own (engine_model.py)
-        self.connect('DESIGN.mixed_nozz.Throat:stat:area', self.od_pts['dry'] + '.balance.rhs:W')
+        # Nozzle throat: OD scales the DESIGN A8 (engine_model.NozzleSchedule)
+        self.connect('DESIGN.mixed_nozz.Throat:stat:area', self.od_pt + '.a8_sched.A8_dsn')
 
         # Flow areas: transfer design station areas to OD
         self.pyc_connect_des_od('inlet.Fl_O:stat:area', 'inlet.area')

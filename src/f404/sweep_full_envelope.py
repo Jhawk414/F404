@@ -1,18 +1,18 @@
 """
 Full-envelope cycle deck builder for the F404 mixed-flow turbofan.
 
-Sizes one engine (DESIGN at SLS dry mil) and sweeps it in two modes, each on
-its own off-design point of the same om.Problem.
+Sizes one engine (DESIGN at SLS dry mil) and sweeps it in two modes on the
+one off-design point of the same om.Problem.
 
-Dry sweep (OD_dry)
-------------------
-  - afterburner is a Duct; 'power' in sweep points = Tt4 target (degR)
+Dry sweep
+---------
+  - afterburner unlit (Tt7 command 0); 'power' in sweep points = Tt4 target (degR)
 
-Wet sweep (OD_wet)
-------------------
+Wet sweep
+---------
   - FAR_ab balance drives T7 to target; 'power' in sweep points = Tt7 (degR)
   - Tt4 is fixed at mil power (mil_Tt4) for the entire wet sweep
-  - A8 is set by the nozzle control law (fan held on its design operating line)
+  - A8 is set by the nozzle schedule (gas generator held where dry put it)
   - Thrust is an output, not a target
 
 Usage (see f404.cli for the full flag set):
@@ -107,10 +107,8 @@ def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.', built=None):
     sweep_pts = build_snake_sweep(alts, dTs_vals, powers)
     print(f"\n{mode.capitalize()} sweep matrix: {len(sweep_pts)} points")
 
-    frozen = [pt for m, pt in mp.od_pts.items() if m != mode]
-    runner = SweepRunner(prob, od_pt=mp.od_pts[mode], mach=MACH,
-                         afterburn=(mode == 'wet'), mil_Tt4=mil_Tt4,
-                         frozen_pts=frozen)
+    runner = SweepRunner(prob, od_pt=mp.od_pt, mach=MACH,
+                         afterburn=(mode == 'wet'), mil_Tt4=mil_Tt4)
     df = runner.run_sweep(
         sweep_pts,
         bridge_threshold=BRIDGE_THRESHOLD,
@@ -138,9 +136,15 @@ def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
 
     st_total = time.time()
     built = build_problem()
+    prob, mp = built
+    # Both modes run on the one OD point, so each starts from the SLS max-AB
+    # solution build_problem() left, not from where the previous sweep ended.
+    od_states = prob.model._get_subsystem(mp.od_pt)._outputs.asarray()
+    anchor = od_states.copy()
     results, attempted = {}, {}
     for m, powers in (('dry', dry_powers), ('wet', wet_powers)):
         if mode in (m, 'both'):
+            od_states[:] = anchor
             results[m], attempted[m] = run_mode_sweep(
                 m, alts, dTs_vals, powers, out_dir, built)
 
