@@ -2,8 +2,7 @@
 
 The yardstick for spikes and PR proof: run a sweep on two versions of the
 model, then compare the decks. Rows are matched on (alt, dTs, throttle), where
-throttle is T4 in a dry deck and T7 in a wet deck, each rounded to 1 degR, so
-a solve that lands within tolerance of its target still matches.
+throttle is T4 in a dry deck and T7 in a wet deck (see ``_keyed``).
 """
 import numpy as np
 import pandas as pd
@@ -34,12 +33,30 @@ def _mode(df, label):
     return 'wet' if df['FAR_ab'].max() > 1e-6 else 'dry'
 
 
-def _keyed(df, mode):
+def _keyed(df, mode, label):
+    """Index a deck by (alt, dTs, throttle).
+
+    alt and dTs are sweep inputs, so they are matched at 1e-6 and a fractional
+    grid stays distinct. The throttle is a solved T4 or T7 that can land a few
+    thousandths of a degree off its target, so it is matched to 1 R. A grid
+    finer than that collapses two points onto one key, which is an error, not
+    a silent pairing.
+    """
     out = df.copy()
-    out['throttle'] = out['T7' if mode == 'wet' else 'T4']
-    for col in _KEY:
-        out[col] = out[col].round().astype(int)
+    out['throttle'] = out['T7' if mode == 'wet' else 'T4'].round()
+    out['alt'] = out['alt'].round(6)
+    out['dTs'] = out['dTs'].round(6)
+    dup = out.duplicated(_KEY, keep=False)
+    if dup.any():
+        keys = sorted({_point(k) for k in out.loc[dup, _KEY].itertuples(index=False)})
+        raise ValueError(f"{label} deck has more than one row at (alt, dTs, throttle) "
+                         f"{keys}; throttle is matched to 1 R")
     return out.set_index(_KEY).sort_index()
+
+
+def _point(key):
+    """A key as plain numbers: ints where integral, for readable output."""
+    return tuple(int(v) if float(v).is_integer() else float(v) for v in key)
 
 
 def compare_decks(base, new, columns=None):
@@ -55,7 +72,8 @@ def compare_decks(base, new, columns=None):
     Raises
     ------
     ValueError
-        If either deck mixes modes, or the two decks are different modes.
+        If either deck mixes modes, the two decks are different modes, or a
+        deck has two rows on one (alt, dTs, throttle) key.
 
     Returns
     -------
@@ -69,7 +87,7 @@ def compare_decks(base, new, columns=None):
     if _mode(new, 'NEW') != mode:
         raise ValueError(f"BASE is a {mode} deck and NEW is a {_mode(new, 'NEW')} "
                          f"deck; their throttles (T4 vs T7) are different points")
-    b, n = _keyed(base, mode), _keyed(new, mode)
+    b, n = _keyed(base, mode, 'BASE'), _keyed(new, mode, 'NEW')
     common = b.index.intersection(n.index)
     only_base = b.index.difference(n.index).tolist()
     only_new = n.index.difference(b.index).tolist()
@@ -95,9 +113,9 @@ def compare_decks(base, new, columns=None):
         rows.append({'column': col, 'kind': kind,
                      'min': np.nanmin(diff), 'max': np.nanmax(diff),
                      'max_abs': abs(diff[i]),
-                     'worst': tuple(int(v) for v in common[i])})
+                     'worst': _point(common[i])})
     table = pd.DataFrame(rows, columns=['column', 'kind', 'min', 'max', 'max_abs', 'worst'])
-    return table, [tuple(map(int, k)) for k in only_base], [tuple(map(int, k)) for k in only_new]
+    return table, [_point(k) for k in only_base], [_point(k) for k in only_new]
 
 
 def format_report(table, only_base, only_new, n_base, n_new, changed_only=False):

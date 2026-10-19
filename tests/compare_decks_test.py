@@ -100,3 +100,30 @@ def test_a_mixed_mode_deck_is_rejected():
 
     with pytest.raises(ValueError, match="BASE deck holds modes"):
         compare_decks(mixed, deck('dry'))
+
+
+def test_a_fractional_dts_grid_keeps_its_points_distinct():
+    # --dts 0,0.25,0.25 is a supported sweep; rounding dTs to 1 R merged them.
+    frac = dict(alt=[0., 0.], dTs=[0., 0.25], T4=[3100., 3100.])
+    table, only_base, only_new = compare_decks(
+        deck('dry', **frac), deck('dry', Fn=[11000., 9900.], **frac))
+
+    assert only_base == only_new == []
+    assert row(table, 'Fn')['worst'] == (0, 0.25, 3100)
+
+
+def test_row_order_does_not_change_the_result():
+    new = deck('dry', Fn=[11110., 9000.])
+
+    forward, _, _ = compare_decks(deck('dry'), new)
+    reversed_, _, _ = compare_decks(deck('dry'), new.iloc[::-1])
+
+    pd.testing.assert_frame_equal(forward, reversed_)
+
+
+def test_two_rows_on_one_key_are_rejected():
+    # A throttle grid finer than the 1 R match would pair arbitrary rows.
+    crowded = deck('dry', alt=[0., 0.], dTs=[0., 0.], T4=[3100.2, 3099.9])
+
+    with pytest.raises(ValueError, match=r"NEW deck has more than one row .*\(0, 0, 3100\)"):
+        compare_decks(deck('dry'), crowded)
