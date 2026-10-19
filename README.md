@@ -45,8 +45,8 @@ vendored upstream `pycycle` library at the repo root (see
 
 | Path | Role |
 |---|---|
-| `src/f404/engine_model.py` | `MixedFlowTurbofan(pyc.Cycle)`: single-point thermodynamic cycle (fan, HPC, burner, HPT/LPT, mixer, afterburner, nozzle) |
-| `src/f404/mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: one DESIGN point (dry mil) feeding two off-design points, `OD_dry` and `OD_wet`, with map scalars and station areas |
+| `src/f404/engine_model.py` | `MixedFlowTurbofan(pyc.Cycle)`: single-point thermodynamic cycle (fan, HPC, burner, HPT/LPT, mixer, afterburner, nozzle), plus `AugmentorControl` (afterburner command and pressure loss) and `NozzleSchedule` (A8) |
+| `src/f404/mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: one DESIGN point (dry mil) feeding one off-design point, `OD`, for dry and wet alike, with map scalars, station areas and the nozzle throat; the augmentor-loss constants |
 | `src/f404/problems.py` | `build_problem()`: design targets, the max-AB calibration, initial guesses and input validation |
 | `src/f404/sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner`, result extraction |
 | `src/f404/cli.py` | `f404` command line: `sweep` and `design` subcommands, `min,max,step` range parsing and validation |
@@ -72,8 +72,8 @@ Key cycle components and mechanical couplings:
 - **Low Pressure (LP) Spool**: 3-stage fan driven by the single-stage LP turbine via `lp_shaft` (10,000 rpm).
 - **High Pressure (HP) Spool**: 7-stage HP compressor driven by the single-stage HP turbine via `hp_shaft` (14,000 rpm, 250 hp customer power extraction).
 - **Cooling Bleeds**: HPC interstage bleed (`cool1`, 5.07% flow) cools the LPT; compressor discharge bleed (`cool3`, 11.0% flow) cools the HPT.
-- **Mixed Exhaust & Augmentor**: Core flow and bypass flow mix in a confluent mixer, then pass through the afterburner duct and expand through a variable convergent-divergent nozzle (`mixed_nozz`). The afterburner is an active combustor in wet mode, with a 5.4% hot pressure loss, and a lossless pass-through in dry mode.
-- **One engine, two modes**: the engine is sized once, at SLS dry mil (11,000 lbf, Tt4 3100 R). Dry points run the DESIGN nozzle throat (A8). Wet points open A8 to hold the fan on its design operating line, so lighting the afterburner leaves the gas generator where dry mil put it. Max AB is Tt7 3608 R, calibrated to 17,700 lbf SLS. See [ADR-0001](docs/adr/0001-single-engine-sizing.md) for the trade study behind this.
+- **Mixed Exhaust & Augmentor**: Core flow and bypass flow mix in a confluent mixer, then pass through the afterburner and expand through a variable convergent-divergent nozzle (`mixed_nozz`). Off-design, the afterburner is always a combustor: a commanded Tt7 at or below its inlet temperature (0 included) is dry, with zero fuel. Its pressure loss is a flameholder drag loss (2.1%, dry and wet, also in the DESIGN sizing) plus a Rayleigh loss that grows with heat addition (6.6% in total at SLS max AB), after Kumar (1980) ([#33](https://github.com/Jhawk414/F404/issues/33)).
+- **One engine, two modes**: the engine is sized once, at SLS dry mil (11,000 lbf, Tt4 3100 R). Dry and wet run on one off-design point. When dry, it uses the DESIGN nozzle throat (A8). When wet, A8 opens by choked-throat continuity, just enough to pass the hotter flow, so the gas generator stays within about 0.25% BPR of where dry put it at that flight condition ([#8](https://github.com/Jhawk414/F404/issues/8), wet half). Max AB is Tt7 3598.35 R, calibrated to 17,700 lbf SLS. See [ADR-0001](docs/adr/0001-single-engine-sizing.md) for the sizing and [ADR-0002](docs/adr/0002-single-od-topology.md) for the single OD topology, the loss and the A8 law.
 
 ## Software architecture and data flow
 
@@ -88,7 +88,7 @@ flowchart TD
 
     subgraph Model["Cycle model"]
         B["problems.py<br/>build_problem<br/>targets, calibration, guesses, validation"]
-        C["mp_cycle.py<br/>MPMixedFlowTurbofan(pyc.MPCycle)<br/>wires DESIGN + OD_dry + OD_wet"]
+        C["mp_cycle.py<br/>MPMixedFlowTurbofan(pyc.MPCycle)<br/>wires DESIGN + OD"]
         D["engine_model.py<br/>MixedFlowTurbofan(pyc.Cycle)<br/>single-point thermodynamic cycle"]
     end
 
@@ -112,15 +112,16 @@ flowchart TD
     E --> G
 ```
 
-`mp_cycle.py` instantiates `MixedFlowTurbofan` three times:
+`mp_cycle.py` instantiates `MixedFlowTurbofan` twice:
 
-- with `design=True`: the DESIGN point, solved once to size the engine;
-- with `design=False` and `afterburn=False`: `OD_dry`;
-- with `design=False` and `afterburn=True`: `OD_wet`.
+- with `design=True`: the DESIGN point, solved once to size the engine, with
+  the afterburner as a duct;
+- with `design=False`: `OD`, with the afterburner as a combustor.
 
-It passes converged map scalars and station areas from DESIGN into both OD
-points, so off-design calculations use the one sized engine geometry. A sweep
-re-solves the OD point for its mode at each condition and freezes the other.
+It passes converged map scalars, station areas and the nozzle throat from
+DESIGN into `OD`, so off-design calculations use the one sized engine
+geometry. `aug_ctrl.Tt7_cmd` sets the mode: a dry sweep holds it at 0 and
+throttles Tt4, and a wet sweep holds Tt4 at mil and throttles Tt7.
 
 ## Installation
 
@@ -145,7 +146,7 @@ and needs no install beyond the package being importable.
 f404 sweep                      # dry + wet, default grid, decks in the cwd
 f404 sweep --mode wet           # one mode only
 f404 sweep --alt 0 --dts -20,20,10   # one altitude, a dTs range
-f404 design                     # solve and print DESIGN, OD_dry and OD_wet
+f404 design                     # solve and print DESIGN, and OD at mil and max AB
 f404 compare old.csv new.csv    # % change of every deck column, new vs old
 f404 --help                     # and `f404 sweep --help`, `f404 design --help`
                                 # (rich panels; plain argparse text for usage errors)
@@ -163,7 +164,7 @@ grid is the default one below, so the output matches earlier decks.
 | `--mode {dry,wet,both}` | afterburner mode | `both` |
 | `--alt MIN,MAX,STEP` | altitude, ft | `0,5000,2500` |
 | `--dts MIN,MAX,STEP` | ISA temperature offset, R | `-50,50,10` |
-| `--throttle MIN,MAX,STEP` | Tt4 (dry) or Tt7 (wet), R | `2500,3100,200` dry, `3008,3608,200` wet |
+| `--throttle MIN,MAX,STEP` | Tt4 (dry) or Tt7 (wet), R | `2500,3100,200` dry, `2998.35,3598.35,200` wet |
 | `--out DIR` | deck directory, created if missing | `.` |
 
 ```bash
@@ -172,8 +173,9 @@ f404 sweep --mode wet --alt 0,10000,2500 --dts 0,20,10 \
            --throttle 3008,3608,200 --out /tmp/run1
 ```
 
-`--throttle` is shown here at its wet default for completeness; leave it off
-to get the same T7 values.
+The wet default is 3598.35 → 2998.35 R, stepping down from the calibrated
+max AB. The example's round-number grid is the one decks before ADR-0002
+used, which keeps `f404 compare` against those decks matched point for point.
 
 - Each range is one `min,max,step` triple, inclusive of `max`, bare or
   bracketed (`--alt [0,10000,1000]`). The order is fixed.
@@ -199,8 +201,8 @@ evenly (so the sweep would silently stop short of `max`), an unusable
 
 ### `f404 design`
 
-Sizes the engine and prints the DESIGN, `OD_dry` (mil) and `OD_wet` (max AB)
-result tables at sea-level static, without sweeping. There is one engine, so
+Sizes the engine and prints the DESIGN result tables, then those of `OD` at
+mil (dry) and at max AB at sea-level static, without sweeping. There is one engine, so
 there is no `--mode`. Three flags override the targets:
 
 - `--fn-target`: dry mil sizing thrust.
@@ -255,7 +257,7 @@ tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-207 tests (172 fast), 97% coverage. The driver and
+216 tests (178 fast), 97% coverage. The driver and
 CLI are importable and covered; what remains uncovered is mostly
 `sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 
@@ -267,8 +269,8 @@ alt ∈ {0, 2500, 5000} ft, dTs ∈ {0, ±10, ±20, ±30, ±40, ±50} R, static
 
 | Mode | Converged | Throttle sweep |
 |---|---|---|
-| Dry | 118 / 132 | Tt4 3100 → 2500 R |
-| Wet | 100 / 132 | Tt7 3608 → 3008 R (Tt4 fixed at 3100 R MIL) |
+| Dry | 120 / 132 | Tt4 3100 → 2500 R |
+| Wet | 95 / 132 | Tt7 3598.35 → 2998.35 R (Tt4 fixed at 3100 R MIL) |
 
 Decks: [`deck/cycle_deck_dry.csv`](deck/cycle_deck_dry.csv),
 [`deck/cycle_deck_wet.csv`](deck/cycle_deck_wet.csv). Every value is written
@@ -280,17 +282,19 @@ augmentor inlet state and loss, and the nozzle inlet and exit states.
 Where the failures are, tracked in
 [issue #3](https://github.com/Jhawk414/F404/issues/3):
 
-- **Wet:** every point with dTs ≥ 0 R converges; all failures are on the cold
-  (dTs < 0 R) side, worst at altitude.
-- **Dry:** 67 of the 72 non-cold points converge. Five hot-day, low-power
-  points fail at Tt4 = 2500 R: dTs +40 and +50 R at 0 and 2500 ft, and
-  +50 R at 5000 ft. The rest of the dry failures are on the cold side.
-
-- **Wet** rose from 89/132 when the wet A8 stopped being frozen at its DESIGN
-  value ([ADR-0001](docs/adr/0001-single-engine-sizing.md)).
-- **Dry** has measured 118/132 on every run since PR #19, including a clean
-  reinstall. The 125/132 in earlier notes is not reproducible on the current
-  OpenMDAO.
+- **Dry:** 69 of the 72 non-cold points converge. Three hot-day, low-power
+  points fail at Tt4 = 2500 R: dTs +40 and +50 R at 0 ft and +50 R at
+  2500 ft. The other nine failures are all at mil (Tt4 3100 R) on the cold
+  side: dTs ≤ −40 R at 0 ft, ≤ −30 R at 2500 ft and ≤ −20 R at 5000 ft.
+- **Wet:** every point with dTs ≥ 0 R converges. Wet now fails at exactly the
+  conditions where dry mil fails, plus one point (2500 ft, −20 R, 3398 R).
+  The A8 law holds the wet gas generator at the dry-mil operating point, so
+  the two modes share one cold-corner problem.
+- The counts moved with ADR-0002, from 118 dry / 100 wet. Both shifts are
+  warm-start path effects at marginal points: a 12-point hot-day probe
+  converged 12/12 with each model change on its own. The wet cold corner
+  converged before only because the old Rline-2.0 hold moved the gas
+  generator off the dry-mil operating point.
 
 ## Roadmap
 
@@ -316,6 +320,11 @@ Done:
       points, wet A8 control law, max AB calibrated to 17,700 lbf
       ([#2](https://github.com/Jhawk414/F404/issues/2),
       [ADR-0001](docs/adr/0001-single-engine-sizing.md))
+- [x] One OD point from dry to max AB, a closed-form augmentor loss
+      ([#33](https://github.com/Jhawk414/F404/issues/33)) and a
+      choked-continuity wet A8 schedule
+      ([#8](https://github.com/Jhawk414/F404/issues/8), wet half;
+      [ADR-0002](docs/adr/0002-single-od-topology.md))
 - [x] `src/` restructure: F404 app code separated from the vendored pyCycle
       library, now the `f404` package under `src/f404/`
       ([#4](https://github.com/Jhawk414/F404/issues/4))
@@ -342,8 +351,8 @@ order:
       ([#27](https://github.com/Jhawk414/F404/issues/27))
 - [ ] Pydantic models for design-point inputs, sweep points and the
       duplicated OD bounds table ([#17](https://github.com/Jhawk414/F404/issues/17))
-- [ ] PLA/T7-scheduled nozzle throat area
-      ([#8](https://github.com/Jhawk414/F404/issues/8)), together with
+- [ ] Dry (part-power) nozzle throat schedule
+      ([#8](https://github.com/Jhawk414/F404/issues/8), dry half), together with
       defining idle and calibrating the dry part-power end against the
       published data ([#25](https://github.com/Jhawk414/F404/issues/25))
 - [ ] Resolve remaining cold/high-alt/max-AB Newton convergence failures

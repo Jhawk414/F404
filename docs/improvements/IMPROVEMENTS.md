@@ -334,7 +334,8 @@ Shape of the change:
   fitted to TN D-6839 Fig. 6 and the NASA RMs.
 - Decide between changing the vendored `pycycle/` `Combustor` and adding an
   F404 wrapper element, given that #6 keeps `pycycle/` synced with upstream.
-- Re-calibrate max AB after it lands, together with #33's loss model. Add
+- Re-calibrate max AB (`MAX_Tt7`) after it lands. #33's loss model is in
+  (ADR-0002), and max AB was last calibrated with it at 3598.35 R. Add
   efficiency columns to the deck so `f404 compare` shows the effect.
 - Related: TN D-6839 puts the TF30 pilot zone's lean limit near f/a 0.006 on
   unburned air, about FAR_ab 0.005 as the model defines it. That is a
