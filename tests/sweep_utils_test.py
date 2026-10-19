@@ -14,9 +14,7 @@ from f404.sweep_utils import (
     DECK_COLUMNS,
     SweepConfigurationError,
     _BOUND_TOL_FRAC,
-    _FROZEN_NEWTON,
     _OD_BOUNDS,
-    _OD_WET_BOUNDS,
     _TARGET_TOL_DEGR,
     SweepRunner,
     _scalar,
@@ -36,7 +34,6 @@ CLEAN_STATE = {
     f'{OD}.balance.FAR_ab':   0.035,
     f'{OD}.balance.LP_Nmech': 10000.,
     f'{OD}.balance.HP_Nmech': 14000.,
-    f'{OD}.a8_ctrl.A8':       320.,
 }
 
 
@@ -164,32 +161,17 @@ def test_extract_od_results_derives_opr_from_the_two_compressors():
     assert row['OPR'] == pytest.approx(4.1 * 6.5)
 
 
-def test_extract_od_results_reports_zero_augmentor_fuel_in_dry_mode():
-    # Dry mode has no FAR_ab balance and a Duct for an afterburner, so both
-    # reads would raise; the columns are filled in as literal zeros to keep
-    # the deck schema identical between modes.
-    state = _results_state()
-    del state[f'{OD}.balance.FAR_ab']
-    del state[f'{OD}.afterburner.Wfuel']
-
-    row = extract_od_results(StubProblem(state), OD, afterburn=False)
-
-    assert row['FAR_ab'] == 0.0
-    assert row['Wf_ab'] == 0.0
-
-
 def test_extract_od_results_reports_fuel_flows_and_nozzle_throat():
     row = extract_od_results(StubProblem(_results_state()), OD)
 
     assert (row['Wf_core'], row['Wf_ab'], row['A8']) == (2.42, 4.1, 380.)
 
 
-def test_extract_od_results_schema_matches_between_modes():
-    dry = extract_od_results(StubProblem(_results_state()), OD, afterburn=False)
-    wet = extract_od_results(StubProblem(_results_state()), OD, afterburn=True)
+def test_extract_od_results_follows_the_deck_schema():
+    row = extract_od_results(StubProblem(_results_state()), OD)
 
-    assert list(dry) == list(wet) == list(DECK_COLUMNS)
-    assert all(type(v) is float for v in wet.values())
+    assert list(row) == list(DECK_COLUMNS)
+    assert all(type(v) is float for v in row.values())
 
 
 def test_deck_keeps_the_original_columns_first_and_in_order():
@@ -224,12 +206,14 @@ def test_saturated_state_is_flagged(state_var, value):
     assert runner(state)._state_at_bounds() is True
 
 
-def test_far_ab_saturation_is_ignored_in_dry_mode():
-    # Dry mode builds no FAR_ab balance, so a stale value at that bound is
-    # not evidence of anything.
-    state = dict(CLEAN_STATE, **{f'{OD}.balance.FAR_ab': 0.0599})
+@pytest.mark.parametrize('afterburn', [False, True])
+def test_far_ab_on_its_zero_lower_bound_is_the_dry_solution(afterburn):
+    # When dry, the FAR_ab root sits on its lower bound of exactly 0. That is
+    # not saturation. A wet point pinned there misses its Tt7 target instead,
+    # and _target_met catches it.
+    state = dict(CLEAN_STATE, **{f'{OD}.balance.FAR_ab': 0.})
 
-    assert runner(state, afterburn=False)._state_at_bounds() is False
+    assert runner(state, afterburn=afterburn)._state_at_bounds() is False
 
 
 def test_an_unreadable_state_is_an_error_not_a_free_pass():
@@ -315,14 +299,16 @@ def test_od_bounds_table_matches_the_bounds_the_model_declares(problem):
         # OpenMDAO stores bounds as length-1 arrays.
         return None if bound is None else _scalar(bound)
 
-    expected = dict(_OD_BOUNDS, **_OD_WET_BOUNDS)
-    for key, (lo, hi) in expected.items():
+    for key, (lo, hi) in _OD_BOUNDS.items():
         comp, var = key.split('.', 1)
-        owner = prob.model._get_subsystem(f"{mp.od_pts['wet']}.{comp}")
+        owner = prob.model._get_subsystem(f"{mp.od_pt}.{comp}")
         meta = owner._var_rel2meta[var]
         declared_lo = scalar(meta['lower'])
         declared_hi = scalar(meta['upper'])
 
+        # None for FAR_ab's lower bound means "not checked", not "unbounded".
+        if lo is None:
+            declared_lo = None
         assert (declared_lo, declared_hi) == (lo, hi), (
             f"{key}: engine_model.py declares ({declared_lo}, {declared_hi}) "
             f"but sweep_utils._OD_BOUNDS says ({lo}, {hi})"
@@ -332,8 +318,8 @@ def test_od_bounds_table_matches_the_bounds_the_model_declares(problem):
 # ── End to end ────────────────────────────────────────────────────────────────
 
 def dry_point(mp):
-    """SweepRunner kwargs that drive OD_dry and freeze OD_wet."""
-    return dict(od_pt=mp.od_pts['dry'], frozen_pts=[mp.od_pts['wet']])
+    """SweepRunner kwargs that drive the OD point dry."""
+    return dict(od_pt=mp.od_pt)
 
 
 @pytest.mark.slow
@@ -356,8 +342,11 @@ def test_a_short_dry_sweep_converges_and_returns_a_deck_frame():
     assert list(deck['dTs']) == [0., 10., 20.]
     # Every row carries the full schema, and the guards passed on each.
     assert set(deck.columns) == set(
-        extract_od_results(prob, mp.od_pts['dry'], afterburn=False))
+        extract_od_results(prob, mp.od_pt))
     assert (deck['T4'] - 3100.).abs().max() <= _TARGET_TOL_DEGR
+    # build_problem() leaves OD at max AB; a dry sweep puts the AB out.
+    assert deck['Wf_ab'].abs().max() < 1e-9
+    assert (deck['T7'] - deck['Tt6']).abs().max() < 1e-3   # Newton tolerance, R
     # A hotter day thins the air, so the sized engine swallows less of it.
     assert deck['W'].is_monotonic_decreasing
     assert deck['Fn'].is_monotonic_decreasing
@@ -443,29 +432,3 @@ def test_a_drifted_bounds_table_aborts_the_sweep():
             runner.run_sweep(build_snake_sweep([0.], [0.], [3100.]))
         finally:
             su._OD_BOUNDS = original
-
-
-@pytest.mark.slow
-def test_the_point_not_being_swept_is_frozen_then_restored():
-    """Every run_model() solves all points; the inactive one must sit still.
-
-    Otherwise a struggling wet point would raise AnalysisError during a dry
-    sweep and be recorded as a failed dry point.
-    """
-    prob, mp = build_problem(verbose=False)
-    prob.set_solver_print(level=-1)
-    wet_newton = prob.model._get_subsystem(mp.od_pts['wet']).nonlinear_solver
-    before = {k: wet_newton.options[k] for k in _FROZEN_NEWTON}
-    during = []
-    solve = prob.run_model
-
-    def recording_run_model():
-        during.append({k: wet_newton.options[k] for k in _FROZEN_NEWTON})
-        solve()
-
-    prob.run_model = recording_run_model
-    SweepRunner(prob, **dry_point(mp), mach=0.001, afterburn=False).run_sweep(
-        build_snake_sweep([0.], [0.], [3100.]))
-
-    assert during and all(opts == _FROZEN_NEWTON for opts in during)
-    assert {k: wet_newton.options[k] for k in _FROZEN_NEWTON} == before

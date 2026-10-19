@@ -25,24 +25,23 @@ def rendered(render, *args, **kwargs):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('point', ['DESIGN', 'OD_dry'])
-def test_page_viewer_renders_every_table_in_dry_mode(problem, point):
+def test_page_viewer_renders_every_table_for_the_design_duct(problem):
     prob, _ = problem
 
-    out = rendered(page_viewer, prob, point, afterburn=False)
+    out = rendered(page_viewer, prob, 'DESIGN', afterburn=False)
 
-    assert point in out
+    assert 'DESIGN' in out
     for heading in TABLE_HEADINGS:
         assert heading in out.upper(), f"{heading} table missing"
 
 
 @pytest.mark.slow
-def test_page_viewer_renders_every_table_in_wet_mode(problem):
-    # The dry points' afterburner is a Duct and the wet point's is a
-    # Combustor, and the printer asks both configurations for a burner table.
+def test_page_viewer_renders_every_table_for_the_od_combustor(problem):
+    # DESIGN's afterburner is a Duct and OD's is a Combustor, and the
+    # printer asks both configurations for a burner table.
     prob, _ = problem
 
-    out = rendered(page_viewer, prob, 'OD_wet')
+    out = rendered(page_viewer, prob, 'OD')
 
     for heading in TABLE_HEADINGS:
         assert heading in out.upper(), f"{heading} table missing"

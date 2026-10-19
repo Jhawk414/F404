@@ -1,6 +1,6 @@
 # ADR-0001: Single-engine sizing for dry and wet modes
 
-**Status:** Accepted
+**Status:** Accepted, partly superseded by [ADR-0002](0002-single-od-topology.md) (one OD topology, augmentor loss, A8 law)
 **Date:** 2026-10-10
 **Deciders:** @Jhawk414
 **Issue:** [#2](https://github.com/Jhawk414/F404/issues/2) (also touches [#3](https://github.com/Jhawk414/F404/issues/3), [#8](https://github.com/Jhawk414/F404/issues/8))

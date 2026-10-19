@@ -12,7 +12,8 @@ cheap for agents to read. Only the gotchas that still bite are kept, under
 
 Full write-up: [ADR-0001](../docs/adr/0001-single-engine-sizing.md), the first ADR in `docs/adr/`.
 
-**What shipped:**
+**What shipped** (the two OD points, `a8_ctrl` and the 5.4 % loss are
+superseded by the single OD point; see [18 Oct, PR #36](#18-oct--one-od-point-kumar-augmentor-loss-wet-a8-schedule-pr-36)):
 - One `MPCycle` with one DESIGN, sized at SLS dry mil (11,000 lbf, Tt4 3100 R).
 - Two OD points:
   - `OD_dry`: afterburner is a Duct; A8 frozen at the DESIGN throat area.
@@ -63,10 +64,10 @@ place to look before calibrating anything (#25) or validating a result.
   |---|---|---|
   | Max A/B thrust | 16,000 lbf | 17,700 (calibrated) |
   | Dry (IRP) thrust | 10,600 lbf | 11,000 |
-  | Dry TSFC | 0.78–0.81 | 0.62 |
+  | Dry TSFC | 0.78–0.81 | 0.624 |
   | BPR | 0.34 | ~0.75 |
   | N1 / N2 | 13,270 / 16,810 rpm | 10,000 / 14,000 |
-  | Airflow | 142–145 lbm/s | 144.2 |
+  | Airflow | 142–145 lbm/s | 145.1 |
   | HPT cooling bleed | 11% of CDP | 11.0% |
 
 - Also there: customer-bleed thrust slopes (Yuhas), nozzle A8 span and
@@ -121,10 +122,55 @@ rebase it as part of the next items.
   the model's definition.
 - **Numbers (18 Oct):** 207 tests (172 fast), 97 % coverage.
 
+### 18 Oct — one OD point, Kumar augmentor loss, wet A8 schedule (PR #36)
+
+Full write-up: [ADR-0002](../docs/adr/0002-single-od-topology.md). ADR-0001 is
+partly superseded.
+
+**What shipped:**
+- **One `OD` point** (`mp.od_pt`). Its afterburner is always a Combustor.
+  `aug_ctrl.Tt7_cmd` selects dry (0, or ≤ Tt6) or wet. FAR_ab's lower bound
+  is exactly 0, and the dry root sits on it. DESIGN keeps its Duct.
+  `od_pts`, `frozen_pts`, `_FROZEN_NEWTON`, `_OD_WET_BOUNDS`, `a8_ctrl` and
+  the `afterburn` option are gone.
+- **Augmentor loss (#33, closed by PR #36):** `q·[C_D + η(τ−1)]`, Kumar
+  Eq. 13 at the flameholder Mach `k_M·MN6`. `AB_K_M` 0.5, `AB_CD` 0.65,
+  `AB_ETA` 1.0 in `mp_cycle.py`. 2.1 % cold (DESIGN too), 6.6 % at SLS max AB.
+- **Wet A8 (#8, wet half):** `NozzleSchedule`, choked continuity with the dry
+  nozzle. It is explicit, with no Newton state. Wet keeps the gas generator
+  within ~0.25 % BPR of dry at each condition. The fan follows its dry-mil
+  line (Rline 1.94–2.12), not 2.0.
+- **`MAX_Tt7` = 3598.35 R** (was 3608). The wet default grid is
+  3598.35 → 2998.35 R. To compare a wet deck against an older one, sweep with
+  `--throttle 3008,3608,200`.
+- **`docs/references/`** is new: general method papers the model uses, kept
+  apart from `unclassified_perf_data/` (F404 data to match). Its
+  [index](../docs/references/README.md) lists, per paper, the equations and
+  constants the code takes, with provenance tags including `[M-THY]`
+  (analytic). Kumar (1980) is in; the NASA flameholder RMs, TN D-6839 and
+  ICAS-90-5.3.4 are the next candidates.
+- SLS dry mil: W 145.09 lbm/s, TSFC 0.6240 (W +0.63 %, TSFC +0.6 % from the
+  cold loss in the sizing).
+
+**Findings worth keeping:**
+1. Full envelope: dry 120/132 (+2 hot-day points), wet 95/132 (−5, all at
+   dTs −20 R). Every wet failure is at a condition where dry mil also fails,
+   except (2500 ft, −20 R, 3398 R). #3 is now one problem for both modes.
+2. Light-off moves the gas generator by < 0.02 %, and the worst excursion over
+   the AB range is 0.26 % BPR, against 3.9 % under the old Rline-2.0 hold.
+3. **The dry A8 schedule is blocked on #25/#30, not on the topology.** Opening
+   A8 at fixed Tt4 raises BPR into the OD bound (1.0) and raises fan Rline,
+   the opposite of the real engine, which commands N2 below MIL.
+4. A minimum wet FAR_ab of ~0.005 (TN D-6839) is the planned floor on
+   `Tt7_cmd`, in a small follow-up PR.
+
+**Numbers (18 Oct, PR #36):** 219 tests (178 fast). `build_problem()`
+raises `MaxTt7TooLowError` (a `ValueError`) if `max_Tt7` ≤ the solved Tt6.
+
 ## Open issues at a glance
 
 Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR).
-New since: #33 (augmentor loss) and #35 (combustion efficiency).
+New since: #33 (augmentor loss; closed by PR #36) and #35 (combustion efficiency).
 
 | # | Title | Type | Size / status |
 |---|---|---|---|
@@ -132,11 +178,11 @@ New since: #33 (augmentor loss) and #35 (combustion efficiency).
 | [#13](https://github.com/Jhawk414/F404/issues/13) | CLI sweep ranges | enhancement | 🟡 alt/dTs/throttle done; **`--mach` open** (needs model work) |
 | [#30](https://github.com/Jhawk414/F404/issues/30) | Define PLA in the cycle (blocks the `--pla` axis) | enhancement | decision first, then small; see [PLA](#pla-what-the-literature-says) |
 | [#17](https://github.com/Jhawk414/F404/issues/17) | Pydantic models for inputs | enhancement | medium |
-| [#8](https://github.com/Jhawk414/F404/issues/8) | PLA/T7-scheduled A8 | enhancement | large; state-of-play comment 10 Oct |
+| [#8](https://github.com/Jhawk414/F404/issues/8) | PLA/T7-scheduled A8 | enhancement | 🟡 wet half done (PR #36, ADR-0002); **dry schedule open**, with #25/#30 |
 | [#25](https://github.com/Jhawk414/F404/issues/25) | Define idle; calibrate dry part power to F404 data | enhancement | large; tune together with #8 |
-| [#3](https://github.com/Jhawk414/F404/issues/3) | Cold / high-alt / max-AB non-convergence | bug | large; body numbers stale (now 118 dry / 100 wet) |
+| [#3](https://github.com/Jhawk414/F404/issues/3) | Cold / high-alt / max-AB non-convergence | bug | large; body numbers stale (now 120 dry / 95 wet; wet fails where dry mil does) |
 | [#16](https://github.com/Jhawk414/F404/issues/16) | CLI entry point | enhancement | 🟡 `sweep`/`design` done; **`init-config`/YAML open** (needs #17) |
-| [#33](https://github.com/Jhawk414/F404/issues/33) | Closed-form dry/wet augmentor pressure loss | enhancement | medium; Kumar form needs the *flameholder-plane* Mach (~0.2–0.36 on the RM12), not MN6 (0.446) or the AB exit station (0.1025) |
+| [#33](https://github.com/Jhawk414/F404/issues/33) | Closed-form dry/wet augmentor pressure loss | enhancement | ✅ closed by PR #36 (Kumar form at `k_M·MN6`) |
 | [#35](https://github.com/Jhawk414/F404/issues/35) | Combustion efficiency in both burners | enhancement | medium; vendored `Combustor` change or F404 wrapper; calibrate max AB after it |
 | [#10](https://github.com/Jhawk414/F404/issues/10) | Inline creep/LCF life estimate | enhancement | exploratory |
 
@@ -173,12 +219,11 @@ working those have `--mach` and `--pla` to sweep or turn.
    line, BPR and spool speeds at exactly the low-Tt4 end #25 is calibrating.
    Notes for whoever starts:
    - Keep DESIGN as the MIL / minimum-A8 anchor so Tt4 = 3100 R dry rows
-     don't change (cheap regression check). Schedule goes inside `OD_dry`,
-     replacing the direct A8 connection; make it an explicit function of a
-     sweep input so it adds no Newton state (see the 10 Oct comment on #8).
-   - The dry-MIL and wet-min-AB A8 must meet continuously (ADR-0001 has the
-     continuity table); today's fixed Rline 2.0 leaves BPR −3.9…+1.7% off SLS.
-   - **Re-check max-AB calibration** (Tt7 3608 R, 5.4% loss) after any DESIGN
+     don't change (cheap regression check). The dry schedule multiplies
+     `a8_sched.A8_dsn` in `NozzleSchedule` (an `A8_dry(Tt4)` or `A8_dry(N2)`
+     slot); keep it explicit, with no Newton state. The wet factor then scales
+     the dry throat, so dry and wet meet continuously by construction.
+   - **Re-check max-AB calibration** (Tt7 3598.35 R, Kumar loss) after any DESIGN
      change; **goldens in `tests/problems_test.py` and the committed decks will
      move by design**.
    - Use the published-data table above and the index README for targets
@@ -189,8 +234,8 @@ working those have `--mach` and `--pla` to sweep or turn.
      reachable there. Opening the dry A8 at a fixed Tt4 raises BPR further.
      The F404 commands N2 below MIL, not Tt4 (#30), which is part of the same
      calibration problem.
-   - **#33 and #35 sit with this cluster.** Both change the augmentor's
-     thrust and fuel, so calibrate max AB once, after both.
+   - **#35 sits with this cluster.** It changes the augmentor's thrust and
+     fuel, so max AB recalibrates after it (#33's loss is already in).
 
 **Stage 4: the rest**
 6. **#16 remainder: `init-config`/YAML**, after #17.
@@ -203,8 +248,8 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
 - Landmarks: 31° flight idle, **87° MIL** (not 90°), 130° max AB.
 - Below MIL, PLA schedules `N2` and `A8`. At and above MIL it schedules AB fuel
   flow, and `A8` is a trim holding a scheduled LPT-exit temperature (`T5.6`).
-  So PLA is not one cycle variable, and `OD_wet`'s `a8_ctrl` (Rline hold) is
-  the model's analogue of that trim.
+  So PLA is not one cycle variable. The wet `NozzleSchedule` (gas generator
+  held at its dry state) is the model's analogue of that trim.
 - One PLA axis spans dry and wet, so `--pla` works with `--mode both`, unlike
   `--throttle`. `--throttle` keeps temperature semantics; `--pla` is a separate
   flag, as is a target-thrust OD mode (discussed 07 Oct, deferred).
@@ -269,12 +314,13 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
 ## Key model parameters
 
 - DESIGN at SLS (alt 0 ft, MN ≈ 0.001), sized at dry mil: 11,000 lbf, Tt4 3100 R.
-  Max AB: Tt7 3608 R → 17,700 lbf, 5.4% augmentor hot loss on `OD_wet` only.
+  Max AB: Tt7 3598.35 R → 17,700 lbf, with the Kumar augmentor loss
+  (2.1 % cold, 6.6 % at max AB; ADR-0002).
 - Thermo: TABULAR / `AIR_JETA_TAB_SPEC`.
 - Fan PR 4.1 (eff 0.8948), HPC PR 6.5 (eff 0.8707), HPT eff 0.8888, LPT eff
   0.8996; BPR ≈ 0.75; low-bypass mixed-flow, no LPC (`lp_shaft` has
   `num_ports=2`: fan + LPT).
 - LP 10,000 rpm, HP 14,000 rpm, 250 hp customer power extraction; bleeds
   `cool1` 5.07% (HPC interstage → LPT), `cool3` 11.0% (CDP → HPT).
-- Dry MIL at SLS: W 144.2 lbm/s, TSFC 0.62 (optimistic vs published, see #25).
+- Dry MIL at SLS: W 145.1 lbm/s, TSFC 0.624 (optimistic vs published, see #25).
 - Branch hygiene: one narrowly-scoped branch per issue (`IMPROVEMENTS.md` item 4).

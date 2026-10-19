@@ -126,7 +126,7 @@ def test_dts_axis_reproduces_the_default_order():
 
 def test_throttle_axis_reproduces_both_default_power_lists():
     assert throttle_axis('2500,3100,200') == DEFAULT_DRY_POWERS
-    assert throttle_axis('3008,3608,200') == DEFAULT_WET_POWERS
+    assert throttle_axis('2998.35,3598.35,200') == pytest.approx(DEFAULT_WET_POWERS)
 
 
 def test_dts_axis_without_a_cold_side_is_plain_ascending():
@@ -298,11 +298,24 @@ def test_documented_wet_range_sweeps_below_core_temperature(tmp_path, capsys):
 
 
 @pytest.mark.slow
-def test_design_prints_the_design_and_both_off_design_points(capsys):
+def test_design_prints_the_design_and_the_off_design_point_dry_and_wet(capsys):
     assert cli.main(['design']) == 0
 
     out = capsys.readouterr().out
-    assert all(pt in out for pt in ('DESIGN', 'OD_dry', 'OD_wet'))
+    assert all(s in out for s in ('DESIGN', 'OD at SLS mil', 'OD at SLS max AB'))
+
+
+@pytest.mark.slow
+def test_design_rejects_a_max_ab_target_that_leaves_the_afterburner_dry(capsys):
+    # Caught only after the dry solve, but still a bad argument: exit 2 with
+    # the inlet temperature it has to beat, not a dry engine reported as max AB.
+    with pytest.raises(SystemExit) as exc:
+        cli.main(['design', '--max-tt7', '1000'])
+
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert 'MaxTt7TooLowError: max_Tt7 must exceed' in err
+    assert 'Tt6 =' in err and 'at sea-level static' in err
 
 
 # ── help rendering ────────────────────────────────────────────────────────────

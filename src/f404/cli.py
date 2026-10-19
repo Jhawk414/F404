@@ -252,7 +252,7 @@ def build_parser():
         '--throttle', type=_axis_arg(throttle_axis), metavar='MIN,MAX,STEP',
         help="Tt4 in dry mode, Tt7 in wet mode, degR; swept high to low; "
              "a single value holds it constant (default: 2500,3100,200 dry "
-             "/ 3008,3608,200 wet). Requires --mode dry or wet, since the "
+             "/ 2998.35,3598.35,200 wet). Requires --mode dry or wet, since the "
              "two are different temperatures")
     sweep.add_argument(
         '--out', type=Path, default=Path('.'), metavar='DIR',
@@ -261,9 +261,9 @@ def build_parser():
 
     design = sub.add_parser(
         'design',
-        help="solve and print the DESIGN point and both OD points",
+        help="solve and print the DESIGN point and the OD point at mil and max AB",
         description="Size the engine at sea-level static dry mil power and "
-                    "print the DESIGN, dry OD and max-afterburner OD result "
+                    "print the DESIGN, OD dry-mil and OD max-afterburner result "
                     "tables, without running a sweep.",
     )
     design.add_argument(
@@ -274,7 +274,7 @@ def build_parser():
         help="core burner exit temperature, degR (default: 3100)")
     design.add_argument(
         '--max-tt7', type=float, metavar='DEGR',
-        help="max-afterburner exit temperature, degR (default: 3608)")
+        help="max-afterburner exit temperature, degR (default: 3598.35)")
     design.set_defaults(handler=_run_design_command)
 
     compare = sub.add_parser(
@@ -340,7 +340,9 @@ def _run_design_command(args, parser):
     try:
         build_problem(**targets)
     except ValueError as exc:
-        parser.error(str(exc))
+        # A named subclass (e.g. MaxTt7TooLowError) says what was wrong.
+        name = type(exc).__name__
+        parser.error(str(exc) if name == 'ValueError' else f"{name}: {exc}")
     except om.AnalysisError as exc:
         print(f"f404 design: the solve did not converge: {exc}",
               file=sys.stderr)
