@@ -67,12 +67,15 @@ def compare_decks(base, new, columns=None):
     base, new : pandas.DataFrame
         Decks as read from CSV.
     columns : iterable of str, optional
-        Restrict the comparison to these columns.
+        Compare only these columns, each of which must be numeric in both
+        decks. By default every shared numeric column but MN is compared, so
+        decks with older, narrower schemas still compare.
 
     Raises
     ------
     ValueError
-        If either deck mixes modes, the two decks are different modes, or a
+        If a requested column is missing from either deck, either deck mixes
+        modes, the two decks are different modes, or a
         deck has two rows on one (alt, dTs, throttle) key.
 
     Returns
@@ -87,6 +90,13 @@ def compare_decks(base, new, columns=None):
     if _mode(new, 'NEW') != mode:
         raise ValueError(f"BASE is a {mode} deck and NEW is a {_mode(new, 'NEW')} "
                          f"deck; their throttles (T4 vs T7) are different points")
+    if columns is not None:
+        columns = list(columns)
+        for label, df in (('BASE', base), ('NEW', new)):
+            missing = [c for c in columns
+                       if c not in df or not pd.api.types.is_numeric_dtype(df[c])]
+            if missing:
+                raise ValueError(f"{label} deck has no numeric column {missing}")
     b, n = _keyed(base, mode, 'BASE'), _keyed(new, mode, 'NEW')
     common = b.index.intersection(n.index)
     only_base = b.index.difference(n.index).tolist()
@@ -95,9 +105,11 @@ def compare_decks(base, new, columns=None):
 
     rows = []
     for col in b.columns:
-        if (col not in n.columns or col == 'MN'
-                or not pd.api.types.is_numeric_dtype(b[col])
-                or (columns is not None and col not in columns)):
+        if columns is not None:
+            if col not in columns:
+                continue
+        elif (col not in n.columns or col == 'MN'
+                or not pd.api.types.is_numeric_dtype(b[col])):
             continue
         bv, nv = b[col].to_numpy(float), n[col].to_numpy(float)
         near_zero = np.abs(bv) < NEAR_ZERO

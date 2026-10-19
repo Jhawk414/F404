@@ -60,10 +60,24 @@ def test_dry_rows_match_on_t4_and_wet_rows_on_t7():
     assert wet_only_new == [(2500, 20, 3208)]
 
 
-def test_columns_filter_and_flight_mach_is_skipped():
-    table, _, _ = compare_decks(deck('dry'), deck('dry'), columns={'Fn', 'MN'})
+def test_columns_filter_and_flight_mach_is_skipped_by_default():
+    every, _, _ = compare_decks(deck('dry'), deck('dry'))
+    chosen, _, _ = compare_decks(deck('dry'), deck('dry'), columns=['Fn'])
 
-    assert table['column'].tolist() == ['Fn']
+    assert 'MN' not in every['column'].tolist()
+    assert chosen['column'].tolist() == ['Fn']
+
+
+@pytest.mark.parametrize('columns, side', [(['FN'], 'BASE'), (['Fn', 'mode'], 'BASE')])
+def test_requested_columns_that_do_not_exist_are_an_error(columns, side):
+    # A typo used to give an empty table and exit 0, hiding any change.
+    with pytest.raises(ValueError, match=f'{side} deck has no numeric column'):
+        compare_decks(deck('dry'), deck('dry'), columns=columns)
+
+
+def test_a_requested_column_missing_from_new_is_an_error():
+    with pytest.raises(ValueError, match=r"NEW deck has no numeric column \['Fn'\]"):
+        compare_decks(deck('dry'), deck('dry').drop(columns='Fn'), columns=['Fn'])
 
 
 def test_report_lists_unmatched_points_and_can_hide_unchanged_columns():
