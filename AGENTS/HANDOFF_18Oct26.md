@@ -64,10 +64,10 @@ place to look before calibrating anything (#25) or validating a result.
   |---|---|---|
   | Max A/B thrust | 16,000 lbf | 17,700 (calibrated) |
   | Dry (IRP) thrust | 10,600 lbf | 11,000 |
-  | Dry TSFC | 0.78–0.81 | 0.62 |
+  | Dry TSFC | 0.78–0.81 | 0.624 |
   | BPR | 0.34 | ~0.75 |
   | N1 / N2 | 13,270 / 16,810 rpm | 10,000 / 14,000 |
-  | Airflow | 142–145 lbm/s | 144.2 |
+  | Airflow | 142–145 lbm/s | 145.1 |
   | HPT cooling bleed | 11% of CDP | 11.0% |
 
 - Also there: customer-bleed thrust slopes (Yuhas), nozzle A8 span and
@@ -133,7 +133,7 @@ partly superseded.
   is exactly 0, and the dry root sits on it. DESIGN keeps its Duct.
   `od_pts`, `frozen_pts`, `_FROZEN_NEWTON`, `_OD_WET_BOUNDS`, `a8_ctrl` and
   the `afterburn` option are gone.
-- **Augmentor loss (#33, closed by this PR):** `q·[C_D + η(τ−1)]`, Kumar
+- **Augmentor loss (#33, closed by PR #36):** `q·[C_D + η(τ−1)]`, Kumar
   Eq. 13 at the flameholder Mach `k_M·MN6`. `AB_K_M` 0.5, `AB_CD` 0.65,
   `AB_ETA` 1.0 in `mp_cycle.py`. 2.1 % cold (DESIGN too), 6.6 % at SLS max AB.
 - **Wet A8 (#8, wet half):** `NozzleSchedule`, choked continuity with the dry
@@ -143,6 +143,12 @@ partly superseded.
 - **`MAX_Tt7` = 3598.35 R** (was 3608). The wet default grid is
   3598.35 → 2998.35 R. To compare a wet deck against an older one, sweep with
   `--throttle 3008,3608,200`.
+- **`docs/references/`** is new: general method papers the model uses, kept
+  apart from `unclassified_perf_data/` (F404 data to match). Its
+  [index](../docs/references/README.md) lists, per paper, the equations and
+  constants the code takes, with provenance tags including `[M-THY]`
+  (analytic). Kumar (1980) is in; the NASA flameholder RMs, TN D-6839 and
+  ICAS-90-5.3.4 are the next candidates.
 - SLS dry mil: W 145.09 lbm/s, TSFC 0.6240 (W +0.63 %, TSFC +0.6 % from the
   cold loss in the sizing).
 

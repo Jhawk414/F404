@@ -16,13 +16,15 @@ and throttle to generate a converged off-design performance deck.
 
 **Status:** In development. One sized engine, with DESIGN at sea-level-static
 dry mil power, operated both dry (military power and below) and wet
-(afterburning) on two off-design points of the same model. Also:
+(afterburning) on one off-design point of the same model. Also:
 altitude/dTs/throttle sweep infrastructure, and an `f404` command line for
 sweeps and single design points. See [Current status](#current-status) for
 convergence coverage and [Roadmap](#roadmap) for planned work. Not yet
 validated against public F404 performance data; the public reports are
 archived and indexed in
-[`docs/unclassified_perf_data/`](docs/unclassified_perf_data/README.md).
+[`docs/unclassified_perf_data/`](docs/unclassified_perf_data/README.md). The
+general aerothermal methods the model uses (e.g. the augmentor-loss
+correlation) are in [`docs/references/`](docs/references/README.md).
 
 ## Table of contents
 
@@ -55,7 +57,7 @@ vendored upstream `pycycle` library at the repo root (see
 | `src/f404/compare_decks.py` | Column-by-column deck comparison behind `f404 compare` |
 | `tests/` | pytest suite, one `<module>_test.py` per module ([#5](https://github.com/Jhawk414/F404/issues/5)) |
 | `deck/` | Cycle-deck output CSVs |
-| `docs/` | System architecture diagrams (`f404_cycle.typ`, `f404_cycle.svg`), architecture decision records (`adr/`), planning docs (`improvements/`), and reference material (`unclassified_perf_data/`: an [index and cross-study reference map](docs/unclassified_perf_data/README.md) of published F404 performance data, with source PDFs in `pdf/` and Obsidian-compatible markdown conversions with their figures in `md/`) |
+| `docs/` | System architecture diagrams (`f404_cycle.typ`, `f404_cycle.svg`), architecture decision records (`adr/`), planning docs (`improvements/`), and reference material: `unclassified_perf_data/` (an [index and cross-study reference map](docs/unclassified_perf_data/README.md) of published F404 performance data) and `references/` (an [index](docs/references/README.md) of general aerothermal methods the model uses, e.g. Kumar 1980 for the augmentor loss). Both keep source PDFs in `pdf/` and Obsidian-compatible markdown conversions with their figures in `md/` |
 | `AGENTS/` | Session handoff notes |
 | `meta/` | Vendored-library provenance (`LICENSE.txt`) |
 | `pycycle/`, `setup.py`, `pyproject.toml`, `example_cycles/` | Vendored upstream `pyCycle` library |
@@ -157,7 +159,8 @@ f404 --help                     # and `f404 sweep --help`, `f404 design --help`
 Sweeps the sized engine over altitude, temperature offset and throttle, and
 writes `cycle_deck_dry.csv` / `cycle_deck_wet.csv` (plus
 `cycle_deck_full_envelope.csv` for `--mode both`). With no range flags the
-grid is the default one below, so the output matches earlier decks.
+grid is the default one below, so the output matches the committed decks in
+`deck/`.
 
 | Flag | Meaning | Default |
 |---|---|---|
@@ -168,14 +171,13 @@ grid is the default one below, so the output matches earlier decks.
 | `--out DIR` | deck directory, created if missing | `.` |
 
 ```bash
-# Wet sweep: T7 from 3608 down to 3008 R (Tt4 held at mil, 3100 R)
-f404 sweep --mode wet --alt 0,10000,2500 --dts 0,20,10 \
-           --throttle 3008,3608,200 --out /tmp/run1
+# Wet sweep: T7 from max AB (3598.35 R) down in 200 R steps (Tt4 held at mil, 3100 R)
+f404 sweep --mode wet --alt 0,10000,2500 --dts 0,20,10 --out /tmp/run1
 ```
 
-The wet default is 3598.35 → 2998.35 R, stepping down from the calibrated
-max AB. The example's round-number grid is the one decks before ADR-0002
-used, which keeps `f404 compare` against those decks matched point for point.
+The wet default steps down from the calibrated max AB, `MAX_Tt7`. Decks from
+before [ADR-0002](docs/adr/0002-single-od-topology.md) used 3608 → 3008 R; to
+compare against one point for point, add `--throttle 3008,3608,200`.
 
 - Each range is one `min,max,step` triple, inclusive of `max`, bare or
   bracketed (`--alt [0,10000,1000]`). The order is fixed.
@@ -341,6 +343,9 @@ Done:
 - [x] Published F404 performance reports archived as Obsidian-compatible
       markdown, with an index and cross-study reference map
       ([`docs/unclassified_perf_data/`](docs/unclassified_perf_data/README.md))
+- [x] Method references library, indexed by model topic with the equations
+      and constants the code uses: Kumar (1980) flameholder pressure loss
+      ([`docs/references/`](docs/references/README.md))
 
 Planned (see `docs/improvements/IMPROVEMENTS.md` for full detail), roughly in
 order:

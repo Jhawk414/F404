@@ -62,10 +62,11 @@ Adopt **C3 with a neutral dry schedule**:
     `τ = Tt7/Tt6`. Here `q` is the approach dynamic head over Pt at the
     flameholder plane (Kumar 1980, Eq. 13),
     `q = (γ/2)·M_fh²·(1 + (γ−1)/2·M_fh²)^(−γ/(γ−1))`, and the flameholder
-    Mach is `M_fh = k_M·MN6`. The constants are `k_M` 0.5, `C_D` 0.65 and
-    `η` 1.0 (`AB_K_M`, `AB_CD`, `AB_ETA` in `mp_cycle.py`). DESIGN's Duct
-    carries the same cold loss through its own `aug_ctrl`: 2.10 % at
-    MN6 = 0.446.
+    Mach is `M_fh = k_M·MN6`. Eq. 13 is Kumar's incompressible form, which
+    he gives for approach Mach below 0.3; `M_fh` is about 0.22 here. The
+    constants are `k_M` 0.5, `C_D` 0.65 and `η` 1.0 (`AB_K_M`, `AB_CD`,
+    `AB_ETA` in `mp_cycle.py`). DESIGN's Duct carries the same cold loss
+    through its own `aug_ctrl`: 2.10 % at MN6 = 0.446.
 - **`NozzleSchedule` (`a8_sched`)** sets A8 explicitly. There is no Newton
   state and no blend. It uses choked-throat continuity with the dry nozzle
   (#8, wet half):
@@ -142,7 +143,8 @@ gas generator at light-off.
 
 #### Augmentor-loss constants (literature)
 
-The sources are collected under #33.
+The sources are collected under #33. Kumar (1980) is converted, with the
+equations the model uses, in [`docs/references/`](../references/README.md).
 
 | | Value | Basis |
 |---|---|---|
