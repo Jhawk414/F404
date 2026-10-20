@@ -32,9 +32,12 @@ def _with_inputs(df):
 
     Those decks hold converged rows only and no commands, so the commands
     are taken from the solved T4 and T7, which ``_keyed`` matches to 1 R.
+    Decks from before PR #34 have no ``mode`` either; it is read off FAR_ab.
     """
     if 'T4_cmd' in df:
         return df
+    if 'mode' not in df:
+        df = df.assign(mode='wet' if df['FAR_ab'].max() > 1e-6 else 'dry')
     return df.assign(converged=True, T4_cmd=df['T4'],
                      T7_cmd=df['T7'].where(df['mode'] == 'wet', 0.))
 

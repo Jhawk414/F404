@@ -102,6 +102,19 @@ def test_a_deck_from_before_the_input_columns_matches_on_its_solved_temperatures
     assert not any(dry.values()) and not any(wet.values())
 
 
+def test_a_deck_without_a_mode_column_gets_it_from_the_augmentor_fuel():
+    # Decks from before PR #34 had no mode column.
+    oldest = deck().drop(columns=['mode', 'converged', 'T4_cmd', 'T7_cmd', 'failure'])
+    wet = deck(mode=['wet', 'wet'], T4_cmd=[3100., 3100.], T7_cmd=[3598.35, 3398.35])
+    oldest_wet = oldest.assign(T4=[3100.0001, 3099.9999], T7=[3598.3512, 3398.3488],
+                               FAR_ab=[0.03, 0.02])
+
+    _, dry_points = compare_decks(oldest.assign(T7=[1500., 1400.]), deck())
+    _, wet_points = compare_decks(oldest_wet, wet)
+
+    assert not any(dry_points.values()) and not any(wet_points.values())
+
+
 def test_columns_filter_and_inputs_are_not_compared_by_default():
     every, _ = compare_decks(deck(), deck())
     chosen, _ = compare_decks(deck(), deck(), columns=['Fn'])
