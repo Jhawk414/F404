@@ -105,8 +105,10 @@ def test_snake_sweep_reverses_dTs_on_alternating_altitudes():
     assert sweep[5]['dTs'] == sweep[6]['dTs']
 
 
-def test_snake_sweep_defaults_to_static_mach():
+def test_snake_sweep_defaults_to_static_mach_and_flies_mach_0_there():
+    # Mach 0 gives NaN residuals in the flow solve.
     assert {p['MN'] for p in build_snake_sweep([0, 2500], [0., 10.], [3100.])} == {STATIC_MN}
+    assert build_snake_sweep([0], [0], [3100], [0])[0]['MN'] == STATIC_MN
 
 
 def test_snake_sweep_reverses_the_flight_block_on_alternating_machs():

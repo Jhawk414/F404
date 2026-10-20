@@ -82,7 +82,8 @@ def build_snake_sweep(alts, dTs_values, powers, machs=(STATIC_MN,)):
     powers : array-like
         Power levels (Tt4 in degR), ordered as desired (e.g. high → low).
     machs : array-like
-        Flight Mach numbers, sorted ascending.
+        Flight Mach numbers, sorted ascending. Below ``STATIC_MN`` (0
+        included) is flown at ``STATIC_MN``.
 
     Returns
     -------
@@ -98,7 +99,7 @@ def build_snake_sweep(alts, dTs_values, powers, machs=(STATIC_MN,)):
             dTs_ordered = dTs_values if (j % 2 == 0) else dTs_values[::-1]
             block += [(mn, alt, dTs) for dTs in dTs_ordered]
         flight += block if (i % 2 == 0) else block[::-1]
-    return [{'MN': float(mn), 'alt': float(alt), 'dTs': float(dTs), 'power': float(power)}
+    return [{'MN': max(float(mn), STATIC_MN), 'alt': float(alt), 'dTs': float(dTs), 'power': float(power)}
             for power in powers for mn, alt, dTs in flight]
 
 
