@@ -1,12 +1,12 @@
 # Handoff: F404 — Recommended Issue Order
 
-Supersedes `HANDOFF_11Oct26.md` (renamed to this file; before that,
-`HANDOFF_10Oct26.md`). Everything before the 10 Oct 26 session is
+Supersedes `HANDOFF_18Oct26.md` (renamed to this file; before that,
+`HANDOFF_11Oct26.md` and `HANDOFF_10Oct26.md`). Everything before the 10 Oct 26 session is
 deliberately **not** carried forward, to keep this file
 cheap for agents to read. Only the gotchas that still bite are kept, under
 [Standing gotchas](#standing-gotchas). Full history: `git log --follow -- AGENTS/`.
 
-## Session summary (10–18 Oct 26)
+## Session summary (10–20 Oct 26)
 
 ### 10 Oct — #2 single-engine sizing (PR #23)
 
@@ -167,53 +167,74 @@ partly superseded.
 **Numbers (18 Oct, PR #36):** 219 tests (178 fast). `build_problem()`
 raises `MaxTt7TooLowError` (a `ValueError`) if `max_Tt7` ≤ the solved Tt6.
 
+### 19–20 Oct — failed points in the deck (#27), Mach axis (#13) (PR #39)
+
+**What shipped:**
+- **Every requested point is a deck row.**
+  - Leading columns: `mode, converged, alt, dTs, MN, T4_cmd, T7_cmd`. `mode` moved to the front.
+  - `T4_cmd`/`T7_cmd` are what the OD point was told: dry is `(Tt4, 0)`, wet is `(mil, Tt7)`.
+  - Outputs are blank on a failed row, and the last column, `failure`, says why: an exception name, `bound:<state>` or `target`.
+  - No separate failures CSV. Count convergence from the deck, never by hand.
+- **`f404 compare` keys on `(mode, alt, dTs, MN, T4_cmd, T7_cmd)`.**
+  - It lists points that converge in only one deck and counts those failed in both.
+  - Full-envelope decks compare too.
+  - Pre-#27 decks get their commands from the solved T4/T7.
+- **`--mach MIN,MAX,STEP`**, default `0.001, 0.2, 0.4, 0.6, 0.8, 0.95`.
+  - Mach 0 is flown at `STATIC_MN` = 0.001; exactly 0 gives NaN residuals.
+  - Mach ≥ 1 is rejected (#38).
+  - The grid nests power → Mach → alt → dTs, and each odd Mach step reverses the alt/dTs block. With one Mach this is the old order, so `--mach 0` reproduces the pre-Mach decks bit for bit (the PR's regression proof).
+- **No model change.** DESIGN stays at SLS dry mil. Mach is off-design; the F404 is rated and published at SLS.
+- Filed #37 (DESIGN at MN 0.01 vs static 0.001; SLS mil reads 11,044.7 lbf, not 11,000) and #38 (supersonic inlet recovery and the W bound).
+
+**Findings worth keeping:**
+1. **Full default sweep:** dry 642/792, wet 657/792 converged, in 2 h 5 min. A failed point costs ~20 s, a converged one ~0.4 s. Per-Mach counts are in the README.
+2. **Dry part power collapses with Mach.** Tt4 2500 R converges 30 of 33 points static and 3 at M 0.95, as BPR runs into its 1.0 bound (`bound:balance.BPR`). This is #25's BPR problem, now visible across Mach.
+3. **The mil cold corner (dry, and wet with it) shrinks up to M 0.6** (24 → 32 of 33), then grows again.
+4. **The OD W bound (200 lbm/s) bites on cold days at M 0.95** (6 points). Mil W reaches 197.6 at M 0.8, −30 R. Raise it before any supersonic work (#38 comment).
+5. **Static rows in the full deck differ from `--mach 0` at Newton tolerance (≤ 0.0024 %).** Later power levels now warm-start from M 0.95, not from 5000 ft. Use `--mach 0` for bit-identical static regressions.
+
+**Numbers (20 Oct, PR #39):** 236 tests (195 fast).
+
 ## Open issues at a glance
 
-Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR).
-New since: #33 (augmentor loss; closed by PR #36) and #35 (combustion efficiency).
+Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR), #33 (PR #36), #27 and #13 (PR #39).
+New since: #35 (combustion efficiency), #37 (one static Mach), #38 (supersonic envelope).
 
 | # | Title | Type | Size / status |
 |---|---|---|---|
-| [#27](https://github.com/Jhawk414/F404/issues/27) | Write failed sweep points to `deck/` | enhancement | small/medium |
-| [#13](https://github.com/Jhawk414/F404/issues/13) | CLI sweep ranges | enhancement | 🟡 alt/dTs/throttle done; **`--mach` open** (needs model work) |
 | [#30](https://github.com/Jhawk414/F404/issues/30) | Define PLA in the cycle (blocks the `--pla` axis) | enhancement | decision first, then small; see [PLA](#pla-what-the-literature-says) |
 | [#17](https://github.com/Jhawk414/F404/issues/17) | Pydantic models for inputs | enhancement | medium |
 | [#8](https://github.com/Jhawk414/F404/issues/8) | PLA/T7-scheduled A8 | enhancement | 🟡 wet half done (PR #36, ADR-0002); **dry schedule open**, with #25/#30 |
 | [#25](https://github.com/Jhawk414/F404/issues/25) | Define idle; calibrate dry part power to F404 data | enhancement | large; tune together with #8 |
-| [#3](https://github.com/Jhawk414/F404/issues/3) | Cold / high-alt / max-AB non-convergence | bug | large; body numbers stale (now 120 dry / 95 wet; wet fails where dry mil does) |
+| [#3](https://github.com/Jhawk414/F404/issues/3) | Cold / high-alt / max-AB non-convergence | bug | large; body numbers stale. Now dry 642/792, wet 657/792 over Mach (static alone: 120/132, 96/132); wet fails where dry mil does. Count from the deck's `converged` column |
 | [#16](https://github.com/Jhawk414/F404/issues/16) | CLI entry point | enhancement | 🟡 `sweep`/`design` done; **`init-config`/YAML open** (needs #17) |
-| [#33](https://github.com/Jhawk414/F404/issues/33) | Closed-form dry/wet augmentor pressure loss | enhancement | ✅ closed by PR #36 (Kumar form at `k_M·MN6`) |
+| [#37](https://github.com/Jhawk414/F404/issues/37) | One static Mach for DESIGN and OD | bug | small; moves goldens and the max-AB calibration |
+| [#38](https://github.com/Jhawk414/F404/issues/38) | Supersonic envelope: inlet recovery, W bound | enhancement | medium; W bound already bites at M 0.95 cold |
 | [#35](https://github.com/Jhawk414/F404/issues/35) | Combustion efficiency in both burners | enhancement | medium; vendored `Combustor` change or F404 wrapper; calibrate max AB after it |
 | [#10](https://github.com/Jhawk414/F404/issues/10) | Inline creep/LCF life estimate | enhancement | exploratory |
 
 ## Recommended order
 
-**#27 → #13 `--mach` → #30 → `--pla` → #17 → #8 + #25 (+ #3 re-measured) → #16 remainder → #10**
+**#30 → `--pla` → #17 → #8 + #25 (+ #3, #37 re-measured) → #16 remainder → #10**
 
-Plan: finish the sweep-axis side of the CLI before #8 and #25, so agents
-working those have `--mach` and `--pla` to sweep or turn.
+#27 and #13 are done (PR #39). Finish the sweep-axis side of the CLI with
+PLA before #8 and #25, so agents working those have `--pla` to sweep.
+#38 is independent and can go any time.
 
-**Stage 1: sweep axes (CLI)**
-1. **#27, failure CSV.** Before `--mach`: a Mach sweep will surface new
-   failures, and without a record of which points failed and why, a missing
-   row can't be told apart from a point nobody asked for. It is also #3's
-   measurable baseline and the input for the planned coverage plot.
-2. **#13 `--mach`.** Not just a flag: Mach is pinned at 0.001 in `SweepRunner`;
-   a Mach dimension has to go into `build_snake_sweep` / `generate_bridge_points`
-   in `sweep_utils.py`. Expect new non-convergence at the envelope edge; that
-   is #3's problem, not a blocker (per #13's scope note).
-3. **#30, then `--pla`.** #30 settles what PLA commands (decision, ADR) and
-   gives a provisional schedule; the `--pla` flag is a thin layer on top.
-   Findings in [PLA](#pla-what-the-literature-says) below.
+**Stage 1: PLA (CLI)**
+
+1. **#30, then `--pla`.** #30 settles what PLA commands (a decision recorded as an ADR) and gives a provisional schedule. PLA then maps onto the deck's existing `T4_cmd`/`T7_cmd` commands (plus a `PLA` input column).
+   - `--throttle` stays as the temperature-based throttle, for textbook T4/T7 work.
+   - Findings are in [PLA](#pla-what-the-literature-says) below.
 
 **Stage 2: inputs as data**
-4. **#17 pydantic.** Not CLI, but placed before the solver cluster because #25
+2. **#17 pydantic.** Not CLI, but placed before the solver cluster because #25
    edits the DESIGN defaults in `problems._apply_design_inputs`, which #17
    turns into data; #17's own text asks to land before #2/#3/#8 churn the
    same signatures. It also unblocks `init-config`/YAML (#16).
 
 **Stage 3: coupled physics cluster (one effort)**
-5. **#8 + #25 together, with #3 measured alongside.** #8 and #3 are the same
+3. **#8 + #25 together, with #3 measured alongside.** #8 and #3 are the same
    problem from two angles (confirmed by 89 → 100/132 from #2). #25 says
    explicitly to tune with #8: a dry PLA → A8 schedule moves the fan operating
    line, BPR and spool speeds at exactly the low-Tt4 end #25 is calibrating.
@@ -238,8 +259,8 @@ working those have `--mach` and `--pla` to sweep or turn.
      fuel, so max AB recalibrates after it (#33's loss is already in).
 
 **Stage 4: the rest**
-6. **#16 remainder: `init-config`/YAML**, after #17.
-7. **#10 creep/LCF.** Additive and independent; last, incrementally.
+4. **#16 remainder: `init-config`/YAML**, after #17.
+5. **#10 creep/LCF.** Additive and independent; last, incrementally.
 
 ### PLA: what the literature says
 
@@ -281,15 +302,18 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
   Bare `float()` is deprecated and, inside the `except Exception` in
   `_state_at_bounds` / `_target_met`, would silently report every point
   unconverged. CI's `ruff --select NPY201` does not catch it.
-- `run_sweep` seeds `_last_good_state` from the state it is handed. If the
-  first grid point fails, there's nothing to restore, and everything after it
-  fails too. This stays hidden only because both default grids start on a
-  converging point, so **it matters when `--mach` or a new envelope reorders
-  the grid.** A near-empty deck usually means this, not "the model broke".
+- `run_sweep` seeds `_last_good_state` from the state it is handed (SLS max
+  AB from `build_problem()`), so a failed first point restores to that and
+  the sweep carries on (pinned by a test). A grid that starts far from SLS
+  (e.g. `--mach 0.6,0.9,0.3`) still warm-starts its first point from SLS, so
+  expect more failures at its head than in the same points mid-sweep.
 - `printer.py` takes a `file` argument because pyCycle's `print_*` helpers
   bind `sys.stdout` at import, which defeats `capsys`.
-- Decks are full float64 precision (`write_deck_csv()`), with columns from
-  `DECK_COLUMNS` in `sweep_utils.py`. Decks written before 18 Oct 26 were
+- Decks are full float64 precision (`write_deck_csv()`), with columns
+  `INPUT_COLUMNS` + `DECK_COLUMNS` + `failure` from `sweep_utils.py`, and a
+  row for every requested point. Filter with `df[df.converged]`. A failed row's
+  outputs are empty fields (`NaN` in pandas) by design. The decks are over
+  GitHub's 512 KB CSV-render limit, so GitHub shows raw text: not a format bug. Decks written before 18 Oct 26 were
   rounded to 2–4 decimals, so they can't resolve differences below about
   0.01 %; regenerate rather than compare against one.
 
@@ -301,19 +325,21 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
 - Axis order is fixed regardless of flag order: `--dts` hot side first, then
   cold; `--throttle` high power to low. The warm-start was built around it.
   `-50,50,10`, `2500,3100,200`, `3200,3800,200` reproduce the old default
-  grids exactly (pinned by tests). A `--mach` axis needs an equivalent rule.
+  grids exactly (pinned by tests). `--mach` is ascending; Mach steps reverse
+  the alt/dTs block (`build_snake_sweep`).
 - Validation fails before OpenMDAO loads (exit 2): not one or three finite
   numbers, step ≤ 0, min > max, a step that doesn't divide `max − min`,
-  `--throttle` with `--mode both`, wet `--throttle` ≤ fixed Tt4, `--out` is a
-  file. A non-converging `design` exits 1.
-- The wet-throttle floor (`Tt7 > MIL_Tt4`) is conservative; the physical floor
-  is the mixer exit temperature (~1500 R).
+  `--throttle` with `--mode both`, Mach outside [0, 1), `--out` is a file.
+  A non-converging `design` exits 1.
+- There is no wet-throttle floor in the CLI. A Tt7 below the augmentor inlet
+  temperature (~1500 R, known only after a solve) is a dry point to the
+  model, and the sweep records it as failed (`target`).
 - `importing sweep_full_envelope` sets no logging or warning filters;
   `configure_runtime()` does, from the CLI.
 
 ## Key model parameters
 
-- DESIGN at SLS (alt 0 ft, MN ≈ 0.001), sized at dry mil: 11,000 lbf, Tt4 3100 R.
+- DESIGN at SLS (alt 0 ft, MN 0.01; sweeps call 0.001 static, #37), sized at dry mil: 11,000 lbf, Tt4 3100 R.
   Max AB: Tt7 3598.35 R → 17,700 lbf, with the Kumar augmentor loss
   (2.1 % cold, 6.6 % at max AB; ADR-0002).
 - Thermo: TABULAR / `AIR_JETA_TAB_SPEC`.

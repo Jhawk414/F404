@@ -41,6 +41,9 @@ _OD_BOUNDS = {
 # Fraction of bound width within which a state is considered saturated.
 _BOUND_TOL_FRAC = 0.01
 
+# Flight Mach for "static": 0 itself gives NaN residuals in the flow solve.
+STATIC_MN = 0.001
+
 # Burner/afterburner exit temperature must be within this many degR of the
 # requested target for the run to count as a real solution.
 _TARGET_TOL_DEGR = 5.0
@@ -58,16 +61,17 @@ def _scalar(value):
     return float(np.asarray(value).item())
 
 
-def build_snake_sweep(alts, dTs_values, powers):
+def build_snake_sweep(alts, dTs_values, powers, machs=(STATIC_MN,)):
     """
     Build an ordered sweep matrix using a snake (boustrophedon) pattern.
 
-    At each altitude, dTs is swept in alternating directions so that
-    consecutive points are always neighbors — minimizing jumps that
-    can cause Newton solver convergence issues.
+    At each altitude, dTs is swept in alternating directions, and at each
+    Mach the whole altitude/dTs block is, so that consecutive points are
+    always neighbors — minimizing jumps that can cause Newton solver
+    convergence issues. With one Mach this is the original order.
 
     Ordering (outermost → innermost):
-        power → altitude → dTs (snake)
+        power → Mach → altitude (snake) → dTs (snake)
 
     Parameters
     ----------
@@ -77,21 +81,27 @@ def build_snake_sweep(alts, dTs_values, powers):
         Delta-ISA temperature offsets in degR, sorted ascending.
     powers : array-like
         Power levels (Tt4 in degR), ordered as desired (e.g. high → low).
+    machs : array-like
+        Flight Mach numbers, sorted ascending. Below ``STATIC_MN`` (0
+        included) is flown at ``STATIC_MN``, once.
 
     Returns
     -------
     list of dict
-        Each entry: {'alt': float, 'dTs': float, 'power': float}
+        Each entry: {'MN': float, 'alt': float, 'dTs': float, 'power': float}
         Ordered for minimal inter-point jumps.
     """
-    sweep = []
-    for power in powers:
-        for i, alt in enumerate(alts):
+    machs = list(dict.fromkeys(max(float(mn), STATIC_MN) for mn in machs))
+    flight = []
+    for i, mn in enumerate(machs):
+        block = []
+        for j, alt in enumerate(alts):
             # Reverse dTs direction on odd altitude indices (snake)
-            dTs_ordered = dTs_values if (i % 2 == 0) else dTs_values[::-1]
-            for dTs in dTs_ordered:
-                sweep.append({'alt': float(alt), 'dTs': float(dTs), 'power': float(power)})
-    return sweep
+            dTs_ordered = dTs_values if (j % 2 == 0) else dTs_values[::-1]
+            block += [(mn, alt, dTs) for dTs in dTs_ordered]
+        flight += block if (i % 2 == 0) else block[::-1]
+    return [{'MN': mn, 'alt': float(alt), 'dTs': float(dTs), 'power': float(power)}
+            for power in powers for mn, alt, dTs in flight]
 
 
 def generate_bridge_points(pt_from, pt_to, n_steps):
@@ -105,9 +115,9 @@ def generate_bridge_points(pt_from, pt_to, n_steps):
     Parameters
     ----------
     pt_from : dict
-        Starting point {'alt', 'dTs', 'power'}.
+        Starting point {'MN', 'alt', 'dTs', 'power'}.
     pt_to : dict
-        Target point {'alt', 'dTs', 'power'}.
+        Target point, with the same keys.
     n_steps : int
         Number of intermediate steps (not including from/to).
 
@@ -116,27 +126,23 @@ def generate_bridge_points(pt_from, pt_to, n_steps):
     list of dict
         Intermediate points, excluding pt_from and pt_to.
     """
-    bridges = []
-    for k in range(1, n_steps + 1):
-        frac = k / (n_steps + 1)
-        bridges.append({
-            'alt': pt_from['alt'] + frac * (pt_to['alt'] - pt_from['alt']),
-            'dTs': pt_from['dTs'] + frac * (pt_to['dTs'] - pt_from['dTs']),
-            'power': pt_from['power'] + frac * (pt_to['power'] - pt_from['power']),
-        })
-    return bridges
+    return [{key: a + k / (n_steps + 1) * (pt_to[key] - a) for key, a in pt_from.items()}
+            for k in range(1, n_steps + 1)]
 
 
-# Deck columns read straight off the OD point: name -> (path under the point,
-# units). The first block is the original deck schema, in its original order;
-# the rest add the station data that downstream work reads: augmentor inlet
-# (#33), compressor operating point and stall margin (#8), turbine exit
-# temperatures (T5 is the F404's T5.6 control temperature), and the nozzle
-# inlet and exit states a method-of-characteristics nozzle tool needs.
+# Leading deck columns: what was asked of each point, so a failed point still
+# has a row (#27). T4_cmd/T7_cmd are the commanded burner and augmentor exit
+# temperatures; T7_cmd 0 is dry.
+INPUT_COLUMNS = ['mode', 'converged', 'alt', 'dTs', 'MN', 'T4_cmd', 'T7_cmd']
+
+# Deck output columns read straight off the OD point: name -> (path under the
+# point, units), blank on a failed point. The first block is the original
+# performance schema, in its original order; the rest add the station data
+# that downstream work reads: augmentor inlet (#33), compressor operating
+# point and stall margin (#8), turbine exit temperatures (T5 is the F404's
+# T5.6 control temperature), and the nozzle inlet and exit states a
+# method-of-characteristics nozzle tool needs.
 DECK_COLUMNS = {
-    'alt':      ('fc.alt', 'ft'),
-    'dTs':      ('fc.dTs', 'degR'),
-    'MN':       ('fc.MN', None),
     'Fn':       ('perf.Fn', 'lbf'),
     'Fg':       ('perf.Fg', 'lbf'),
     'TSFC':     ('perf.TSFC', None),
@@ -193,6 +199,10 @@ DECK_COLUMNS = {
     'V9':       ('mixed_nozz.Fl_O:stat:V', 'ft/s'),
 }
 
+# Why a point failed: an exception name, 'bound:<state>' or 'target'. Last
+# column, blank when converged.
+FAILURE_COLUMN = 'failure'
+
 
 def extract_od_results(prob, pt):
     """
@@ -234,8 +244,6 @@ class SweepRunner:
         Problem with DESIGN already converged via prob.run_model().
     od_pt : str
         Name of the OD point to drive, e.g. ``mp.od_pt``.
-    mach : float
-        Mach number to use for all sweep points.
     afterburn : bool
         True = wet mode: 'power' in sweep points is T7 (degR); Tt4 is fixed at mil_Tt4.
         False = dry mode: 'power' in sweep points is Tt4 (degR); afterburner dry.
@@ -244,10 +252,9 @@ class SweepRunner:
         Ignored in dry mode.
     """
 
-    def __init__(self, prob, od_pt, mach=0.01, afterburn=True, mil_Tt4=3100.):
+    def __init__(self, prob, od_pt, afterburn=True, mil_Tt4=3100.):
         self.prob = prob
         self.od_pt = od_pt
-        self.mach = mach
         self.afterburn = afterburn
         self.mil_Tt4 = mil_Tt4
         # Snapshot of the most recently converged OD state — used to restore a
@@ -293,23 +300,25 @@ class SweepRunner:
         od_group = self.prob.model._get_subsystem(self.od_pt)
         od_group._outputs.asarray()[:] = snap
 
-    def _set_od_conditions(self, alt, dTs, power):
-        """Set flight conditions and power level on the OD point.
+    def _set_od_conditions(self, cond):
+        """Set a sweep point's flight conditions and power level on the OD point.
 
         In dry mode, 'power' is the Tt4 target (degR) and the afterburner is
         dry (Tt7 command 0).
         In wet mode, 'power' is the T7 (Tt7) target (degR); Tt4 is fixed at mil_Tt4.
+        Returns the (Tt4, Tt7) commands.
         """
-        pt = self.od_pt
-        self.prob.set_val(f'{pt}.fc.alt', alt, units='ft')
-        self.prob.set_val(f'{pt}.fc.dTs', dTs, units='degR')
-        self.prob.set_val(f'{pt}.fc.MN', self.mach)
+        pt, power = self.od_pt, cond['power']
+        self.prob.set_val(f'{pt}.fc.alt', cond['alt'], units='ft')
+        self.prob.set_val(f'{pt}.fc.dTs', cond['dTs'], units='degR')
+        self.prob.set_val(f'{pt}.fc.MN', cond['MN'])
         tt4, tt7 = (self.mil_Tt4, power) if self.afterburn else (power, 0.)
         self.prob.set_val(f'{pt}.balance.rhs:FAR_core', tt4, units='degR')
         self.prob.set_val(f'{pt}.aug_ctrl.Tt7_cmd', tt7, units='degR')
+        return tt4, tt7
 
     def _state_at_bounds(self):
-        """Return True if any OD BalanceComp state is at/near its bound.
+        """Return the first OD BalanceComp state at/near its bound, else None.
 
         Newton can satisfy `_iter_count < maxiter` while the state is clipped
         at a BalanceComp lower/upper bound — producing a residual minimum
@@ -336,14 +345,14 @@ class SweepRunner:
             if lo is not None and hi is not None:
                 tol = _BOUND_TOL_FRAC * (hi - lo)
                 if val > hi - tol or val < lo + tol:
-                    return True
+                    return key
             elif hi is None:
                 # Half-bounded — only check the lower bound, scale tol off lo.
                 if val < lo * (1.0 + _BOUND_TOL_FRAC):
-                    return True
+                    return key
             elif val > hi * (1.0 - _BOUND_TOL_FRAC):
-                return True
-        return False
+                return key
+        return None
 
     def _target_met(self, power):
         """Verify the FAR balances actually drove T4 (and T7, if wet) to target.
@@ -394,7 +403,7 @@ class SweepRunner:
         return not self._state_at_bounds()
 
     def _run_point(self, power=None):
-        """Run the model. Return True only if Newton actually converged.
+        """Run the model. Return None if Newton actually converged, else why not.
 
         Three independent checks must pass:
           1. prob.run_model() didn't raise (Newton hit atol/rtol).
@@ -426,12 +435,13 @@ class SweepRunner:
             # burst of them across every point is the signature of a real
             # problem rather than a hard corner.
             log.warning("Point failed (%s): %s", type(err).__name__, err)
-            return False
-        if self._state_at_bounds():
-            return False
+            return type(err).__name__
+        saturated = self._state_at_bounds()
+        if saturated:
+            return f'bound:{saturated}'
         if power is not None and not self._target_met(power):
-            return False
-        return True
+            return 'target'
+        return None
 
     def run_sweep(self, sweep_points, bridge_threshold=None, max_bridge_steps=5):
         """
@@ -441,10 +451,10 @@ class SweepRunner:
         ----------
         sweep_points : list of dict
             Ordered sweep points from build_snake_sweep().
-            Each dict has keys: 'alt', 'dTs', 'power'.
+            Each dict has keys: 'MN', 'alt', 'dTs', 'power'.
         bridge_threshold : dict, optional
             Max allowed jump per variable before bridge points are inserted.
-            Example: {'alt': 5000, 'dTs': 30}
+            Example: {'alt': 5000, 'dTs': 30, 'MN': 0.25}
             Defaults to {'alt': 5000, 'dTs': 30} if not provided.
         max_bridge_steps : int
             Number of intermediate bridge points when threshold is exceeded.
@@ -452,7 +462,9 @@ class SweepRunner:
         Returns
         -------
         pandas.DataFrame
-            One row per converged sweep point with performance columns.
+            One row per sweep point, failed ones included: ``INPUT_COLUMNS``,
+            then ``DECK_COLUMNS`` (blank where the point failed), then
+            ``FAILURE_COLUMN``.
         """
         if bridge_threshold is None:
             bridge_threshold = {'alt': 5000, 'dTs': 30}
@@ -476,17 +488,15 @@ class SweepRunner:
         for i, pt_cond in enumerate(sweep_points):
             # Check if bridge points are needed
             if prev_pt is not None:
-                needs_bridge = any(
-                    abs(pt_cond[key] - prev_pt[key]) > bridge_threshold.get(key, float('inf'))
-                    for key in ('alt', 'dTs', 'power')
-                )
+                needs_bridge = any(abs(pt_cond[key] - prev_pt[key]) > limit
+                                   for key, limit in bridge_threshold.items())
                 if needs_bridge:
                     bridges = generate_bridge_points(prev_pt, pt_cond, max_bridge_steps)
                     for j, bp in enumerate(bridges, 1):
                         print(f"  [BRIDGE {j}/{len(bridges)}] alt={bp['alt']:6.0f} ft  "
-                              f"dTs={bp['dTs']:+5.1f} R  MN={self.mach:.3f}  "
+                              f"dTs={bp['dTs']:+5.1f} R  MN={bp['MN']:.3f}  "
                               f"{power_label}={bp['power']:6.1f} R")
-                        self._set_od_conditions(bp['alt'], bp['dTs'], bp['power'])
+                        self._set_od_conditions(bp)
                         bridge_ok = self._run_bridge()
                         if not bridge_ok and self._last_good_state is not None:
                             # Hard failure (bound saturation / NaN) — restore
@@ -496,28 +506,32 @@ class SweepRunner:
             # Run the actual sweep point — fast linesearch first, fall back to
             # safe (Armijo backtracking) only if the fast attempt diverges.
             print(f"  [SWEEP  {i+1:3d}/{n_total}] alt={pt_cond['alt']:6.0f} ft  "
-                  f"dTs={pt_cond['dTs']:+5.1f} R  MN={self.mach:.3f}  "
+                  f"dTs={pt_cond['dTs']:+5.1f} R  MN={pt_cond['MN']:.3f}  "
                   f"{power_label}={pt_cond['power']:6.1f} R", end="", flush=True)
-            self._set_od_conditions(pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
+            tt4, tt7 = self._set_od_conditions(pt_cond)
 
             self._set_linesearch_mode('fast')
-            converged = self._run_point(power=pt_cond['power'])
+            failure = self._run_point(power=pt_cond['power'])
             mode_used = 'fast'
 
-            if not converged:
+            if failure:
                 # Restore last known-good state (Newton may have left NaNs/junk
                 # in the state vector) and retry with safe linesearch.
                 if self._last_good_state is not None:
                     self._restore_state(self._last_good_state)
-                self._set_od_conditions(pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
+                self._set_od_conditions(pt_cond)
                 self._set_linesearch_mode('safe')
-                converged = self._run_point(power=pt_cond['power'])
+                failure = self._run_point(power=pt_cond['power'])
                 self._set_linesearch_mode('fast')  # restore default for next point
                 mode_used = 'safe'
 
-            if converged:
-                row = extract_od_results(self.prob, self.od_pt)
-                results.append(row)
+            row = {'mode': 'wet' if self.afterburn else 'dry',
+                   'converged': failure is None, 'alt': pt_cond['alt'],
+                   'dTs': pt_cond['dTs'], 'MN': pt_cond['MN'],
+                   'T4_cmd': tt4, 'T7_cmd': tt7, FAILURE_COLUMN: failure}
+            results.append(row)
+            if failure is None:
+                row.update(extract_od_results(self.prob, self.od_pt))
                 self._last_good_state = self._snapshot_state()
                 tag = "" if mode_used == 'fast' else " (safe)"
                 print(f"  → converged{tag}")
@@ -527,13 +541,14 @@ class SweepRunner:
                 # cascade more false convergences.
                 if self._last_good_state is not None:
                     self._restore_state(self._last_good_state)
-                print("  → FAILED")
-                log.warning("Point did not converge: alt=%.0f dTs=%.1f power=%.0f",
-                            pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
+                print(f"  → FAILED ({failure})")
+                log.warning("Point did not converge: MN=%.3f alt=%.0f dTs=%.1f power=%.0f",
+                            pt_cond['MN'], pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
 
             prev_pt = pt_cond
 
+        deck = pd.DataFrame(results,
+                            columns=INPUT_COLUMNS + list(DECK_COLUMNS) + [FAILURE_COLUMN])
         log.info("Sweep complete: %d / %d points converged",
-                 len(results), len(sweep_points))
-
-        return pd.DataFrame(results)
+                 deck['converged'].sum(), len(deck))
+        return deck

@@ -12,6 +12,9 @@ import pytest
 from f404.problems import build_problem
 from f404.sweep_utils import (
     DECK_COLUMNS,
+    FAILURE_COLUMN,
+    INPUT_COLUMNS,
+    STATIC_MN,
     SweepConfigurationError,
     _BOUND_TOL_FRAC,
     _OD_BOUNDS,
@@ -102,6 +105,32 @@ def test_snake_sweep_reverses_dTs_on_alternating_altitudes():
     assert sweep[5]['dTs'] == sweep[6]['dTs']
 
 
+def test_snake_sweep_defaults_to_static_mach_and_flies_mach_0_there():
+    # Mach 0 gives NaN residuals in the flow solve.
+    assert {p['MN'] for p in build_snake_sweep([0, 2500], [0., 10.], [3100.])} == {STATIC_MN}
+    assert build_snake_sweep([0], [0], [3100], [0])[0]['MN'] == STATIC_MN
+    # 0 and 0.001 are one point: --mach 0,0.002,0.001 must not solve it twice.
+    assert [p['MN'] for p in build_snake_sweep([0], [0], [3100], [0., 0.001, 0.002])] \
+        == [STATIC_MN, 0.002]
+
+
+def test_snake_sweep_reverses_the_flight_block_on_alternating_machs():
+    # Mach sits between power and altitude. Each Mach step walks the
+    # altitude/dTs block back the way it came, so the points either side of
+    # a Mach step share alt and dTs; a new power level restarts at the first
+    # Mach.
+    machs = [STATIC_MN, 0.2, 0.4]
+    one = build_snake_sweep([0, 2500], [0., 10.], [3100.])
+    sweep = build_snake_sweep([0, 2500], [0., 10.], [3100., 2900.], machs)
+
+    flight = [(p['alt'], p['dTs']) for p in one]
+    assert [(p['alt'], p['dTs']) for p in sweep[:12]] == flight + flight[::-1] + flight
+    assert [p['MN'] for p in sweep[:12]] == [m for m in machs for _ in range(4)]
+    assert sweep[12]['MN'] == STATIC_MN and sweep[12]['power'] == 2900.
+    for a, b in zip(sweep[3:12:4], sweep[4:12:4]):
+        assert (a['alt'], a['dTs']) == (b['alt'], b['dTs'])
+
+
 def test_snake_sweep_does_not_mutate_the_caller_s_dTs_list():
     dTs_values = [0., 10., 20.]
     build_snake_sweep([0, 2500], dTs_values, [3100.])
@@ -131,6 +160,13 @@ def test_bridge_points_interpolate_strictly_between_the_endpoints():
     # power is constant across this jump, so it must not drift.
     assert [b['power'] for b in bridges] == [3800.] * 3
     assert pt_from not in bridges and pt_to not in bridges
+
+
+def test_bridge_points_interpolate_flight_mach():
+    bridges = generate_bridge_points({'MN': 0.95, 'alt': 0., 'dTs': 0., 'power': 2900.},
+                                     {'MN': 0.001, 'alt': 0., 'dTs': 0., 'power': 2700.}, 1)
+
+    assert bridges == [pytest.approx({'MN': 0.4755, 'alt': 0., 'dTs': 0., 'power': 2800.})]
 
 
 def test_bridge_points_empty_when_no_steps_requested():
@@ -174,10 +210,12 @@ def test_extract_od_results_follows_the_deck_schema():
     assert all(type(v) is float for v in row.values())
 
 
-def test_deck_keeps_the_original_columns_first_and_in_order():
-    # Readers of the pre-#12 decks index these by position.
-    assert list(DECK_COLUMNS)[:22] == [
-        'alt', 'dTs', 'MN', 'Fn', 'Fg', 'TSFC', 'W', 'BPR', 'FAR_core', 'FAR_ab',
+def test_deck_leads_with_the_inputs_then_the_original_performance_columns():
+    # Inputs first, so a failed point's row still says what was asked (#27).
+    assert INPUT_COLUMNS == ['mode', 'converged', 'alt', 'dTs', 'MN',
+                             'T4_cmd', 'T7_cmd']
+    assert list(DECK_COLUMNS)[:19] == [
+        'Fn', 'Fg', 'TSFC', 'W', 'BPR', 'FAR_core', 'FAR_ab',
         'OPR', 'fan_PR', 'hpc_PR', 'hpt_PR', 'lpt_PR', 'T4', 'T7',
         'LP_Nmech', 'HP_Nmech', 'Wf_core', 'Wf_ab', 'A8']
 
@@ -188,7 +226,7 @@ def test_deck_keeps_the_original_columns_first_and_in_order():
 # residual minimum but not a solution.
 
 def test_clean_state_is_not_flagged_as_bound_saturated():
-    assert runner(CLEAN_STATE)._state_at_bounds() is False
+    assert runner(CLEAN_STATE)._state_at_bounds() is None
 
 
 @pytest.mark.parametrize('state_var, value', [
@@ -203,7 +241,7 @@ def test_clean_state_is_not_flagged_as_bound_saturated():
 def test_saturated_state_is_flagged(state_var, value):
     state = dict(CLEAN_STATE, **{f'{OD}.{state_var}': value})
 
-    assert runner(state)._state_at_bounds() is True
+    assert runner(state)._state_at_bounds() == state_var
 
 
 @pytest.mark.parametrize('afterburn', [False, True])
@@ -213,7 +251,7 @@ def test_far_ab_on_its_zero_lower_bound_is_the_dry_solution(afterburn):
     # and _target_met catches it.
     state = dict(CLEAN_STATE, **{f'{OD}.balance.FAR_ab': 0.})
 
-    assert runner(state, afterburn=afterburn)._state_at_bounds() is False
+    assert runner(state, afterburn=afterburn)._state_at_bounds() is None
 
 
 def test_an_unreadable_state_is_an_error_not_a_free_pass():
@@ -243,8 +281,8 @@ def test_bound_tolerance_is_a_fraction_of_the_bound_width():
     width = _OD_BOUNDS['balance.W'][1] - _OD_BOUNDS['balance.W'][0]
     assert width * _BOUND_TOL_FRAC == pytest.approx(1.75)
 
-    assert runner(dict(CLEAN_STATE, **{f'{OD}.balance.W': 197.0}))._state_at_bounds() is False
-    assert runner(dict(CLEAN_STATE, **{f'{OD}.balance.W': 198.5}))._state_at_bounds() is True
+    assert runner(dict(CLEAN_STATE, **{f'{OD}.balance.W': 197.0}))._state_at_bounds() is None
+    assert runner(dict(CLEAN_STATE, **{f'{OD}.balance.W': 198.5}))._state_at_bounds() == 'balance.W'
 
 
 # ── SweepRunner._target_met ───────────────────────────────────────────────────
@@ -335,14 +373,17 @@ def test_a_short_dry_sweep_converges_and_returns_a_deck_frame():
     prob.set_solver_print(level=-1)
     points = build_snake_sweep([0.], [0., 10., 20.], [3100.])
 
-    runner = SweepRunner(prob, **dry_point(mp), mach=0.001, afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
     deck = runner.run_sweep(points)
 
-    assert len(deck) == len(points), "a nominal SLS sweep should fully converge"
+    assert deck['converged'].all(), "a nominal SLS sweep should fully converge"
     assert list(deck['dTs']) == [0., 10., 20.]
+    assert list(deck['T4_cmd']) == [3100.] * 3
+    assert (deck['mode'] == 'dry').all() and (deck['T7_cmd'] == 0.).all()
+    assert deck[FAILURE_COLUMN].isna().all()
     # Every row carries the full schema, and the guards passed on each.
-    assert set(deck.columns) == set(
-        extract_od_results(prob, mp.od_pt))
+    assert list(deck.columns) == (INPUT_COLUMNS + list(extract_od_results(prob, mp.od_pt))
+                                  + [FAILURE_COLUMN])
     assert (deck['T4'] - 3100.).abs().max() <= _TARGET_TOL_DEGR
     # build_problem() leaves OD at max AB; a dry sweep puts the AB out.
     assert deck['Wf_ab'].abs().max() < 1e-9
@@ -353,10 +394,10 @@ def test_a_short_dry_sweep_converges_and_returns_a_deck_frame():
 
 
 @pytest.mark.slow
-def test_a_sweep_point_that_cannot_converge_is_dropped_not_reported():
-    """An unreachable power target must shrink the deck, not corrupt or abort it.
+def test_a_sweep_point_that_cannot_converge_is_recorded_as_failed():
+    """An unreachable power target gets a failed row, not a corrupt or aborted deck.
 
-    Two failure modes in one test. The deck must not gain a row filled with
+    Two failure modes in one test. The row must not carry
     whatever state Newton stalled in — the bug class this suite exists for —
     and run_sweep must return normally rather than propagating, since a real
     sweep is hundreds of points and losing all of them to one bad corner is
@@ -370,26 +411,30 @@ def test_a_sweep_point_that_cannot_converge_is_dropped_not_reported():
     # would have to remove heat — FAR_core pins at its 1e-4 floor.
     points = build_snake_sweep([0.], [0.], [800.])
 
-    deck = SweepRunner(prob, **dry_point(mp), mach=0.001,
+    deck = SweepRunner(prob, **dry_point(mp),
                        afterburn=False).run_sweep(points)
 
-    assert len(deck) == 0
+    row = deck.iloc[0]
+    assert len(deck) == 1 and not row['converged']
+    assert (row['alt'], row['dTs'], row['T4_cmd']) == (0., 0., 800.)
+    assert deck[list(DECK_COLUMNS)].isna().all(axis=None)
+    assert row[FAILURE_COLUMN]
 
 
 @pytest.mark.slow
 def test_a_failed_point_does_not_abandon_the_rest_of_the_sweep():
     # The failure is deliberately placed first, so the two points after it
-    # only produce rows if the sweep survived it.
+    # only converge if the sweep survived it. Every attempted point has a row.
     prob, mp = build_problem(verbose=False)
     prob.set_solver_print(level=-1)
     points = (build_snake_sweep([0.], [0.], [800.])
               + build_snake_sweep([0.], [0., 10.], [3100.]))
 
-    deck = SweepRunner(prob, **dry_point(mp), mach=0.001,
+    deck = SweepRunner(prob, **dry_point(mp),
                        afterburn=False).run_sweep(points)
 
-    assert len(deck) == 2
-    assert list(deck['dTs']) == [0., 10.]
+    assert list(deck['converged']) == [False, True, True]
+    assert list(deck['T4_cmd']) == [800., 3100., 3100.]
 
 
 @pytest.mark.slow
@@ -404,7 +449,7 @@ def test_an_unexpected_error_aborts_the_sweep_rather_than_failing_a_point():
     """
     prob, mp = build_problem(verbose=False)
     prob.set_solver_print(level=-1)
-    runner = SweepRunner(prob, **dry_point(mp), mach=0.001, afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
 
     def exploding_run_model():
         raise KeyError("OD.balance.typo")
@@ -422,7 +467,7 @@ def test_a_drifted_bounds_table_aborts_the_sweep():
     # as an ordinary failed point.
     prob, mp = build_problem(verbose=False)
     prob.set_solver_print(level=-1)
-    runner = SweepRunner(prob, **dry_point(mp), mach=0.001, afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
 
     with pytest.raises(SweepConfigurationError, match='balance.nonexistent'):
         with_drift = dict(_OD_BOUNDS, **{'balance.nonexistent': (0., 1.)})

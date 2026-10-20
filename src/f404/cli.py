@@ -2,7 +2,7 @@
 
 Entry points::
 
-    f404 sweep  [--mode {dry,wet,both}] [--alt R] [--dts R] [--throttle R] [--out DIR]
+    f404 sweep  [--mode {dry,wet,both}] [--mach R] [--alt R] [--dts R] [--throttle R] [--out DIR]
     f404 design [--fn-target LBF] [--mil-tt4 DEGR] [--max-tt7 DEGR]
 
 ``python -m f404`` is equivalent to ``f404``. Every range flag takes one
@@ -97,6 +97,21 @@ def expand_range(lo, hi, step):
     return [float(v) for v in np.round(lo + step * np.arange(n), 9)]
 
 
+def mach_axis(text):
+    """Flight Mach axis, ascending; 0 is flown at the sweep's static Mach.
+
+    Subsonic only: the inlet's ram recovery is a fixed 0.999, which has no
+    shock loss in it.
+    """
+    values = expand_range(*parse_range(text))
+    if values[0] < 0 or values[-1] >= 1:
+        raise RangeError(
+            f"Mach must be at least 0 and below 1 (the inlet model is subsonic "
+            f"only), got {values[0]:g} to {values[-1]:g}"
+        )
+    return values
+
+
 def alt_axis(text):
     """Altitude axis in ft, ascending."""
     return expand_range(*parse_range(text))
@@ -134,7 +149,7 @@ def throttle_axis(text):
 
 # ── argparse wiring ───────────────────────────────────────────────────────────
 
-_RANGE_FLAGS = ('--alt', '--dts', '--throttle')
+_RANGE_FLAGS = ('--mach', '--alt', '--dts', '--throttle')
 
 def _axis_arg(builder):
     """Adapt an axis builder to argparse's ``type=``.
@@ -232,14 +247,19 @@ def build_parser():
 
     sweep = sub.add_parser(
         'sweep',
-        help="run the alt/dTs/throttle sweep and write cycle decks",
-        description="Sweep the sized engine over altitude, temperature offset "
-                    "and throttle, writing one CSV deck per mode.",
+        help="run the Mach/alt/dTs/throttle sweep and write cycle decks",
+        description="Sweep the sized engine over flight Mach, altitude, "
+                    "temperature offset and throttle, writing one CSV deck per "
+                    "mode. Failed points are rows too, with converged False.",
     )
     sweep.add_argument(
         '--mode', choices=['dry', 'wet', 'both'], default='both',
         help="dry (mil power and below), wet (afterburning) or both "
              "(default: both)")
+    sweep.add_argument(
+        '--mach', type=_axis_arg(mach_axis), metavar='MIN,MAX,STEP',
+        help="flight Mach, below 1; 0 is flown at 0.001 (static); a single "
+             "value holds it constant (default: 0.001,0.2,0.4,0.6,0.8,0.95)")
     sweep.add_argument(
         '--alt', type=_axis_arg(alt_axis), metavar='MIN,MAX,STEP',
         help="altitude, ft; a single value holds it constant "
@@ -280,10 +300,12 @@ def build_parser():
     compare = sub.add_parser(
         'compare',
         help="compare two cycle decks column by column",
-        description="Match the rows of two decks on (alt, dTs, throttle) and "
-                    "report the min, max and largest % change of every shared "
-                    "column, NEW against BASE. Columns whose base is ~0 are "
-                    "compared in absolute terms.",
+        description="Match the rows of two decks on (mode, alt, dTs, MN, "
+                    "T4_cmd, T7_cmd), list the points that converge in only "
+                    "one of them, and report the min, max and largest % change "
+                    "of every shared column over the points converged in both, "
+                    "NEW against BASE. Columns whose base is ~0 are compared in "
+                    "absolute terms.",
     )
     compare.add_argument('base', type=Path, metavar='BASE', help="reference deck CSV")
     compare.add_argument('new', type=Path, metavar='NEW', help="deck CSV to compare")
@@ -324,6 +346,7 @@ def _run_sweep_command(args, parser):
         dTs_vals=args.dts if args.dts is not None else sfe.DEFAULT_DTS,
         dry_powers=throttle['dry'],
         wet_powers=throttle['wet'],
+        machs=args.mach if args.mach is not None else sfe.DEFAULT_MACHS,
         out_dir=args.out,
     )
     return 0
@@ -360,10 +383,10 @@ def _run_compare_command(args, parser):
     base, new = read_deck(args.base), read_deck(args.new)
     columns = args.cols.split(',') if args.cols else None
     try:
-        table, only_base, only_new = compare_decks(base, new, columns)
+        table, points = compare_decks(base, new, columns)
     except ValueError as exc:
         parser.error(str(exc))
-    print(format_report(table, only_base, only_new, len(base), len(new),
+    print(format_report(table, points, len(base), len(new),
                         changed_only=args.changed_only))
     invalid = table.loc[table['kind'] == 'invalid', 'column'].tolist()
     if invalid:

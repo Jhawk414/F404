@@ -15,6 +15,7 @@ from f404.cli import (
     alt_axis,
     dts_axis,
     expand_range,
+    mach_axis,
     parse_range,
     throttle_axis,
 )
@@ -22,6 +23,7 @@ from f404.sweep_full_envelope import (
     DEFAULT_ALTS,
     DEFAULT_DRY_POWERS,
     DEFAULT_DTS,
+    DEFAULT_MACHS,
     DEFAULT_WET_POWERS,
 )
 
@@ -95,6 +97,7 @@ def test_single_values_work_on_every_axis_builder():
     assert alt_axis('2500') == [2500.]
     assert dts_axis('-20') == [-20.]
     assert throttle_axis('3100') == [3100.]
+    assert mach_axis('0.8') == [0.8]
 
 
 def test_expand_range_includes_both_endpoints():
@@ -137,6 +140,16 @@ def test_dts_axis_of_cold_only_range_walks_away_from_zero():
     assert dts_axis('-30,-10,10') == [-10., -20., -30.]
 
 
+def test_mach_axis_is_ascending_from_static():
+    assert mach_axis('0,0.9,0.3') == [0., 0.3, 0.6, 0.9]
+
+
+@pytest.mark.parametrize('text', ['-0.2,0.4,0.2', '0.5,1.5,0.5', '1'])
+def test_mach_axis_rejects_negative_and_supersonic_mach(text):
+    with pytest.raises(RangeError, match="subsonic only"):
+        mach_axis(text)
+
+
 def test_throttle_axis_rejects_non_positive_temperatures():
     with pytest.raises(RangeError, match="positive degR"):
         throttle_axis('0,100,50')
@@ -164,15 +177,18 @@ def test_sweep_with_no_flags_uses_the_default_grid(recorded):
     assert kw['dTs_vals'] == DEFAULT_DTS
     assert kw['dry_powers'] == DEFAULT_DRY_POWERS
     assert kw['wet_powers'] == DEFAULT_WET_POWERS
+    assert kw['machs'] == DEFAULT_MACHS
     assert kw['out_dir'].as_posix() == '.'
 
 
 def test_sweep_flags_override_only_what_they_name(recorded):
     cli.main(['sweep', '--mode', 'dry', '--alt', '[0,2000,1000]',
-              '--throttle', '2900,3100,100', '--out', 'somewhere'])
+              '--throttle', '2900,3100,100', '--mach', '0,0.5,0.25',
+              '--out', 'somewhere'])
 
     (mode,), kw = recorded[0]
     assert mode == 'dry'
+    assert kw['machs'] == [0., 0.25, 0.5]
     assert kw['alts'] == [0., 1000., 2000.]
     assert kw['dry_powers'] == [3100., 3000., 2900.]
     assert kw['wet_powers'] == DEFAULT_WET_POWERS
@@ -228,6 +244,7 @@ def fails(capsys, argv, fragment):
     (['sweep', '--throttle', '3100,2500,200', '--mode', 'dry'], 'must not exceed max'),
     (['sweep', '--throttle', '2500,3100,200'], 'can\'t serve --mode both'),
     (['sweep', '--mode', 'hot'], 'invalid choice'),
+    (['sweep', '--mach', '-0.5,0.5,0.5'], 'subsonic only'),
 ])
 def test_bad_sweep_arguments_fail_before_any_model_is_built(
         recorded, capsys, argv, fragment):
@@ -274,12 +291,13 @@ def test_sweep_end_to_end_writes_the_requested_deck(tmp_path, capsys):
 
     status = cli.main(['sweep', '--mode', 'dry', '--alt', '0,0,1',
                        '--dts', '0,0,1', '--throttle', '3100,3100,1',
-                       '--out', str(out)])
+                       '--mach', '0', '--out', str(out)])
 
     deck = pd.read_csv(out / 'cycle_deck_dry.csv')
     assert status == 0
     assert len(deck) == 1
     assert deck['alt'].iloc[0] == 0 and deck['dTs'].iloc[0] == 0
+    assert deck['MN'].iloc[0] == 0.001   # Mach 0 is flown as static
     assert deck['T4'].iloc[0] == pytest.approx(3100.0, abs=0.01)
 
 
@@ -289,7 +307,7 @@ def test_documented_wet_range_sweeps_below_core_temperature(tmp_path, capsys):
     # 3100 R core Tt4, which the CLI used to reject.
     status = cli.main(['sweep', '--mode', 'wet', '--alt', '0,0,1',
                        '--dts', '0,0,1', '--throttle', '3008,3608,600',
-                       '--out', str(tmp_path)])
+                       '--mach', '0', '--out', str(tmp_path)])
 
     deck = pd.read_csv(tmp_path / 'cycle_deck_wet.csv')
     assert status == 0
@@ -340,14 +358,15 @@ def test_sweep_help_documents_every_flag_with_its_default(capsys):
 
     for fragment in ('--mode {dry,wet,both}', '--alt MIN,MAX,STEP',
                      '--dts MIN,MAX,STEP', '--throttle MIN,MAX,STEP',
-                     '--out DIR', '0,5000,2500', '-50,50,10'):
+                     '--mach MIN,MAX,STEP', '--out DIR', '0,5000,2500', '-50,50,10',
+                     '0.001,0.2,0.4,0.6,0.8,0.95'):
         assert fragment in out, fragment
 
 
 def test_every_range_flag_says_a_single_value_holds_it_constant(capsys):
     out = ' '.join(help_text(capsys, 'sweep').split())
 
-    assert out.count('a single value holds it constant') == 3
+    assert out.count('a single value holds it constant') == 4
 
 
 def test_usage_line_is_styled_on_a_terminal(capsys, monkeypatch):
@@ -411,8 +430,9 @@ def test_usage_errors_stay_plain_argparse_text(capsys):
 # ── compare ───────────────────────────────────────────────────────────────────
 
 def test_compare_prints_the_markdown_report(tmp_path, capsys):
-    base = pd.DataFrame({'alt': [0.], 'dTs': [0.], 'T4': [3100.], 'T7': [1500.],
-                         'Fn': [11000.], 'FAR_ab': [0.], 'mode': ['dry']})
+    base = pd.DataFrame({'mode': ['dry'], 'converged': [True], 'alt': [0.],
+                         'dTs': [0.], 'MN': [0.001], 'T4_cmd': [3100.], 'T7_cmd': [0.],
+                         'Fn': [11000.]})
     new = base.assign(Fn=[11011.])
     base.to_csv(tmp_path / 'a.csv', index=False)
     new.to_csv(tmp_path / 'b.csv', index=False)
@@ -423,7 +443,7 @@ def test_compare_prints_the_markdown_report(tmp_path, capsys):
     out = capsys.readouterr().out
     assert status == 0
     assert 'matched 1' in out
-    assert '| Fn % | +0.1 | +0.1 | 0.1 | (0, 0, 3100) |' in out
+    assert "| Fn % | +0.1 | +0.1 | 0.1 | ('dry', 0, 0, 0.001, 3100, 0) |" in out
 
 
 def test_compare_rejects_a_missing_deck(capsys, tmp_path):
@@ -432,8 +452,9 @@ def test_compare_rejects_a_missing_deck(capsys, tmp_path):
 
 
 def test_compare_exits_1_when_a_deck_has_a_blank_value(tmp_path, capsys):
-    base = pd.DataFrame({'alt': [0.], 'dTs': [0.], 'T4': [3100.], 'T7': [1500.],
-                         'Fn': [11000.], 'FAR_ab': [0.], 'mode': ['dry']})
+    base = pd.DataFrame({'mode': ['dry'], 'converged': [True], 'alt': [0.],
+                         'dTs': [0.], 'MN': [0.001], 'T4_cmd': [3100.], 'T7_cmd': [0.],
+                         'Fn': [11000.]})
     base.to_csv(tmp_path / 'a.csv', index=False)
     base.assign(Fn=[None]).to_csv(tmp_path / 'b.csv', index=False)
 

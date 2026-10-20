@@ -11,13 +11,14 @@ with design-point sizing and off-design flight sweeps, built on
 
 Given a target thrust and component parameters (fan and HPC pressure ratios,
 component efficiencies, cooling bleed fractions), the model sizes the engine
-at sea-level-static conditions and sweeps altitude, ambient temperature offset,
-and throttle to generate a converged off-design performance deck.
+at sea-level-static conditions and sweeps flight Mach, altitude, ambient
+temperature offset and throttle to generate an off-design performance deck.
+The deck records every requested point, with or without convergence.
 
 **Status:** In development. One sized engine, with DESIGN at sea-level-static
 dry mil power, operated both dry (military power and below) and wet
 (afterburning) on one off-design point of the same model. Also:
-altitude/dTs/throttle sweep infrastructure, and an `f404` command line for
+Mach/altitude/dTs/throttle sweep infrastructure, and an `f404` command line for
 sweeps and single design points. See [Current status](#current-status) for
 convergence coverage and [Roadmap](#roadmap) for planned work. Not yet
 validated against public F404 performance data; the public reports are
@@ -51,7 +52,7 @@ vendored upstream `pycycle` library at the repo root (see
 | `src/f404/mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: one DESIGN point (dry mil) feeding one off-design point, `OD`, for dry and wet alike, with map scalars, station areas and the nozzle throat; the augmentor-loss constants |
 | `src/f404/problems.py` | `build_problem()`: design targets, the max-AB calibration, initial guesses and input validation |
 | `src/f404/sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner`, result extraction |
-| `src/f404/cli.py` | `f404` command line: `sweep` and `design` subcommands, `min,max,step` range parsing and validation |
+| `src/f404/cli.py` | `f404` command line: `sweep`, `design` and `compare` subcommands, `min,max,step` range parsing (`--mach`, `--alt`, `--dts`, `--throttle`) and validation |
 | `src/f404/sweep_full_envelope.py` | Sweep driver: default grid, `run_sweeps()` for dry, wet, or both modes, and the cycle-deck CSV writer |
 | `src/f404/printer.py` | Console table formatter for DESIGN/OD results |
 | `src/f404/compare_decks.py` | Column-by-column deck comparison behind `f404 compare` |
@@ -84,7 +85,7 @@ Current data flow from CLI invocation to output CSV.
 ```mermaid
 flowchart TD
     subgraph Drivers["Entry point (src/f404/)"]
-        CLI["cli.py  (f404)<br/>sweep · design<br/>--mode · --alt · --dts · --throttle · --out"]
+        CLI["cli.py  (f404)<br/>sweep · design · compare<br/>--mode · --mach · --alt · --dts · --throttle · --out"]
         A["sweep_full_envelope.py<br/>run_sweeps · write_deck_csv"]
     end
 
@@ -147,6 +148,7 @@ and needs no install beyond the package being importable.
 ```bash
 f404 sweep                      # dry + wet, default grid, decks in the cwd
 f404 sweep --mode wet           # one mode only
+f404 sweep --mach 0             # static only (flown at Mach 0.001)
 f404 sweep --alt 0 --dts -20,20,10   # one altitude, a dTs range
 f404 design                     # solve and print DESIGN, and OD at mil and max AB
 f404 compare old.csv new.csv    # % change of every deck column, new vs old
@@ -156,15 +158,28 @@ f404 --help                     # and `f404 sweep --help`, `f404 design --help`
 
 ### `f404 sweep`
 
-Sweeps the sized engine over altitude, temperature offset and throttle, and
-writes `cycle_deck_dry.csv` / `cycle_deck_wet.csv` (plus
+Sweeps the sized engine over flight Mach, altitude, temperature offset and
+throttle, and writes `cycle_deck_dry.csv` / `cycle_deck_wet.csv` (plus
 `cycle_deck_full_envelope.csv` for `--mode both`). With no range flags the
 grid is the default one below, so the output matches the committed decks in
 `deck/`.
 
+Every requested point is a row, failed ones included
+([#27](https://github.com/Jhawk414/F404/issues/27)):
+
+- The deck leads with the inputs: `mode, converged, alt, dTs, MN, T4_cmd, T7_cmd`.
+- `T4_cmd`/`T7_cmd` are the commanded burner and augmentor exit temperatures: dry is `(Tt4, 0)`, wet is `(3100, Tt7)`.
+- A failed row has blank outputs, and its last column, `failure`, says why:
+  - `AnalysisError`: Newton failed;
+  - `RuntimeError`: singular Jacobian;
+  - `bound:<state>`: a balance state saturated at its bound;
+  - `target`: T4/T7 missed.
+- `df[df.converged]` is the converged deck.
+
 | Flag | Meaning | Default |
 |---|---|---|
 | `--mode {dry,wet,both}` | afterburner mode | `both` |
+| `--mach MIN,MAX,STEP` | flight Mach, below 1 | `0.001, 0.2, 0.4, 0.6, 0.8, 0.95` |
 | `--alt MIN,MAX,STEP` | altitude, ft | `0,5000,2500` |
 | `--dts MIN,MAX,STEP` | ISA temperature offset, R | `-50,50,10` |
 | `--throttle MIN,MAX,STEP` | Tt4 (dry) or Tt7 (wet), R | `2500,3100,200` dry, `2998.35,3598.35,200` wet |
@@ -188,12 +203,14 @@ compare against one point for point, add `--throttle 3008,3608,200`.
   ([#22](https://github.com/Jhawk414/F404/issues/22)).
 - Axes are walked in the order the solver's warm-starting expects, whatever
   the flag order: `--dts` hot side first (0, +10 … then −10 …), `--throttle`
-  high power to low.
+  high power to low, `--mach` ascending. Nesting is throttle → Mach → alt →
+  dTs. Each Mach step walks the alt/dTs block back the way it came, so
+  consecutive points stay neighbours.
 - `--throttle` needs `--mode dry` or `--mode wet`: it is a different
   temperature in each.
-- There is no `--mach` yet; Mach is pinned at 0.001 until a Mach sweep
-  dimension exists in `sweep_utils.py`
-  ([#13](https://github.com/Jhawk414/F404/issues/13)).
+- Mach 0 is flown at 0.001 (`STATIC_MN`): at exactly 0 the flow solve
+  gives NaN. Mach 1 and above is rejected, because the inlet's fixed ram
+  recovery is subsonic only ([#38](https://github.com/Jhawk414/F404/issues/38)).
 
 A malformed flag stops the run before any model is built, with a message
 naming the problem: a range that isn't exactly three finite numbers, a
@@ -220,21 +237,27 @@ the same as `f404 sweep`.
 
 ### `f404 compare`
 
-Compares two decks of the same mode, `NEW` against `BASE`, and prints a
-markdown table. For every shared column it gives the min and max % change,
-the largest |%|, and the point where that occurs.
+Compares two decks, `NEW` against `BASE`, and prints a markdown report:
+- which points converge in only one of them;
+- for every shared column, over the points converged in both, the min and max % change, the largest |%|, and the point where it occurs.
 
 ```bash
 f404 compare deck/cycle_deck_wet.csv /tmp/run1/cycle_deck_wet.csv
 f404 compare old.csv new.csv --cols Fn,TSFC,BPR --changed-only
 ```
 
-- **Matching.** Rows match on (alt, dTs, throttle). alt and dTs match at
-  1e-6, so fractional grids stay distinct. The throttle is the solved T4 for
-  a dry deck or T7 for a wet one, matched to 1 R. Points in only one deck are
-  listed.
-- **Errors (exit 2).** Two rows on one key, a mixed-mode deck, a dry deck
-  against a wet one, and `--cols` naming a column either deck lacks.
+- **Matching.** Rows match on the inputs: (mode, alt, dTs, MN, T4_cmd,
+  T7_cmd).
+  - alt, dTs and MN match at 1e-6, so fractional grids stay distinct. The
+    commands match to 1 R.
+  - Full-envelope decks (both modes) compare too.
+  - Points in only one deck are listed.
+  - Decks from before #27 have no command columns. Their solved T4 (dry) or
+    T7 (wet) stands in.
+- **Convergence.** The report lists points converged only in base
+  (regressions) and only in new (gains), and counts points failed in both.
+- **Errors (exit 2).** Two rows on one key, and `--cols` naming a column
+  either deck lacks.
 - **Near-zero base values.** Points whose base value is ~0 (dry `FAR_ab`, a
   zero loss) are compared in absolute terms, on a separate `(abs)` row.
 - **Missing values.** Blank or non-finite values are reported on an
@@ -261,44 +284,58 @@ tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-219 tests (178 fast), 97% coverage. The driver and
+236 tests (195 fast), 97% coverage. The driver and
 CLI are importable and covered; what remains uncovered is mostly
 `sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 
 ## Current status
 
-Latest full-envelope sweep (`--mode both`, OpenMDAO 3.39.0) at
-alt ∈ {0, 2500, 5000} ft, dTs ∈ {0, ±10, ±20, ±30, ±40, ±50} R, static
-(MN ≈ 0.001), 4 throttle levels per mode, all on the one sized engine:
+Latest full-envelope sweep (`--mode both`, OpenMDAO 3.39.0, 2 h 5 min).
+- Grid: MN ∈ {0.001, 0.2, 0.4, 0.6, 0.8, 0.95}, alt ∈ {0, 2500, 5000} ft, dTs ∈ {0, ±10 … ±50} R, and 4 throttle levels per mode.
+- That is 792 points per mode, all on the one sized engine.
 
 | Mode | Converged | Throttle sweep |
 |---|---|---|
-| Dry | 120 / 132 | Tt4 3100 → 2500 R |
-| Wet | 95 / 132 | Tt7 3598.35 → 2998.35 R (Tt4 fixed at 3100 R MIL) |
+| Dry | 642 / 792 | Tt4 3100 → 2500 R |
+| Wet | 657 / 792 | Tt7 3598.35 → 2998.35 R (Tt4 fixed at 3100 R MIL) |
+
+Converged by Mach (each cell out of 132):
+
+| MN | 0.001 | 0.2 | 0.4 | 0.6 | 0.8 | 0.95 |
+|---|---|---|---|---|---|---|
+| Dry | 120 | 118 | 120 | 115 | 97 | 72 |
+| Wet | 96 | 100 | 117 | 128 | 120 | 96 |
 
 Decks: [`deck/cycle_deck_dry.csv`](deck/cycle_deck_dry.csv),
-[`deck/cycle_deck_wet.csv`](deck/cycle_deck_wet.csv). Every value is written
-at full float64 precision (shortest round-trip repr). Columns are
-`DECK_COLUMNS` in `sweep_utils.py`: the original 22 performance columns
-first, then fan and HPC operating point and stall margin, T3/T45/T5,
-augmentor inlet state and loss, and the nozzle inlet and exit states.
+[`deck/cycle_deck_wet.csv`](deck/cycle_deck_wet.csv).
+
+- **Precision.** Every value is written at full float64 precision (shortest round-trip repr).
+- **Size.** At ~650 KB each, the decks are over GitHub's 512 KB limit for rendering a CSV as a table, so GitHub shows them as raw text.
+- **Blank cells.** A failed row's outputs are empty fields, which pandas reads as `NaN`.
+- **Rows.** Every requested point is a row, so these counts come straight from the deck: `df.groupby(['mode', 'MN']).converged.sum()`.
+- **Columns.**
+  - `INPUT_COLUMNS` (mode, converged, alt, dTs, MN, T4_cmd, T7_cmd).
+  - Then `DECK_COLUMNS` in `sweep_utils.py`: the original 19 performance columns, then fan and HPC operating point and stall margin, T3/T45/T5, augmentor inlet state and loss, and the nozzle inlet and exit states.
+  - Then `failure`.
+
+At SLS std day, from static to M 0.95:
+
+| | Fn (lbf) | Fg (lbf) | W (lbm/s) |
+|---|---|---|---|
+| Dry mil | 11,045 → 9,262 | 11,050 → 15,510 | 145 → 190 |
+| Max AB | 17,745 → 18,831 (minimum 16,939 at M 0.4) | 17,750 → 25,075 | 145 → 190 |
 
 Where the failures are, tracked in
-[issue #3](https://github.com/Jhawk414/F404/issues/3):
+[issue #3](https://github.com/Jhawk414/F404/issues/3), and readable from the
+`failure` column:
 
-- **Dry:** 69 of the 72 non-cold points converge. Three hot-day, low-power
-  points fail at Tt4 = 2500 R: dTs +40 and +50 R at 0 ft and +50 R at
-  2500 ft. The other nine failures are all at mil (Tt4 3100 R) on the cold
-  side: dTs ≤ −40 R at 0 ft, ≤ −30 R at 2500 ft and ≤ −20 R at 5000 ft.
-- **Wet:** every point with dTs ≥ 0 R converges. Wet now fails at exactly the
-  conditions where dry mil fails, plus one point (2500 ft, −20 R, 3398 R).
-  The A8 law holds the wet gas generator at the dry-mil operating point, so
-  the two modes share one cold-corner problem.
-- The counts moved with ADR-0002, from 118 dry / 100 wet. Both shifts are
-  warm-start path effects at marginal points: a 12-point hot-day probe
-  converged 12/12 with each model change on its own. The wet cold corner
-  converged before only because the old Rline-2.0 hold moved the gas
-  generator off the dry-mil operating point.
+- **Dry part power (Tt4 2500 R) gets worse with Mach.**
+  - Converged out of 33: 30 static, 18 at M 0.6, 3 at M 0.95.
+  - BPR climbs toward its 1.0 bound (15 `bound:balance.BPR` failures, mostly at 2500–2700 R). This is the part-power BPR problem in [#25](https://github.com/Jhawk414/F404/issues/25).
+- **Dry and wet mil fail on the cold side.** That cold corner shrinks with Mach up to 0.6 (24 → 32 of 33 converged), then grows again by 0.95.
+  - Wet fails at the same conditions as dry mil, across all four Tt7 levels: the A8 law holds the wet gas generator at the dry-mil operating point. Every wet failure is at dTs < 0.
+- **Airflow ceiling.** Six cold-day points at M 0.95 fail on the OD airflow bound (`bound:balance.W`, 200 lbm/s; [#38](https://github.com/Jhawk414/F404/issues/38)).
+- **Static rows match the pre-Mach decks.** Every point that converged before still converges, and the values agree to Newton tolerance (≤ 0.0024 %). Wet gains one point (2500 ft, −20 R, 3398 R). `f404 sweep --mach 0` reproduces the pre-Mach decks bit for bit.
 
 ## Roadmap
 
@@ -315,9 +352,9 @@ Done:
       `.bumpversion.cfg`), moved reference PDFs into `docs/unclassified_perf_data/`
 - [x] Single `write_deck_csv()` writer for every deck
       ([#12](https://github.com/Jhawk414/F404/issues/12)), now at full
-      float64 precision with 56 columns, station data included, so deck-to-deck
+      float64 precision with station data included (61 columns since #27), so deck-to-deck
       comparisons measure the model rather than the rounding
-- [x] Per-module test suite (`tests/<module>_test.py`), 87% coverage, with
+- [x] Per-module test suite (`tests/<module>_test.py`), 97% coverage, with
       golden DESIGN/OD baselines and regression cover on the
       false-convergence guards ([#5](https://github.com/Jhawk414/F404/issues/5))
 - [x] Single-engine sizing: one DESIGN at dry mil feeding dry and wet OD
@@ -334,8 +371,13 @@ Done:
       ([#4](https://github.com/Jhawk414/F404/issues/4))
 - [x] Vendored `pycycle/` synced against upstream
       ([#6](https://github.com/Jhawk414/F404/issues/6))
-- [x] `f404` CLI with `sweep` and `design` and `--alt` / `--dts` /
-      `--throttle` range flags; single-value constant axes
+- [x] Failed sweep points recorded in the deck, with `converged` and
+      `failure` columns, and `f404 compare` reporting convergence changes
+      ([#27](https://github.com/Jhawk414/F404/issues/27))
+- [x] Mach sweep axis, static to 0.95
+      ([#13](https://github.com/Jhawk414/F404/issues/13))
+- [x] `f404` CLI with `sweep`, `design` and `compare`, and `--mach` / `--alt` /
+      `--dts` / `--throttle` range flags; single-value constant axes
       ([#24](https://github.com/Jhawk414/F404/issues/24)) and negative-start
       ranges ([#22](https://github.com/Jhawk414/F404/issues/22))
 - [x] CI: fast tests on PRs, full matrix on merge or the `full-ci` label
@@ -350,12 +392,13 @@ Done:
 Planned (see `docs/improvements/IMPROVEMENTS.md` for full detail), roughly in
 order:
 
-- [ ] CLI sweep-axis follow-ups: `--mach` (needs a Mach sweep dimension,
-      [#13](https://github.com/Jhawk414/F404/issues/13)) and a PLA axis
-      (needs PLA defined in the cycle first,
-      [#30](https://github.com/Jhawk414/F404/issues/30))
-- [ ] Write failed sweep points to `deck/` beside each cycle deck
-      ([#27](https://github.com/Jhawk414/F404/issues/27))
+- [ ] PLA sweep axis (needs PLA defined in the cycle first,
+      [#30](https://github.com/Jhawk414/F404/issues/30)), mapping onto the
+      same `T4_cmd`/`T7_cmd` commands; `--throttle` stays as the
+      temperature-based throttle
+- [ ] One static Mach for DESIGN and off-design
+      ([#37](https://github.com/Jhawk414/F404/issues/37)); supersonic inlet
+      recovery and envelope ([#38](https://github.com/Jhawk414/F404/issues/38))
 - [ ] Pydantic models for design-point inputs, sweep points and the
       duplicated OD bounds table ([#17](https://github.com/Jhawk414/F404/issues/17))
 - [ ] Dry (part-power) nozzle throat schedule
