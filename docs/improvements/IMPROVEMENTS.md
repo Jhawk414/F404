@@ -230,7 +230,9 @@ validated":
   hides failures overstates validated envelope. Mark them distinctly
   (open/hollow marker, or a red "X" overlay) rather than omitting them
   outright; exact styling is a small `matplotlib` decision to make at
-  implementation time, not a design blocker.
+  implementation time, not a design blocker. Decks now carry failed points
+  as rows (`converged`, `failure`; #27), so the plot reads them directly.
+- **Mach:** decks now span Mach 0.001–0.95 (#13); facet the plot by Mach.
 
 Generate this from the `deck/` CSVs (or the sweep's solver log, once item
 5's logging lands) via a small script — e.g. `scripts/plot_envelope.py` —
