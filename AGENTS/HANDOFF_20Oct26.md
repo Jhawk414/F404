@@ -193,7 +193,7 @@ raises `MaxTt7TooLowError` (a `ValueError`) if `max_Tt7` ≤ the solved Tt6.
 4. **The OD W bound (200 lbm/s) bites on cold days at M 0.95** (6 points). Mil W reaches 197.6 at M 0.8, −30 R. Raise it before any supersonic work (#38 comment).
 5. **Static rows in the full deck differ from `--mach 0` at Newton tolerance (≤ 0.0024 %).** Later power levels now warm-start from M 0.95, not from 5000 ft. Use `--mach 0` for bit-identical static regressions.
 
-**Numbers (20 Oct, PR #39):** 228 tests (187 fast).
+**Numbers (20 Oct, PR #39):** 236 tests (195 fast).
 
 ## Open issues at a glance
 
