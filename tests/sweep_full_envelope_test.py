@@ -120,3 +120,9 @@ def test_both_modes_sweep_one_problem_and_survive_a_failed_point(tmp_path):
         results['wet']['W'].iloc[0], rel=1e-3)
     combined = pd.read_csv(tmp_path / 'cycle_deck_full_envelope.csv')
     assert list(combined['mode']) == ['dry', 'dry', 'wet']
+    # On disk a failed row keeps its inputs, reads back NaN outputs and says why.
+    failed = pd.read_csv(tmp_path / 'cycle_deck_dry.csv').iloc[0]
+    assert (failed['converged'], failed['T4_cmd']) == (False, 800.)
+    assert failed[['Fn', 'W', 'T4', 'V9']].isna().all()
+    assert failed['failure'] in ('AnalysisError', 'RuntimeError', 'target') \
+        or failed['failure'].startswith('bound:')
