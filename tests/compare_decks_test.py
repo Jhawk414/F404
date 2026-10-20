@@ -151,11 +151,17 @@ def test_columns_filter_and_inputs_are_not_compared_by_default():
     assert chosen['column'].tolist() == ['Fn']
 
 
-@pytest.mark.parametrize('columns, side', [(['FN'], 'BASE'), (['Fn', 'mode'], 'BASE')])
+@pytest.mark.parametrize('columns, side', [(['FN'], 'BASE'), (['Fn', 'nope'], 'BASE')])
 def test_requested_columns_that_do_not_exist_are_an_error(columns, side):
     # A typo used to give an empty table and exit 0, hiding any change.
     with pytest.raises(ValueError, match=f'{side} deck has no numeric column'):
         compare_decks(deck(), deck(), columns=columns)
+
+
+@pytest.mark.parametrize('column', ['mode', 'MN', 'T4_cmd', 'converged'])
+def test_requesting_an_input_column_is_an_error_not_an_empty_table(column):
+    with pytest.raises(ValueError, match='not compared'):
+        compare_decks(deck(), deck(), columns=['Fn', column])
 
 
 def test_a_requested_column_missing_from_new_is_an_error():

@@ -105,7 +105,7 @@ def compare_decks(base, new, columns=None):
     Raises
     ------
     ValueError
-        If a requested column is missing from either deck, a deck has two
+        If a requested column is an input or missing from either deck, a deck has two
         rows on one ``_KEY``, or a deck without commands can't be matched
         unambiguously.
 
@@ -122,6 +122,10 @@ def compare_decks(base, new, columns=None):
     """
     if columns is not None:
         columns = list(columns)
+        inputs = [c for c in columns if c in _KEY + ['converged', 'failure']]
+        if inputs:
+            raise ValueError(f"{inputs} are matched on or summarized, not compared; "
+                             f"pass output columns")
         for label, df in (('BASE', base), ('NEW', new)):
             missing = [c for c in columns
                        if c not in df or not pd.api.types.is_numeric_dtype(df[c])]
