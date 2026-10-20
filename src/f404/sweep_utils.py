@@ -83,7 +83,7 @@ def build_snake_sweep(alts, dTs_values, powers, machs=(STATIC_MN,)):
         Power levels (Tt4 in degR), ordered as desired (e.g. high → low).
     machs : array-like
         Flight Mach numbers, sorted ascending. Below ``STATIC_MN`` (0
-        included) is flown at ``STATIC_MN``.
+        included) is flown at ``STATIC_MN``, once.
 
     Returns
     -------
@@ -91,6 +91,7 @@ def build_snake_sweep(alts, dTs_values, powers, machs=(STATIC_MN,)):
         Each entry: {'MN': float, 'alt': float, 'dTs': float, 'power': float}
         Ordered for minimal inter-point jumps.
     """
+    machs = list(dict.fromkeys(max(float(mn), STATIC_MN) for mn in machs))
     flight = []
     for i, mn in enumerate(machs):
         block = []
@@ -99,7 +100,7 @@ def build_snake_sweep(alts, dTs_values, powers, machs=(STATIC_MN,)):
             dTs_ordered = dTs_values if (j % 2 == 0) else dTs_values[::-1]
             block += [(mn, alt, dTs) for dTs in dTs_ordered]
         flight += block if (i % 2 == 0) else block[::-1]
-    return [{'MN': max(float(mn), STATIC_MN), 'alt': float(alt), 'dTs': float(dTs), 'power': float(power)}
+    return [{'MN': mn, 'alt': float(alt), 'dTs': float(dTs), 'power': float(power)}
             for power in powers for mn, alt, dTs in flight]
 
 

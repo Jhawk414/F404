@@ -109,6 +109,9 @@ def test_snake_sweep_defaults_to_static_mach_and_flies_mach_0_there():
     # Mach 0 gives NaN residuals in the flow solve.
     assert {p['MN'] for p in build_snake_sweep([0, 2500], [0., 10.], [3100.])} == {STATIC_MN}
     assert build_snake_sweep([0], [0], [3100], [0])[0]['MN'] == STATIC_MN
+    # 0 and 0.001 are one point: --mach 0,0.002,0.001 must not solve it twice.
+    assert [p['MN'] for p in build_snake_sweep([0], [0], [3100], [0., 0.001, 0.002])] \
+        == [STATIC_MN, 0.002]
 
 
 def test_snake_sweep_reverses_the_flight_block_on_alternating_machs():
