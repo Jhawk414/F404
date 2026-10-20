@@ -52,7 +52,7 @@ vendored upstream `pycycle` library at the repo root (see
 | `src/f404/mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: one DESIGN point (dry mil) feeding one off-design point, `OD`, for dry and wet alike, with map scalars, station areas and the nozzle throat; the augmentor-loss constants |
 | `src/f404/problems.py` | `build_problem()`: design targets, the max-AB calibration, initial guesses and input validation |
 | `src/f404/sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner`, result extraction |
-| `src/f404/cli.py` | `f404` command line: `sweep` and `design` subcommands, `min,max,step` range parsing and validation |
+| `src/f404/cli.py` | `f404` command line: `sweep`, `design` and `compare` subcommands, `min,max,step` range parsing (`--mach`, `--alt`, `--dts`, `--throttle`) and validation |
 | `src/f404/sweep_full_envelope.py` | Sweep driver: default grid, `run_sweeps()` for dry, wet, or both modes, and the cycle-deck CSV writer |
 | `src/f404/printer.py` | Console table formatter for DESIGN/OD results |
 | `src/f404/compare_decks.py` | Column-by-column deck comparison behind `f404 compare` |
@@ -352,9 +352,9 @@ Done:
       `.bumpversion.cfg`), moved reference PDFs into `docs/unclassified_perf_data/`
 - [x] Single `write_deck_csv()` writer for every deck
       ([#12](https://github.com/Jhawk414/F404/issues/12)), now at full
-      float64 precision with 56 columns, station data included, so deck-to-deck
+      float64 precision with station data included (61 columns since #27), so deck-to-deck
       comparisons measure the model rather than the rounding
-- [x] Per-module test suite (`tests/<module>_test.py`), 87% coverage, with
+- [x] Per-module test suite (`tests/<module>_test.py`), 97% coverage, with
       golden DESIGN/OD baselines and regression cover on the
       false-convergence guards ([#5](https://github.com/Jhawk414/F404/issues/5))
 - [x] Single-engine sizing: one DESIGN at dry mil feeding dry and wet OD

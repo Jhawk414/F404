@@ -206,7 +206,7 @@ New since: #35 (combustion efficiency), #37 (one static Mach), #38 (supersonic e
 | [#17](https://github.com/Jhawk414/F404/issues/17) | Pydantic models for inputs | enhancement | medium |
 | [#8](https://github.com/Jhawk414/F404/issues/8) | PLA/T7-scheduled A8 | enhancement | 🟡 wet half done (PR #36, ADR-0002); **dry schedule open**, with #25/#30 |
 | [#25](https://github.com/Jhawk414/F404/issues/25) | Define idle; calibrate dry part power to F404 data | enhancement | large; tune together with #8 |
-| [#3](https://github.com/Jhawk414/F404/issues/3) | Cold / high-alt / max-AB non-convergence | bug | large; body numbers stale (now 120 dry / 95 wet; wet fails where dry mil does) |
+| [#3](https://github.com/Jhawk414/F404/issues/3) | Cold / high-alt / max-AB non-convergence | bug | large; body numbers stale. Now dry 642/792, wet 657/792 over Mach (static alone: 120/132, 96/132); wet fails where dry mil does. Count from the deck's `converged` column |
 | [#16](https://github.com/Jhawk414/F404/issues/16) | CLI entry point | enhancement | 🟡 `sweep`/`design` done; **`init-config`/YAML open** (needs #17) |
 | [#37](https://github.com/Jhawk414/F404/issues/37) | One static Mach for DESIGN and OD | bug | small; moves goldens and the max-AB calibration |
 | [#38](https://github.com/Jhawk414/F404/issues/38) | Supersonic envelope: inlet recovery, W bound | enhancement | medium; W bound already bites at M 0.95 cold |
@@ -302,12 +302,11 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
   Bare `float()` is deprecated and, inside the `except Exception` in
   `_state_at_bounds` / `_target_met`, would silently report every point
   unconverged. CI's `ruff --select NPY201` does not catch it.
-- `run_sweep` seeds `_last_good_state` from the state it is handed. If the
-  first grid point fails, there's nothing to restore, and everything after it
-  fails too. This stays hidden only because both default grids start on a
-  converging point (SLS, static), so **it matters when a new envelope
-  reorders the grid** (e.g. `--mach 0.6,0.9,0.3` starts at M 0.6). A deck
-  that is nearly all `converged == False` usually means this, not "the model broke".
+- `run_sweep` seeds `_last_good_state` from the state it is handed (SLS max
+  AB from `build_problem()`), so a failed first point restores to that and
+  the sweep carries on (pinned by a test). A grid that starts far from SLS
+  (e.g. `--mach 0.6,0.9,0.3`) still warm-starts its first point from SLS, so
+  expect more failures at its head than in the same points mid-sweep.
 - `printer.py` takes a `file` argument because pyCycle's `print_*` helpers
   bind `sys.stdout` at import, which defeats `capsys`.
 - Decks are full float64 precision (`write_deck_csv()`), with columns
@@ -330,10 +329,11 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
   the alt/dTs block (`build_snake_sweep`).
 - Validation fails before OpenMDAO loads (exit 2): not one or three finite
   numbers, step ≤ 0, min > max, a step that doesn't divide `max − min`,
-  `--throttle` with `--mode both`, wet `--throttle` ≤ fixed Tt4, `--out` is a
-  file. A non-converging `design` exits 1.
-- The wet-throttle floor (`Tt7 > MIL_Tt4`) is conservative; the physical floor
-  is the mixer exit temperature (~1500 R).
+  `--throttle` with `--mode both`, Mach outside [0, 1), `--out` is a file.
+  A non-converging `design` exits 1.
+- There is no wet-throttle floor in the CLI. A Tt7 below the augmentor inlet
+  temperature (~1500 R, known only after a solve) is a dry point to the
+  model, and the sweep records it as failed (`target`).
 - `importing sweep_full_envelope` sets no logging or warning filters;
   `configure_runtime()` does, from the CLI.
 
