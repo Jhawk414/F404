@@ -127,16 +127,19 @@ def generate_bridge_points(pt_from, pt_to, n_steps):
     return bridges
 
 
-# Deck columns read straight off the OD point: name -> (path under the point,
-# units). The first block is the original deck schema, in its original order;
-# the rest add the station data that downstream work reads: augmentor inlet
-# (#33), compressor operating point and stall margin (#8), turbine exit
-# temperatures (T5 is the F404's T5.6 control temperature), and the nozzle
-# inlet and exit states a method-of-characteristics nozzle tool needs.
+# Leading deck columns: what was asked of each point, so a failed point still
+# has a row (#27). T4_cmd/T7_cmd are the commanded burner and augmentor exit
+# temperatures; T7_cmd 0 is dry.
+INPUT_COLUMNS = ['mode', 'converged', 'alt', 'dTs', 'MN', 'T4_cmd', 'T7_cmd']
+
+# Deck output columns read straight off the OD point: name -> (path under the
+# point, units), blank on a failed point. The first block is the original
+# performance schema, in its original order; the rest add the station data
+# that downstream work reads: augmentor inlet (#33), compressor operating
+# point and stall margin (#8), turbine exit temperatures (T5 is the F404's
+# T5.6 control temperature), and the nozzle inlet and exit states a
+# method-of-characteristics nozzle tool needs.
 DECK_COLUMNS = {
-    'alt':      ('fc.alt', 'ft'),
-    'dTs':      ('fc.dTs', 'degR'),
-    'MN':       ('fc.MN', None),
     'Fn':       ('perf.Fn', 'lbf'),
     'Fg':       ('perf.Fg', 'lbf'),
     'TSFC':     ('perf.TSFC', None),
@@ -192,6 +195,10 @@ DECK_COLUMNS = {
     'Ps9':      ('mixed_nozz.Fl_O:stat:P', 'psi'),
     'V9':       ('mixed_nozz.Fl_O:stat:V', 'ft/s'),
 }
+
+# Why a point failed: an exception name, 'bound:<state>' or 'target'. Last
+# column, blank when converged.
+FAILURE_COLUMN = 'failure'
 
 
 def extract_od_results(prob, pt):
@@ -299,6 +306,7 @@ class SweepRunner:
         In dry mode, 'power' is the Tt4 target (degR) and the afterburner is
         dry (Tt7 command 0).
         In wet mode, 'power' is the T7 (Tt7) target (degR); Tt4 is fixed at mil_Tt4.
+        Returns the (Tt4, Tt7) commands.
         """
         pt = self.od_pt
         self.prob.set_val(f'{pt}.fc.alt', alt, units='ft')
@@ -307,9 +315,10 @@ class SweepRunner:
         tt4, tt7 = (self.mil_Tt4, power) if self.afterburn else (power, 0.)
         self.prob.set_val(f'{pt}.balance.rhs:FAR_core', tt4, units='degR')
         self.prob.set_val(f'{pt}.aug_ctrl.Tt7_cmd', tt7, units='degR')
+        return tt4, tt7
 
     def _state_at_bounds(self):
-        """Return True if any OD BalanceComp state is at/near its bound.
+        """Return the first OD BalanceComp state at/near its bound, else None.
 
         Newton can satisfy `_iter_count < maxiter` while the state is clipped
         at a BalanceComp lower/upper bound — producing a residual minimum
@@ -336,14 +345,14 @@ class SweepRunner:
             if lo is not None and hi is not None:
                 tol = _BOUND_TOL_FRAC * (hi - lo)
                 if val > hi - tol or val < lo + tol:
-                    return True
+                    return key
             elif hi is None:
                 # Half-bounded — only check the lower bound, scale tol off lo.
                 if val < lo * (1.0 + _BOUND_TOL_FRAC):
-                    return True
+                    return key
             elif val > hi * (1.0 - _BOUND_TOL_FRAC):
-                return True
-        return False
+                return key
+        return None
 
     def _target_met(self, power):
         """Verify the FAR balances actually drove T4 (and T7, if wet) to target.
@@ -394,7 +403,7 @@ class SweepRunner:
         return not self._state_at_bounds()
 
     def _run_point(self, power=None):
-        """Run the model. Return True only if Newton actually converged.
+        """Run the model. Return None if Newton actually converged, else why not.
 
         Three independent checks must pass:
           1. prob.run_model() didn't raise (Newton hit atol/rtol).
@@ -426,12 +435,13 @@ class SweepRunner:
             # burst of them across every point is the signature of a real
             # problem rather than a hard corner.
             log.warning("Point failed (%s): %s", type(err).__name__, err)
-            return False
-        if self._state_at_bounds():
-            return False
+            return type(err).__name__
+        saturated = self._state_at_bounds()
+        if saturated:
+            return f'bound:{saturated}'
         if power is not None and not self._target_met(power):
-            return False
-        return True
+            return 'target'
+        return None
 
     def run_sweep(self, sweep_points, bridge_threshold=None, max_bridge_steps=5):
         """
@@ -452,7 +462,9 @@ class SweepRunner:
         Returns
         -------
         pandas.DataFrame
-            One row per converged sweep point with performance columns.
+            One row per sweep point, failed ones included: ``INPUT_COLUMNS``,
+            then ``DECK_COLUMNS`` (blank where the point failed), then
+            ``FAILURE_COLUMN``.
         """
         if bridge_threshold is None:
             bridge_threshold = {'alt': 5000, 'dTs': 30}
@@ -498,26 +510,31 @@ class SweepRunner:
             print(f"  [SWEEP  {i+1:3d}/{n_total}] alt={pt_cond['alt']:6.0f} ft  "
                   f"dTs={pt_cond['dTs']:+5.1f} R  MN={self.mach:.3f}  "
                   f"{power_label}={pt_cond['power']:6.1f} R", end="", flush=True)
-            self._set_od_conditions(pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
+            tt4, tt7 = self._set_od_conditions(pt_cond['alt'], pt_cond['dTs'],
+                                               pt_cond['power'])
 
             self._set_linesearch_mode('fast')
-            converged = self._run_point(power=pt_cond['power'])
+            failure = self._run_point(power=pt_cond['power'])
             mode_used = 'fast'
 
-            if not converged:
+            if failure:
                 # Restore last known-good state (Newton may have left NaNs/junk
                 # in the state vector) and retry with safe linesearch.
                 if self._last_good_state is not None:
                     self._restore_state(self._last_good_state)
                 self._set_od_conditions(pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
                 self._set_linesearch_mode('safe')
-                converged = self._run_point(power=pt_cond['power'])
+                failure = self._run_point(power=pt_cond['power'])
                 self._set_linesearch_mode('fast')  # restore default for next point
                 mode_used = 'safe'
 
-            if converged:
-                row = extract_od_results(self.prob, self.od_pt)
-                results.append(row)
+            row = {'mode': 'wet' if self.afterburn else 'dry',
+                   'converged': failure is None, 'alt': pt_cond['alt'],
+                   'dTs': pt_cond['dTs'], 'MN': self.mach,
+                   'T4_cmd': tt4, 'T7_cmd': tt7, FAILURE_COLUMN: failure}
+            results.append(row)
+            if failure is None:
+                row.update(extract_od_results(self.prob, self.od_pt))
                 self._last_good_state = self._snapshot_state()
                 tag = "" if mode_used == 'fast' else " (safe)"
                 print(f"  → converged{tag}")
@@ -527,13 +544,14 @@ class SweepRunner:
                 # cascade more false convergences.
                 if self._last_good_state is not None:
                     self._restore_state(self._last_good_state)
-                print("  → FAILED")
+                print(f"  → FAILED ({failure})")
                 log.warning("Point did not converge: alt=%.0f dTs=%.1f power=%.0f",
                             pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
 
             prev_pt = pt_cond
 
+        deck = pd.DataFrame(results,
+                            columns=INPUT_COLUMNS + list(DECK_COLUMNS) + [FAILURE_COLUMN])
         log.info("Sweep complete: %d / %d points converged",
-                 len(results), len(sweep_points))
-
-        return pd.DataFrame(results)
+                 deck['converged'].sum(), len(deck))
+        return deck

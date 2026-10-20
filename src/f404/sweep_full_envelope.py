@@ -92,9 +92,8 @@ def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.', built=None):
 
     Returns
     -------
-    (pandas.DataFrame, int)
-        The converged rows (with a ``mode`` column) and the number of points
-        the sweep attempted.
+    pandas.DataFrame
+        One row per attempted point; ``converged`` marks the ones that solved.
     """
     if mode not in ('dry', 'wet'):
         raise ValueError(f"mode must be 'dry' or 'wet', got {mode!r}")
@@ -114,9 +113,8 @@ def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.', built=None):
         bridge_threshold=BRIDGE_THRESHOLD,
         max_bridge_steps=MAX_BRIDGE_STEPS,
     )
-    df['mode'] = mode
     write_deck_csv(df, Path(out_dir) / f'cycle_deck_{mode}.csv')
-    return df, len(sweep_pts)
+    return df
 
 
 def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
@@ -141,11 +139,11 @@ def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
     # solution build_problem() left, not from where the previous sweep ended.
     od_states = prob.model._get_subsystem(mp.od_pt)._outputs.asarray()
     anchor = od_states.copy()
-    results, attempted = {}, {}
+    results = {}
     for m, powers in (('dry', dry_powers), ('wet', wet_powers)):
         if mode in (m, 'both'):
             od_states[:] = anchor
-            results[m], attempted[m] = run_mode_sweep(
+            results[m] = run_mode_sweep(
                 m, alts, dTs_vals, powers, out_dir, built)
 
     if mode == 'both':
@@ -154,7 +152,7 @@ def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
 
     print(f"\nSweep complete in {time.time() - st_total:.1f}s")
     for m, df in results.items():
-        print(f"  {m.capitalize()}: {len(df)} / {attempted[m]} converged "
+        print(f"  {m.capitalize()}: {df['converged'].sum()} / {len(df)} converged "
               f"→ {out_dir / f'cycle_deck_{m}.csv'}")
     if mode == 'both':
         print(f"  Combined: {len(df_all)} rows "
