@@ -411,8 +411,9 @@ def test_usage_errors_stay_plain_argparse_text(capsys):
 # ── compare ───────────────────────────────────────────────────────────────────
 
 def test_compare_prints_the_markdown_report(tmp_path, capsys):
-    base = pd.DataFrame({'alt': [0.], 'dTs': [0.], 'T4': [3100.], 'T7': [1500.],
-                         'Fn': [11000.], 'FAR_ab': [0.], 'mode': ['dry']})
+    base = pd.DataFrame({'mode': ['dry'], 'converged': [True], 'alt': [0.],
+                         'dTs': [0.], 'MN': [0.001], 'T4_cmd': [3100.], 'T7_cmd': [0.],
+                         'Fn': [11000.]})
     new = base.assign(Fn=[11011.])
     base.to_csv(tmp_path / 'a.csv', index=False)
     new.to_csv(tmp_path / 'b.csv', index=False)
@@ -423,7 +424,7 @@ def test_compare_prints_the_markdown_report(tmp_path, capsys):
     out = capsys.readouterr().out
     assert status == 0
     assert 'matched 1' in out
-    assert '| Fn % | +0.1 | +0.1 | 0.1 | (0, 0, 3100) |' in out
+    assert "| Fn % | +0.1 | +0.1 | 0.1 | ('dry', 0, 0, 0.001, 3100, 0) |" in out
 
 
 def test_compare_rejects_a_missing_deck(capsys, tmp_path):
@@ -432,8 +433,9 @@ def test_compare_rejects_a_missing_deck(capsys, tmp_path):
 
 
 def test_compare_exits_1_when_a_deck_has_a_blank_value(tmp_path, capsys):
-    base = pd.DataFrame({'alt': [0.], 'dTs': [0.], 'T4': [3100.], 'T7': [1500.],
-                         'Fn': [11000.], 'FAR_ab': [0.], 'mode': ['dry']})
+    base = pd.DataFrame({'mode': ['dry'], 'converged': [True], 'alt': [0.],
+                         'dTs': [0.], 'MN': [0.001], 'T4_cmd': [3100.], 'T7_cmd': [0.],
+                         'Fn': [11000.]})
     base.to_csv(tmp_path / 'a.csv', index=False)
     base.assign(Fn=[None]).to_csv(tmp_path / 'b.csv', index=False)
 

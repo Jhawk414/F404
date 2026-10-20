@@ -280,10 +280,12 @@ def build_parser():
     compare = sub.add_parser(
         'compare',
         help="compare two cycle decks column by column",
-        description="Match the rows of two decks on (alt, dTs, throttle) and "
-                    "report the min, max and largest % change of every shared "
-                    "column, NEW against BASE. Columns whose base is ~0 are "
-                    "compared in absolute terms.",
+        description="Match the rows of two decks on (mode, alt, dTs, MN, "
+                    "T4_cmd, T7_cmd), list the points that converge in only "
+                    "one of them, and report the min, max and largest % change "
+                    "of every shared column over the points converged in both, "
+                    "NEW against BASE. Columns whose base is ~0 are compared in "
+                    "absolute terms.",
     )
     compare.add_argument('base', type=Path, metavar='BASE', help="reference deck CSV")
     compare.add_argument('new', type=Path, metavar='NEW', help="deck CSV to compare")
@@ -360,10 +362,10 @@ def _run_compare_command(args, parser):
     base, new = read_deck(args.base), read_deck(args.new)
     columns = args.cols.split(',') if args.cols else None
     try:
-        table, only_base, only_new = compare_decks(base, new, columns)
+        table, points = compare_decks(base, new, columns)
     except ValueError as exc:
         parser.error(str(exc))
-    print(format_report(table, only_base, only_new, len(base), len(new),
+    print(format_report(table, points, len(base), len(new),
                         changed_only=args.changed_only))
     invalid = table.loc[table['kind'] == 'invalid', 'column'].tolist()
     if invalid:
