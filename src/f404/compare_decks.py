@@ -13,6 +13,9 @@ import pandas as pd
 # kinds of point, and then gets one row of each.
 NEAR_ZERO = 1e-9
 _KEY = ['mode', 'alt', 'dTs', 'MN', 'T4_cmd', 'T7_cmd']
+# A solved T4/T7 from a deck without commands stands in for the other deck's
+# command within this many degR.
+_LEGACY_TOL_DEGR = 0.5
 # Point lists in the report; 'failed in both' is only counted.
 POINT_LISTS = ['only in base', 'only in new', 'converged only in base',
                'converged only in new', 'failed in both']
@@ -27,37 +30,51 @@ def read_deck(path):
     return pd.read_csv(path, float_precision='round_trip')
 
 
-def _with_inputs(df):
+def _with_inputs(df, other):
     """Give a deck written before #27 its input columns.
 
-    Those decks hold converged rows only and no commands, so the commands
-    are taken from the solved T4 and T7, which ``_keyed`` matches to 1 R.
-    Decks from before PR #34 have no ``mode`` either; it is read off FAR_ab.
+    Those decks hold converged rows only and no commands. Each solved T4/T7
+    takes ``other``'s command within ``_LEGACY_TOL_DEGR`` (see ``_snap``), or
+    is rounded to 1 R if ``other`` has no commands either. Decks from before
+    PR #34 have no ``mode``; it is read off FAR_ab.
     """
     if 'T4_cmd' in df:
         return df
     if 'mode' not in df:
         df = df.assign(mode='wet' if df['FAR_ab'].max() > 1e-6 else 'dry')
-    return df.assign(converged=True, T4_cmd=df['T4'],
-                     T7_cmd=df['T7'].where(df['mode'] == 'wet', 0.))
+    out = df.assign(converged=True, T4_cmd=df['T4'],
+                    T7_cmd=df['T7'].where(df['mode'] == 'wet', 0.))
+    for col in ('T4_cmd', 'T7_cmd'):
+        out[col] = (_snap(out[col].to_numpy(), other[col].unique()) if col in other
+                    else out[col].round())
+    return out
 
 
-def _keyed(df, label):
-    """Index a deck by ``_KEY``.
+def _snap(solved, commands):
+    """Replace each solved temperature with the command within tolerance of it.
 
-    alt, dTs and MN are matched at 1e-6, so a fractional grid stays distinct.
-    The commands are matched to 1 R, which also lets a pre-#27 deck's solved
-    temperatures stand in for them. A throttle grid finer than that collapses
-    two points onto one key, which is an error, not a silent pairing.
+    A value with no command that close is left as is, and so matches nothing.
+    Two commands that close to one value would make the pairing a guess.
     """
-    out = _with_inputs(df)
-    out = out.assign(**{c: out[c].round(6) for c in ('alt', 'dTs', 'MN')},
-                     **{c: out[c].round() for c in ('T4_cmd', 'T7_cmd')})
+    near = np.abs(solved[:, None] - commands[None, :]) <= _LEGACY_TOL_DEGR
+    if (near.sum(axis=1) > 1).any():
+        raise ValueError(f"commands closer together than {_LEGACY_TOL_DEGR} R can't "
+                         f"be matched by a deck without commands' solved T4/T7")
+    return np.where(near.any(axis=1), commands[near.argmax(axis=1)], solved)
+
+
+def _keyed(df, label, other):
+    """Index a deck by ``_KEY``, matched at 1e-6, so a fractional grid stays distinct.
+
+    ``other`` is the deck it is compared with, for ``_with_inputs``. Two rows
+    on one key is an error, not a silent pairing.
+    """
+    out = _with_inputs(df, other)
+    out = out.assign(**{c: out[c].round(6) for c in _KEY[1:]})
     dup = out.duplicated(_KEY, keep=False)
     if dup.any():
         keys = sorted({_point(k) for k in out.loc[dup, _KEY].itertuples(index=False)})
-        raise ValueError(f"{label} deck has more than one row at {tuple(_KEY)} "
-                         f"{keys}; the commands are matched to 1 R")
+        raise ValueError(f"{label} deck has more than one row at {tuple(_KEY)} {keys}")
     return out.set_index(_KEY).sort_index()
 
 
@@ -88,8 +105,9 @@ def compare_decks(base, new, columns=None):
     Raises
     ------
     ValueError
-        If a requested column is missing from either deck, or a deck has two
-        rows on one ``_KEY``.
+        If a requested column is missing from either deck, a deck has two
+        rows on one ``_KEY``, or a deck without commands can't be matched
+        unambiguously.
 
     Returns
     -------
@@ -109,7 +127,7 @@ def compare_decks(base, new, columns=None):
                        if c not in df or not pd.api.types.is_numeric_dtype(df[c])]
             if missing:
                 raise ValueError(f"{label} deck has no numeric column {missing}")
-    b, n = _keyed(base, 'BASE'), _keyed(new, 'NEW')
+    b, n = _keyed(base, 'BASE', new), _keyed(new, 'NEW', base)
     common = b.index.intersection(n.index)
     b_ok = b.loc[common, 'converged'].to_numpy(bool)
     n_ok = n.loc[common, 'converged'].to_numpy(bool)

@@ -102,6 +102,34 @@ def test_a_deck_from_before_the_input_columns_matches_on_its_solved_temperatures
     assert not any(dry.values()) and not any(wet.values())
 
 
+def test_a_fractional_throttle_grid_keeps_its_points_distinct():
+    # Commands are inputs, so 3099.5 and 3100.5 are two points, not one.
+    frac = dict(alt=[0., 0.], dTs=[0., 0.], T4_cmd=[3099.5, 3100.5])
+    table, points = compare_decks(deck(**frac), deck(Fn=[11000., 9900.], **frac))
+
+    assert not any(points.values())
+    assert row(table, 'Fn')['worst'] == ('dry', 0, 0, 0.001, 3100.5, 0)
+
+
+def test_a_legacy_deck_matches_fractional_commands_on_its_solved_temperatures():
+    frac = dict(alt=[0., 0.], dTs=[0., 0.], T4_cmd=[3099.5, 3100.5])
+    legacy = deck(alt=[0., 0.], dTs=[0., 0.], T4=[3099.4999, 3100.500058]).drop(
+        columns=['converged', 'T4_cmd', 'T7_cmd', 'failure']).assign(T7=[1500., 1500.])
+
+    _, points = compare_decks(legacy, deck(**frac))
+
+    assert not any(points.values())
+
+
+def test_a_legacy_deck_against_commands_closer_than_the_tolerance_is_an_error():
+    legacy = deck().drop(columns=['converged', 'T4_cmd', 'T7_cmd', 'failure']).assign(
+        T7=[1500., 1400.])
+    close = deck(alt=[0., 0.], dTs=[0., 0.], T4_cmd=[3100., 3100.3])
+
+    with pytest.raises(ValueError, match="closer together than 0.5 R"):
+        compare_decks(legacy, close)
+
+
 def test_a_deck_without_a_mode_column_gets_it_from_the_augmentor_fuel():
     # Decks from before PR #34 had no mode column.
     oldest = deck().drop(columns=['mode', 'converged', 'T4_cmd', 'T7_cmd', 'failure'])
@@ -177,8 +205,7 @@ def test_row_order_does_not_change_the_result():
 
 
 def test_two_rows_on_one_key_are_rejected():
-    # A throttle grid finer than the 1 R match would pair arbitrary rows.
-    crowded = deck(alt=[0., 0.], dTs=[0., 0.], T4_cmd=[3100.2, 3099.9])
+    crowded = deck(alt=[0., 0.], dTs=[0., 0.], T4_cmd=[3100., 3100.])
 
     with pytest.raises(ValueError, match=r"NEW deck has more than one row .*3100, 0\)"):
         compare_decks(deck(), crowded)
