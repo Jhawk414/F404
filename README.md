@@ -310,6 +310,8 @@ Decks: [`deck/cycle_deck_dry.csv`](deck/cycle_deck_dry.csv),
 [`deck/cycle_deck_wet.csv`](deck/cycle_deck_wet.csv).
 
 - **Precision.** Every value is written at full float64 precision (shortest round-trip repr).
+- **Size.** At ~650 KB each, the decks are over GitHub's 512 KB limit for rendering a CSV as a table, so GitHub shows them as raw text.
+- **Blank cells.** A failed row's outputs are empty fields, which pandas reads as `NaN`.
 - **Rows.** Every requested point is a row, so these counts come straight from the deck: `df.groupby(['mode', 'MN']).converged.sum()`.
 - **Columns.**
   - `INPUT_COLUMNS` (mode, converged, alt, dTs, MN, T4_cmd, T7_cmd).

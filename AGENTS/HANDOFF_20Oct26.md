@@ -312,7 +312,9 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
   bind `sys.stdout` at import, which defeats `capsys`.
 - Decks are full float64 precision (`write_deck_csv()`), with columns
   `INPUT_COLUMNS` + `DECK_COLUMNS` + `failure` from `sweep_utils.py`, and a
-  row for every requested point. Filter with `df[df.converged]`. Decks written before 18 Oct 26 were
+  row for every requested point. Filter with `df[df.converged]`. A failed row's
+  outputs are empty fields (`NaN` in pandas) by design. The decks are over
+  GitHub's 512 KB CSV-render limit, so GitHub shows raw text: not a format bug. Decks written before 18 Oct 26 were
   rounded to 2–4 decimals, so they can't resolve differences below about
   0.01 %; regenerate rather than compare against one.
 
