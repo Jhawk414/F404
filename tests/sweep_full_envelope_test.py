@@ -12,6 +12,7 @@ from f404.sweep_full_envelope import (
     DEFAULT_ALTS,
     DEFAULT_DRY_POWERS,
     DEFAULT_DTS,
+    DEFAULT_MACHS,
     DEFAULT_WET_POWERS,
     run_mode_sweep,
     run_sweeps,
@@ -61,6 +62,7 @@ def test_writing_does_not_mutate_the_caller_s_dataframe(tmp_path):
 def test_default_grid_is_the_committed_envelope():
     # The committed decks were generated from this grid. Changing it silently
     # changes every deck, so it is pinned here rather than inferred.
+    assert DEFAULT_MACHS == [0.001, 0.2, 0.4, 0.6, 0.8, 0.95]
     assert list(DEFAULT_ALTS) == [0, 2500, 5000]
     assert DEFAULT_DTS == [0., 10., 20., 30., 40., 50.,
                            -10., -20., -30., -40., -50.]
@@ -70,7 +72,7 @@ def test_default_grid_is_the_committed_envelope():
 
 @pytest.mark.parametrize('call', [
     lambda: run_sweeps('hot'),
-    lambda: run_mode_sweep('both', [0.], [0.], [3100.]),
+    lambda: run_mode_sweep('both', [0.], [0.], [3100.], [0.001]),
 ])
 def test_unknown_mode_is_rejected_before_any_work(call):
     with pytest.raises(ValueError, match="mode must be"):
@@ -80,13 +82,13 @@ def test_unknown_mode_is_rejected_before_any_work(call):
 @pytest.mark.slow
 @pytest.mark.parametrize('mode, power', [('dry', 3100.), ('wet', 3608.)])
 def test_run_mode_sweep_writes_a_deck_for_the_requested_grid(tmp_path, mode, power):
-    df = run_mode_sweep(mode, [0.], [0.], [power], out_dir=tmp_path)
+    df = run_mode_sweep(mode, [0.], [0.], [power], [0.5], out_dir=tmp_path)
 
     deck = pd.read_csv(tmp_path / f'cycle_deck_{mode}.csv')
     assert len(df) == len(deck) == 1
     assert deck['converged'].iloc[0]
     assert deck['mode'].iloc[0] == mode
-    assert deck['alt'].iloc[0] == 0.0
+    assert (deck['alt'].iloc[0], deck['MN'].iloc[0]) == (0.0, 0.5)
 
 
 @pytest.mark.slow
@@ -95,7 +97,7 @@ def test_wet_sweep_holds_the_mil_temperature_the_engine_was_built_with(tmp_path)
     # its own mil Tt4 in the wet sweep, not the module default (3100 R).
     built = build_problem(mil_Tt4=3000., verbose=False)
 
-    df = run_mode_sweep('wet', [0.], [0.], [3608.], out_dir=tmp_path,
+    df = run_mode_sweep('wet', [0.], [0.], [3608.], [0.001], out_dir=tmp_path,
                            built=built)
 
     assert df['T4'].iloc[0] == pytest.approx(3000., abs=0.01)
@@ -109,7 +111,7 @@ def test_both_modes_sweep_one_problem_and_survive_a_failed_point(tmp_path):
     # leave the shared OD point broken: each mode restarts from the SLS state.
     results = run_sweeps('both', alts=[0.], dTs_vals=[0.],
                          dry_powers=[800., 3100.], wet_powers=[3608.],
-                         out_dir=tmp_path)
+                         machs=[0.001], out_dir=tmp_path)
 
     # Converged plus failed rows are the whole attempted grid (#27).
     assert list(results['dry']['converged']) == [False, True]

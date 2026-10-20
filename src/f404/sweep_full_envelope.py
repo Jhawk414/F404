@@ -29,24 +29,26 @@ import numpy as np
 import pandas as pd
 
 from f404.problems import build_problem, MAX_Tt7
-from f404.sweep_utils import build_snake_sweep, SweepRunner, _scalar
+from f404.sweep_utils import build_snake_sweep, STATIC_MN, SweepRunner, _scalar
 
 # ── Default sweep grid (shared by both modes) ────────────────────────────────
-# Crawl-walk-run scope: low altitudes, static conditions on the runway.
+# Static to high subsonic; the inlet's fixed ram recovery is subsonic only.
+DEFAULT_MACHS = [STATIC_MN, 0.2, 0.4, 0.6, 0.8, 0.95]
+# Crawl-walk-run scope: low altitudes.
 DEFAULT_ALTS = np.arange(0, 5001, 2500)        # [0, 2500, 5000] ft — 3 pts
 # dTs ordering: anchor at 0 (matches OD verification), walk hot first
 # (+10..+50), then jump to cold side (-10..-50). Bridge logic handles
 # the +50 → -10 jump within each alt level.
 DEFAULT_DTS = [0., 10., 20., 30., 40., 50.,
                -10., -20., -30., -40., -50.]   # 11 pts, hot-first
-MACH = 0.001                                   # static (runway) conditions
 
 # Dry: sweep Tt4 from mil (3100) down to part-power (2500)
 DEFAULT_DRY_POWERS = [3100., 2900., 2700., 2500.]   # Tt4, degR
 # Wet: sweep T7 from the calibrated max AB down to min AB, 200 R steps
 DEFAULT_WET_POWERS = [MAX_Tt7 - 200. * k for k in range(4)]   # Tt7, degR
 
-BRIDGE_THRESHOLD = {'alt': 2000, 'dTs': 30, 'power': 100}
+# MN 0.25 bridges only the jump back to static at each new power level.
+BRIDGE_THRESHOLD = {'alt': 2000, 'dTs': 30, 'power': 100, 'MN': 0.25}
 MAX_BRIDGE_STEPS = 5
 
 def write_deck_csv(df, path):
@@ -76,7 +78,7 @@ def configure_runtime():
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 
-def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.', built=None):
+def run_mode_sweep(mode, alts, dTs_vals, powers, machs, out_dir='.', built=None):
     """Sweep one mode of the sized engine and write its deck.
 
     Parameters
@@ -85,6 +87,8 @@ def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.', built=None):
     alts, dTs_vals, powers : sequence of float
         The sweep axes, already in traversal order. ``powers`` is Tt4 (degR)
         in dry mode and Tt7 (degR) in wet mode.
+    machs : sequence of float
+        Flight Mach numbers, ascending.
     out_dir : path-like
         Directory the ``cycle_deck_<mode>.csv`` is written to.
     built : (Problem, MPMixedFlowTurbofan), optional
@@ -103,11 +107,10 @@ def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.', built=None):
     # not be problems.MIL_Tt4 if the caller passed custom targets.
     mil_Tt4 = _scalar(prob.get_val('DESIGN.balance.rhs:FAR_core', units='degR'))
 
-    sweep_pts = build_snake_sweep(alts, dTs_vals, powers)
+    sweep_pts = build_snake_sweep(alts, dTs_vals, powers, machs)
     print(f"\n{mode.capitalize()} sweep matrix: {len(sweep_pts)} points")
 
-    runner = SweepRunner(prob, od_pt=mp.od_pt, mach=MACH,
-                         afterburn=(mode == 'wet'), mil_Tt4=mil_Tt4)
+    runner = SweepRunner(prob, od_pt=mp.od_pt, afterburn=(mode == 'wet'), mil_Tt4=mil_Tt4)
     df = runner.run_sweep(
         sweep_pts,
         bridge_threshold=BRIDGE_THRESHOLD,
@@ -119,7 +122,7 @@ def run_mode_sweep(mode, alts, dTs_vals, powers, out_dir='.', built=None):
 
 def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
                dry_powers=DEFAULT_DRY_POWERS, wet_powers=DEFAULT_WET_POWERS,
-               out_dir='.'):
+               machs=DEFAULT_MACHS, out_dir='.'):
     """Run the dry sweep, the wet sweep, or both, and write the decks.
 
     ``mode`` is 'dry', 'wet' or 'both'; 'both' also writes the combined
@@ -144,7 +147,7 @@ def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
         if mode in (m, 'both'):
             od_states[:] = anchor
             results[m] = run_mode_sweep(
-                m, alts, dTs_vals, powers, out_dir, built)
+                m, alts, dTs_vals, powers, machs, out_dir, built)
 
     if mode == 'both':
         df_all = pd.concat([results['dry'], results['wet']], ignore_index=True)

@@ -14,6 +14,7 @@ from f404.sweep_utils import (
     DECK_COLUMNS,
     FAILURE_COLUMN,
     INPUT_COLUMNS,
+    STATIC_MN,
     SweepConfigurationError,
     _BOUND_TOL_FRAC,
     _OD_BOUNDS,
@@ -104,6 +105,27 @@ def test_snake_sweep_reverses_dTs_on_alternating_altitudes():
     assert sweep[5]['dTs'] == sweep[6]['dTs']
 
 
+def test_snake_sweep_defaults_to_static_mach():
+    assert {p['MN'] for p in build_snake_sweep([0, 2500], [0., 10.], [3100.])} == {STATIC_MN}
+
+
+def test_snake_sweep_reverses_the_flight_block_on_alternating_machs():
+    # Mach sits between power and altitude. Each Mach step walks the
+    # altitude/dTs block back the way it came, so the points either side of
+    # a Mach step share alt and dTs; a new power level restarts at the first
+    # Mach.
+    machs = [STATIC_MN, 0.2, 0.4]
+    one = build_snake_sweep([0, 2500], [0., 10.], [3100.])
+    sweep = build_snake_sweep([0, 2500], [0., 10.], [3100., 2900.], machs)
+
+    flight = [(p['alt'], p['dTs']) for p in one]
+    assert [(p['alt'], p['dTs']) for p in sweep[:12]] == flight + flight[::-1] + flight
+    assert [p['MN'] for p in sweep[:12]] == [m for m in machs for _ in range(4)]
+    assert sweep[12]['MN'] == STATIC_MN and sweep[12]['power'] == 2900.
+    for a, b in zip(sweep[3:12:4], sweep[4:12:4]):
+        assert (a['alt'], a['dTs']) == (b['alt'], b['dTs'])
+
+
 def test_snake_sweep_does_not_mutate_the_caller_s_dTs_list():
     dTs_values = [0., 10., 20.]
     build_snake_sweep([0, 2500], dTs_values, [3100.])
@@ -133,6 +155,13 @@ def test_bridge_points_interpolate_strictly_between_the_endpoints():
     # power is constant across this jump, so it must not drift.
     assert [b['power'] for b in bridges] == [3800.] * 3
     assert pt_from not in bridges and pt_to not in bridges
+
+
+def test_bridge_points_interpolate_flight_mach():
+    bridges = generate_bridge_points({'MN': 0.95, 'alt': 0., 'dTs': 0., 'power': 2900.},
+                                     {'MN': 0.001, 'alt': 0., 'dTs': 0., 'power': 2700.}, 1)
+
+    assert bridges == [pytest.approx({'MN': 0.4755, 'alt': 0., 'dTs': 0., 'power': 2800.})]
 
 
 def test_bridge_points_empty_when_no_steps_requested():
@@ -339,7 +368,7 @@ def test_a_short_dry_sweep_converges_and_returns_a_deck_frame():
     prob.set_solver_print(level=-1)
     points = build_snake_sweep([0.], [0., 10., 20.], [3100.])
 
-    runner = SweepRunner(prob, **dry_point(mp), mach=0.001, afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
     deck = runner.run_sweep(points)
 
     assert deck['converged'].all(), "a nominal SLS sweep should fully converge"
@@ -377,7 +406,7 @@ def test_a_sweep_point_that_cannot_converge_is_recorded_as_failed():
     # would have to remove heat — FAR_core pins at its 1e-4 floor.
     points = build_snake_sweep([0.], [0.], [800.])
 
-    deck = SweepRunner(prob, **dry_point(mp), mach=0.001,
+    deck = SweepRunner(prob, **dry_point(mp),
                        afterburn=False).run_sweep(points)
 
     row = deck.iloc[0]
@@ -396,7 +425,7 @@ def test_a_failed_point_does_not_abandon_the_rest_of_the_sweep():
     points = (build_snake_sweep([0.], [0.], [800.])
               + build_snake_sweep([0.], [0., 10.], [3100.]))
 
-    deck = SweepRunner(prob, **dry_point(mp), mach=0.001,
+    deck = SweepRunner(prob, **dry_point(mp),
                        afterburn=False).run_sweep(points)
 
     assert list(deck['converged']) == [False, True, True]
@@ -415,7 +444,7 @@ def test_an_unexpected_error_aborts_the_sweep_rather_than_failing_a_point():
     """
     prob, mp = build_problem(verbose=False)
     prob.set_solver_print(level=-1)
-    runner = SweepRunner(prob, **dry_point(mp), mach=0.001, afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
 
     def exploding_run_model():
         raise KeyError("OD.balance.typo")
@@ -433,7 +462,7 @@ def test_a_drifted_bounds_table_aborts_the_sweep():
     # as an ordinary failed point.
     prob, mp = build_problem(verbose=False)
     prob.set_solver_print(level=-1)
-    runner = SweepRunner(prob, **dry_point(mp), mach=0.001, afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
 
     with pytest.raises(SweepConfigurationError, match='balance.nonexistent'):
         with_drift = dict(_OD_BOUNDS, **{'balance.nonexistent': (0., 1.)})
