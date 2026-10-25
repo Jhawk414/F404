@@ -1,150 +1,24 @@
-"""Command-line interface for the F404 cycle model.
-
-Entry points::
-
-    f404 sweep  [--mode {dry,wet,both}] [--mach R] [--alt R] [--dts R] [--throttle R] [--out DIR]
-    f404 design [--fn-target LBF] [--mil-tt4 DEGR] [--max-tt7 DEGR]
-
-``python -m f404`` is equivalent to ``f404``. Every range flag takes one
-``min,max,step`` triple (inclusive of ``max``), bare or bracketed, or a single
-value to hold the axis constant.
-
-Input is validated eagerly: a malformed flag stops the run before any model is
-built. A partial or misread range that silently swept the wrong envelope would
-only be discovered later, in a deck that doesn't match what was asked for.
-"""
+"""CLI entry point for YAML runs, sweeps, design solves, and deck comparisons."""
 import argparse
-import math
 import re
 import sys
 from pathlib import Path
 
-import numpy as np
+import openmdao.api as om
+import yaml
+from rich import box
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
-
-class RangeError(ValueError):
-    """A ``min,max,step`` range flag that can't be turned into a sweep axis."""
-
-
-# max-min must be a whole number of steps to within this fraction of a step.
-_STEP_TOL = 1e-9
-
-
-def parse_range(text):
-    """Parse ``'min,max,step'`` (optionally in ``[...]``) into three floats.
-
-    A single value (``'0'``) holds the axis constant and parses as
-    ``(value, value, 1)``.
-
-    The order is fixed at min, max, step: a step in any other position can't be
-    told apart from a bound without a marker, so it is not accepted.
-
-    Raises
-    ------
-    RangeError
-        If there aren't exactly three finite numbers, ``step`` isn't positive,
-        ``min`` exceeds ``max``, or ``step`` doesn't divide ``max - min`` evenly
-        (which would otherwise stop the sweep short of the requested ``max``).
-    """
-    raw = text
-    text = text.strip()
-    if text.startswith('[') and text.endswith(']'):
-        text = text[1:-1]
-
-    parts = [p.strip() for p in text.split(',')]
-    if len(parts) == 1:
-        parts = parts * 2 + ['1']
-    if len(parts) != 3:
-        raise RangeError(
-            f"expected exactly 3 values as min,max,step, got {len(parts)} in "
-            f"{raw!r}. Example: 0,10000,1000. For a constant axis pass a "
-            f"single value, e.g. 0"
-        )
-
-    try:
-        lo, hi, step = (float(p) for p in parts)
-    except ValueError:
-        raise RangeError(
-            f"min,max,step must all be numbers, got {raw!r}. Example: 0,10000,1000"
-        ) from None
-
-    if not all(math.isfinite(v) for v in (lo, hi, step)):
-        raise RangeError(f"min,max,step must be finite, got {raw!r}")
-    if step <= 0:
-        hint = (f"For a constant axis pass a single value, e.g. {lo:g}."
-                if lo == hi else
-                "The order is min,max,step; sweeps are built from min up to max.")
-        raise RangeError(f"step must be positive, got {step:g} in {raw!r}. {hint}")
-    if lo > hi:
-        raise RangeError(
-            f"min ({lo:g}) must not exceed max ({hi:g}) in {raw!r}. The order "
-            f"is min,max,step."
-        )
-
-    n_steps = (hi - lo) / step
-    if abs(n_steps - round(n_steps)) > _STEP_TOL * max(1.0, n_steps):
-        raise RangeError(
-            f"step {step:g} does not divide max - min ({hi - lo:g}) evenly in "
-            f"{raw!r}; the sweep would stop at {lo + math.floor(n_steps) * step:g}, "
-            f"short of max {hi:g}. Adjust max or step."
-        )
-    return lo, hi, step
-
-
-def expand_range(lo, hi, step):
-    """Return the ascending values ``lo, lo+step, ... hi`` as a list of floats."""
-    n = int(round((hi - lo) / step)) + 1
-    return [float(v) for v in np.round(lo + step * np.arange(n), 9)]
-
-
-def mach_axis(text):
-    """Flight Mach axis, ascending; 0 is flown at the sweep's static Mach.
-
-    Subsonic only: the inlet's ram recovery is a fixed 0.999, which has no
-    shock loss in it.
-    """
-    values = expand_range(*parse_range(text))
-    if values[0] < 0 or values[-1] >= 1:
-        raise RangeError(
-            f"Mach must be at least 0 and below 1 (the inlet model is subsonic "
-            f"only), got {values[0]:g} to {values[-1]:g}"
-        )
-    return values
-
-
-def alt_axis(text):
-    """Altitude axis in ft, ascending."""
-    return expand_range(*parse_range(text))
-
-
-def dts_axis(text):
-    """Temperature-offset axis in degR, in the sweep's traversal order.
-
-    Anchored at 0 and walked hot-first (0, +10, ... +max), then jumping to the
-    cold side (-10, ... -min) — the same order as the default grid, which the
-    bridge-point logic is built around. Plain ascending order would instead
-    start at the most extreme cold corner, the hardest point to converge from
-    the design-condition warm start.
-    """
-    values = expand_range(*parse_range(text))
-    hot = sorted(v for v in values if v >= 0)
-    cold = sorted((v for v in values if v < 0), reverse=True)
-    return hot + cold
-
-
-def throttle_axis(text):
-    """Throttle axis (Tt4 dry, Tt7 wet) in degR, highest power first.
-
-    Matches the default grids, which start at the design-point throttle (mil
-    Tt4 / max-AB Tt7) and walk down to part power.
-    """
-    values = expand_range(*parse_range(text))
-    if values[0] <= 0:
-        raise RangeError(
-            f"throttle temperatures must be positive degR, got a minimum of "
-            f"{values[0]:g}"
-        )
-    return values[::-1]
+from f404 import sweep_full_envelope as sfe
+from f404.compare_decks import compare_decks, format_report, read_deck
+from f404.config import (
+    EXAMPLE_YAML, RangeError, SweepConfig, alt_axis, dts_axis, load_config,
+    mach_axis, throttle_axis,
+)
+from f404.problems import build_problem
 
 
 # ── argparse wiring ───────────────────────────────────────────────────────────
@@ -210,13 +84,6 @@ class _PanelHelpParser(argparse.ArgumentParser):
                        for a in self._actions)
 
     def print_help(self, file=None):
-        # Imported here so only help output pays for rich.
-        from rich import box
-        from rich.console import Console
-        from rich.panel import Panel
-        from rich.table import Table
-        from rich.text import Text
-
         console = Console(file=file, highlight=False)
         label, _, synopsis = self.format_usage().rstrip().partition(' ')
         console.print(Text.assemble((label, 'bold'), ' ', (synopsis, 'cyan')))
@@ -233,6 +100,8 @@ class _PanelHelpParser(argparse.ArgumentParser):
                 grid.add_row(Text(label), Text(text or ''))
             console.print(Panel(grid, title=title, title_align='left',
                                 box=box.ROUNDED, padding=(0, 1)))
+        if self.epilog:
+            console.print(Text(self.epilog))
         if self._takes_options_only() and not self._has_required_flags():
             console.print(Text("No flag is required: omitted flags use the "
                                "defaults shown.", style='dim'))
@@ -242,8 +111,11 @@ def build_parser():
     parser = _PanelHelpParser(
         prog='f404',
         description="GE F404 mixed-flow twin-spool turbofan cycle model.",
+        epilog="Run a YAML sweep: f404 run.yml",
     )
-    sub = parser.add_subparsers(dest='command', required=True, metavar='COMMAND')
+    parser.add_argument('--example-yaml', action='store_true',
+                        help='print a blank, commented YAML run template')
+    sub = parser.add_subparsers(dest='command', metavar='COMMAND')
 
     sweep = sub.add_parser(
         'sweep',
@@ -325,37 +197,44 @@ def _run_sweep_command(args, parser):
         parser.error(
             "--throttle is Tt4 in dry mode and Tt7 in wet mode, so one range "
             "can't serve --mode both. Run --mode dry and --mode wet separately.")
-    if args.out.exists() and not args.out.is_dir():
-        parser.error(f"--out {args.out} exists and is not a directory")
-
-    # Imported here, not at module level, so that --help and every argument
-    # error above return immediately instead of after loading OpenMDAO.
-    # Wet Tt7 needs no floor here: the physical one is the augmentor inlet
-    # temperature, known only after a solve, and a point below it pins FAR_ab
-    # at its bound and is dropped by SweepRunner's guards.
-    from f404 import sweep_full_envelope as sfe
-
     throttle = {'dry': sfe.DEFAULT_DRY_POWERS, 'wet': sfe.DEFAULT_WET_POWERS}
     if args.throttle is not None:
         throttle[args.mode] = args.throttle
 
+    try:
+        config = SweepConfig(
+            mode=args.mode,
+            mach=args.mach if args.mach is not None else sfe.DEFAULT_MACHS,
+            alt=args.alt if args.alt is not None else list(map(float, sfe.DEFAULT_ALTS)),
+            dts=args.dts if args.dts is not None else sfe.DEFAULT_DTS,
+            throttle=throttle,
+            out=args.out,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+    return _run_sweep(config, parser)
+
+
+def _run_sweep(config, parser):
+    try:
+        config.out.mkdir(parents=True, exist_ok=True)
+        resolved = config.model_dump(mode='json')
+        resolved['out'] = str(config.out.resolve())
+        (config.out / 'run.resolved.yml').write_text(
+            yaml.safe_dump({'sweep': resolved}, sort_keys=False), encoding='utf-8')
+    except OSError as exc:
+        parser.error(f"cannot write sweep configuration in {config.out}: {exc}")
+
     sfe.configure_runtime()
     sfe.run_sweeps(
-        args.mode,
-        alts=args.alt if args.alt is not None else sfe.DEFAULT_ALTS,
-        dTs_vals=args.dts if args.dts is not None else sfe.DEFAULT_DTS,
-        dry_powers=throttle['dry'],
-        wet_powers=throttle['wet'],
-        machs=args.mach if args.mach is not None else sfe.DEFAULT_MACHS,
-        out_dir=args.out,
+        config.mode, alts=config.alt, dTs_vals=config.dts,
+        dry_powers=config.throttle['dry'], wet_powers=config.throttle['wet'],
+        machs=config.mach, out_dir=config.out,
     )
     return 0
 
 
 def _run_design_command(args, parser):
-    import openmdao.api as om
-    from f404.problems import build_problem
-
     targets = {name: value for name, value in (
         ('fn_target', args.fn_target), ('mil_Tt4', args.mil_tt4),
         ('max_Tt7', args.max_tt7)) if value is not None}
@@ -377,8 +256,6 @@ def _run_compare_command(args, parser):
     for path in (args.base, args.new):
         if not path.is_file():
             parser.error(f"{path} is not a file")
-
-    from f404.compare_decks import compare_decks, format_report, read_deck
 
     base, new = read_deck(args.base), read_deck(args.new)
     columns = args.cols.split(',') if args.cols else None
@@ -418,8 +295,24 @@ def _join_negative_ranges(argv):
 def main(argv=None):
     """Run the CLI and return its exit status."""
     parser = build_parser()
-    args = parser.parse_args(_join_negative_ranges(
-        sys.argv[1:] if argv is None else argv))
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and Path(argv[0]).suffix.lower() in ('.yml', '.yaml'):
+        if len(argv) != 1:
+            parser.error("a YAML run file must be the only argument")
+        try:
+            config = load_config(Path(argv[0]))
+        except ValueError as exc:
+            parser.error(str(exc))
+        return _run_sweep(config.sweep, parser)
+
+    args = parser.parse_args(_join_negative_ranges(argv))
+    if args.example_yaml:
+        if args.command is not None:
+            parser.error("--example-yaml must be used without a command")
+        print(EXAMPLE_YAML, end='')
+        return 0
+    if args.command is None:
+        parser.error("a command or YAML run file is required")
     return args.handler(args, parser)
 
 

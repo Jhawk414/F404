@@ -27,6 +27,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from openmdao.utils.om_warnings import SolverWarning
 
 from f404.problems import build_problem, MAX_Tt7
 from f404.sweep_utils import build_snake_sweep, STATIC_MN, SweepRunner, _scalar
@@ -69,11 +70,7 @@ def configure_runtime():
     (tests, other drivers) doesn't reconfigure the host's logging or warnings.
     """
     warnings.filterwarnings('ignore', category=RuntimeWarning)
-    try:
-        from openmdao.utils.om_warnings import SolverWarning
-        warnings.filterwarnings('ignore', category=SolverWarning)
-    except ImportError:
-        pass
+    warnings.filterwarnings('ignore', category=SolverWarning)
 
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
