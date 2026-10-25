@@ -385,27 +385,19 @@ class SweepRunner:
         return abs(t4 - power) <= _TARGET_TOL_DEGR
 
     def _run_bridge(self):
-        """Run a bridge point, accepting any forward progress.
+        """Run a bridge point; True if its state is a usable warm start.
 
         Bridges exist only to warm-start Newton toward the next real sweep
-        point — they do not need to converge to their intermediate target.
-        Partial progress (e.g. T7 moved from 3800 toward 3766 without fully
-        landing on 3766) is still a better warm-start than the previous state.
-
-        Only hard failures (bound saturation / NaN) trigger a state restore;
-        an unconverged-but-sane intermediate state is kept.  To allow partial
-        convergence without an AnalysisError, err_on_non_converge is
-        temporarily disabled for the duration of this run.
+        point, so they skip the target check. A bridge that doesn't converge
+        within the cap, or ends at a bound, returns False and the caller
+        rolls it back. Partial progress used to be kept, but in the default
+        sweep no point that converged had depended on it (ADR-0003).
         """
-        newton = self._od_newton()
-        newton.options['err_on_non_converge'] = False
         try:
             self.prob.run_model()
         except (om.AnalysisError, RuntimeError) as err:
             log.warning("Bridge point failed (%s): %s", type(err).__name__, err)
             return False
-        finally:
-            newton.options['err_on_non_converge'] = True
         return not self._state_at_bounds()
 
     def _run_point(self, power=None):

@@ -7,6 +7,7 @@ matters because those guards are the regression surface — they are what
 distinguishes a real solution from a bound-clipped one that Newton is willing
 to call converged.
 """
+import openmdao.api as om
 import pytest
 
 from f404.problems import build_problem
@@ -319,6 +320,23 @@ def test_wet_target_requires_both_core_and_augmentor_temperatures():
 
 def test_target_not_met_when_temperature_is_unreadable():
     assert runner({}, afterburn=False)._target_met(3100.) is False
+
+
+# ── Bridges ───────────────────────────────────────────────────────────────────
+
+class NonConvergingProblem(StubProblem):
+    def run_model(self):
+        raise om.AnalysisError("Solver 'NL: Newton' on system 'OD' failed to "
+                               "converge in 20 iterations.")
+
+
+def test_a_bridge_that_does_not_converge_is_rolled_back():
+    # Partial progress used to be kept as the warm start. In the default
+    # sweep it never led to a converged point, so now a bridge that runs out
+    # of iterations is reported unusable and run_sweep restores the last
+    # good state (ADR-0003).
+    bridge_runner = SweepRunner(NonConvergingProblem(CLEAN_STATE), od_pt=OD)
+    assert bridge_runner._run_bridge() is False
 
 
 # ── _OD_BOUNDS drift ──────────────────────────────────────────────────────────
