@@ -12,13 +12,14 @@ import pytest
 
 from f404.problems import (
     DRY_DSN_FN,
+    DSN_MN,
     MAX_AB_FN,
     MAX_Tt7,
     MIL_Tt4,
     MaxTt7TooLowError,
     build_problem,
 )
-from f404.sweep_utils import _scalar
+from f404.sweep_utils import STATIC_MN, _scalar
 
 REL = 1e-4
 
@@ -121,6 +122,12 @@ def test_validation_errors_name_the_offending_value_and_the_expected_range():
     assert '-5.0' in message           # what was passed
     assert 'lbf' in message            # the units it was read as
     assert str(int(DRY_DSN_FN)) in message  # what a sane value looks like
+
+
+def test_design_is_sized_at_the_sweeps_static_mach():
+    # #37: sizing at MN 0.01 while the sweeps' static runs at 0.001 left SLS
+    # dry mil making 11,045 lbf against the 11,000 lbf target.
+    assert DSN_MN == STATIC_MN
 
 
 # ── DESIGN (dry mil) baseline ─────────────────────────────────────────────────
