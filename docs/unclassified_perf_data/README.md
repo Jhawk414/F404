@@ -15,6 +15,7 @@ docs/unclassified_perf_data/
 │   │   ├── exhaust-gas-pt-survey/ # Figures for Walton & Burcham (1986)
 │   │   ├── hadzic-2010/           # Figures for Hadzic et al. (2010)
 │   │   ├── henry-1988/            # Figures for Henry & Moffatt (1988)
+│   │   ├── mcas-iwakuni-2017/     # Screen captures for MCAS Iwakuni (2017)
 │   │   ├── nasa-tm-4140/          # Figures for Conners (1989)
 │   │   ├── nasa-tm-4240/          # Figures for Johnson (1990)
 │   │   ├── nasa-tm-4538/          # Figures for Ennix et al. (1993)
@@ -25,6 +26,7 @@ docs/unclassified_perf_data/
 │   ├── Exhaust-Gas P & T Survey of F404-GE-400 engine.md
 │   ├── Hadzic 2010 - Limited Qualification Tests of an F404 Engine with Blended FT-SPK and NATO F-34 Fuel.md
 │   ├── Henry 1988 - Transient Performance Trending for a Turbofan Engine.md
+│   ├── MCAS Iwakuni 2017 - F404 Ground Run Test Cell Screen Data.md
 │   ├── NASA TM 4140 - Measurement Effects on the Calculation of In-Flight Thrust for an F404 turbofan engine.md
 │   ├── NASA TM 4538 - Flight-Determine Engine Exhaust Characteristics of an F404 Engine in an F-18 Airplane.md
 │   ├── NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring.md
@@ -78,6 +80,7 @@ Numerical values throughout this index carry explicit provenance classifications
 | [Ennix et al. (1993)](md/NASA%20TM%204538%20-%20Flight-Determine%20Engine%20Exhaust%20Characteristics%20of%20an%20F404%20Engine%20in%20an%20F-18%20Airplane.md) | K. A. Ennix | 1993 | NASA TM-4538 / AIAA-93-2543 | F-18 subsonic flyovers over Rogers Dry Lake for HSCT jet noise | In-flight exhaust gas properties, C-D nozzle expansion states, invariant exit Mach number |
 | [Hadzic et al. (2010)](md/Hadzic%202010%20-%20Limited%20Qualification%20Tests%20of%20an%20F404%20Engine%20with%20Blended%20FT-SPK%20and%20NATO%20F-34%20Fuel.md) | R. Hadzic | 2010 | ASME GT2010-23402 | NRC Canada Test Cell #4 qualification campaign (CF-18) | 50/50 FT-SPK synthetic kerosene blend, fuel density effects, spool match invariance, acoustic stability |
 | [Henry & Moffatt (1988)](md/Henry%201988%20-%20Transient%20Performance%20Trending%20for%20a%20Turbofan%20Engine.md) | J. R. Henry | 1988 | ASME 88-GT-222 | Canadian Forces CF-18 takeoff slam accelerations | Takeoff transient repeatability, cross-plotted operating lines, LPT inlet temperature ($T_5$), HPC blade damage signatures |
+| [MCAS Iwakuni (2017)](md/MCAS%20Iwakuni%202017%20-%20F404%20Ground%20Run%20Test%20Cell%20Screen%20Data.md) | USMC / AiirSource | 2017 | Ground Run Telemetry | MCAS Iwakuni Hush-House Test Cell | Ground idle (PLA 18.1°) & low-throttle (PLA 21.4°) operator screen telemetry, spool speeds, station pressures, variable geometry |
 | [F404 Family Data Sheet (2006)](pdf/F404%20Family%20Data%20Sheet_UPDATED.pdf) | GEAE | 2006 | OEM Product Sheet | Commercial and military marketing specifications | Unconverted PDF summary for F404-GE-402, F404-GE-102, and RM12 ratings |
 
 ---
@@ -551,6 +554,37 @@ Turbomachinery component matching ($N_1/N_2$ spool split, airflow vs corrected s
 
 ---
 
+### 11. MCAS Iwakuni (2017) - Ground Run Test Cell Screen Telemetry
+
+- **Note**: [MCAS Iwakuni 2017 - F404 Ground Run Test Cell Screen Data.md](md/MCAS%20Iwakuni%202017%20-%20F404%20Ground%20Run%20Test%20Cell%20Screen%20Data.md)
+- **Source**: AiirSource Military, *Marines Test F-18 Jet's Powerful F404 Engine*, YouTube, 16 June 2017 ([Link](https://www.youtube.com/watch?v=gyaKh7BY-6c))
+- **Context**: Post-maintenance ground run of an F404 turbofan engine in an indoor test cell at MCAS Iwakuni, Japan. Captures the test conductor's supervisory control console displaying real-time `RUN SHEET PARAMETERS` across seven high-resolution freeze frames at Ground Idle ($\text{PLA} = 18.1^\circ$) and low-power throttle ($\text{PLA} = 21.4^\circ$).
+
+#### Key Ground Idle Telemetry [M-DIR]
+
+| Parameter | Ground Idle ($\text{PLA} = 18.1^\circ$) | Advanced Idle ($\text{PLA} = 21.4^\circ$) | Operating Condition & Notes |
+| :--- | :---: | :---: | :--- |
+| **Power Lever Angle (PLA)** | $18.1^\circ$ | $21.4^\circ$ | Ground idle setting (below $\approx 25.5^\circ - 30^\circ$ flight idle) |
+| **Fan Physical Speed ($N_1$)** | $4,089\text{ rpm}$ ($30.8\%$) | $4,180\text{ rpm}$ ($31.5\%$) | LP spool mechanical speed (design $13,270\text{ rpm}$) |
+| **Core Physical Speed ($N_2$)** | $10,933\text{ rpm}$ ($65.0\%$) | $11,067\text{ rpm}$ ($65.8\%$) | HP spool mechanical speed (design $16,810\text{ rpm}$) |
+| **Core Speed Fraction (`N2%`)** | $65.0\%$ | $65.8\%$ | Direct ECU tachometer speed percentage |
+| **Compressor Discharge Static ($PS_3$)** | $36.2 - 36.3\text{ psia}$ | $38.4\text{ psia}$ | Combustor entrance; idle $\text{OPR} \approx 2.47$ at $P_0 = 14.71\text{ psia}$ |
+| **Turbine Exit Total Pressure ($PT_{5.6}$)** | $15.1\text{ psia}$ | $15.2\text{ psia}$ | LPT frame exit / mixer inlet; $0.39\text{ psi}$ above ambient |
+| **Turbine Exit Temperature ($T_5$)** | $444^\circ\text{C}$ ($1,291^\circ\text{R}$) | $456^\circ\text{C}$ ($1,313^\circ\text{R}$) | Control/calculated ($T_{5C}$) and Harness A ($T_{5Ha}$) |
+| **Variable Exhaust Nozzle ($A_8$)** | $75.7\%$ open | $75.7\%$ open | Wide open idle nozzle schedule to reduce idle ground thrust |
+| **Fan Variable Guide Vane (`FVG`)** | $49.4^\circ$ | $49.4^\circ$ | Closed stop schedule for low-speed surge margin |
+| **Compressor Variable Geometry (`CVG`)** | $52.5^\circ$ | $52.3^\circ$ | HPC stator vane angle |
+| **Core Fuel Flow (`Wfcore`)** | $941\text{ pph}$ ($0.261\text{ lbm/s}$) | $946\text{ pph}$ ($0.263\text{ lbm/s}$) | Engine internal fuel flow transmitter |
+| **Facility Fuel Flow (`WFCELL`)** | $666\text{ pph}$ ($0.185\text{ lbm/s}$) | $681\text{ lbm/s}$ ($0.189\text{ lbm/s}$) | Test cell calibrated facility meter |
+| **Engine Oil Pressure (`EOP`)** | $96.5 - 97.6\text{ psid}$ | $98.1\text{ psid}$ | Lube pump differential; yellow caution due to cold oil warmup |
+| **Ambient Barometric Pressure** | $29.95\text{ inHg}$ ($14.71\text{ psia}$) | $29.95\text{ inHg}$ ($14.71\text{ psia}$) | MCAS Iwakuni sea-level barometric pressure |
+| **Test Cell Ambient Temperature** | $38 - 39^\circ\text{F}$ ($3.3 - 3.9^\circ\text{C}$) | $38^\circ\text{F}$ ($3.3^\circ\text{C}$) | Test cell intake average ($T_{0\text{AvgF}}$) |
+
+#### Cycle Modeling Relevance
+Anchors the low-power ground-idle operating point for the pyCycle model. Establishes the ground idle spool match ($N_1/N_2 = 4089 / 10933 = 0.374$), overall pressure ratio ($\approx 2.47$), turbine backpressure, and variable exhaust nozzle opening ($75.7\%$).
+
+---
+
 ## Cross-Study Multi-Condition Reference Map
 
 The table below cross-indexes key performance metrics and aerothermodynamic parameters across the corpus for the F404-GE-400. Operating conditions vary across ground static test cells, altitude simulation chambers, and flight test installations. Each row identifies its operating environment and data provenance.
@@ -584,6 +618,13 @@ The table below cross-indexes key performance metrics and aerothermodynamic para
 | **LPT Inlet Total Temperature ($T_5$)** | 1,692 to 1,746 °R (940 to 970 K) ground; 1,917 °R (1,065 K) flight | Sea Level Static Takeoff Roll (Military power, $PS_3/\delta = 250\text{ psia}$) | [M-PLOT] Henry & Moffatt (1988, Figs 3, 8) | Gas path Station 4.5 ($Tt_{45}$) between HPT and LPT; distinct from exhaust $T_{56}$ |
 | **Combustor-to-Turbine Expansion Ratio ($PS_3/P_5$)** | 4.2 to 5.9 (idle to Military) | Sea Level Static Takeoff Slam Accelerations | [M-PLOT] Henry & Moffatt (1988, Fig 9) | Core expansion ratio; fixes $P_5/\delta = 42\text{ to }46\text{ psia}$ at military endpoint |
 | **Transient Military Takeoff OPR** | 17.0 to 18.5:1 ($PS_3/\delta = 250\text{ to }272\text{ psia}$) | Sea Level Static Takeoff Roll (Military power endpoint) | [M-PLOT] Henry & Moffatt (1988, Figs 2, 7) | Operational transient compressor pressure ratio vs 25:1 design rating |
+| **Ground Idle Fan Speed ($N_1$)** | 4,089 rpm (30.8% of design) | Sea Level Static Test Cell ($P_0 = 29.95\text{ inHg}$, $39^\circ\text{F}$, $\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Uninstalled ground idle LP spool operating line |
+| **Ground Idle Core Speed ($N_2$)** | 10,933 rpm (65.0% of design, `N2%` = 65.0%) | Sea Level Static Test Cell ($\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Ground idle HP spool governing speed |
+| **Ground Idle Overall Pressure Ratio (OPR)** | 2.47:1 ($PS_3 = 36.3\text{ psia}$) | Sea Level Static Test Cell ($P_0 = 14.71\text{ psia}$, $\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Ground idle compressor exit pressure anchor |
+| **Ground Idle Turbine Exit Total Press ($PT_{5.6}$)** | 15.1 psia (0.39 psi over ambient) | Sea Level Static Test Cell ($\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Confirms unchoked mixer/afterburner duct flow at idle |
+| **Ground Idle Turbine Exhaust Temp ($T_5$)** | 444 °C (1,291 °R / 717 K) | Sea Level Static Test Cell ($\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Ground idle turbine discharge gas temperature |
+| **Ground Idle Nozzle Position ($A_8$)** | 75.7% open | Sea Level Static Test Cell ($\text{PLA} = 18.1^\circ$ & $21.4^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Exhaust nozzle schedule at ground idle |
+| **Ground Idle Core Fuel Flow ($W_{f,\text{core}}$)** | 941 pph (0.261 lbm/s) | Sea Level Static Test Cell ($\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Engine internal transmitter flow at idle |
 
 ---
 
@@ -618,3 +659,6 @@ Depending on your modeling or validation objective, consult the following specif
 
 9. **Transient Gas Path Dynamics, Two-Spool Acceleration Lines, and Interturbine Temperature ($T_5$)**:
    - Consult [Henry & Moffatt (1988)](md/Henry%201988%20-%20Transient%20Performance%20Trending%20for%20a%20Turbofan%20Engine.md) for continuous dry takeoff operating lines ($N_1$, $N_2$, $T_5$, $PS_3$, $P_5$), Low Pressure Turbine inlet total temperature (station 4.5), expansion ratios across the core, and component deterioration shift signatures.
+
+10. **Ground Idle Operating Lines and Variable Nozzle Scheduling at Idle**:
+    - Consult [MCAS Iwakuni (2017)](md/MCAS%20Iwakuni%202017%20-%20F404%20Ground%20Run%20Test%20Cell%20Screen%20Data.md) for direct test cell operator screen measurements at true Ground Idle ($PLA = 18.1^\circ$) and low-throttle ($PLA = 21.4^\circ$), including fan and core spool match, compressor discharge pressure, and $A_8$ opening.
