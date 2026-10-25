@@ -2,7 +2,7 @@
 title: "MCAS Iwakuni 2017 - F404 Ground Run Test Cell Screen Data"
 author: "AiirSource Military / USMC MCAS Iwakuni"
 year: 2017
-source: "AiirSource Military, 'Marines Test F-18 Jet\'s Powerful F404 Engine' (YouTube, 16 June 2017)"
+source: "AiirSource Military, 'Marines Test F-18 Jet's Powerful F404 Engine' (YouTube, 16 June 2017)"
 url: "https://www.youtube.com/watch?v=gyaKh7BY-6c"
 type: test_data
 tags: [f404, reference/perf-data, ground-idle, test-cell]
