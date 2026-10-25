@@ -80,9 +80,10 @@ Adopt **C3 with a neutral dry schedule**:
 - **No dry A8 opening yet.** The dry half of #8 waits for #25 and #30 (see
   [Dry schedule](#the-dry-a8-schedule-is-blocked-on-calibration)). The OD
   BPR upper bound stays at 1.0.
-- **Calibration.** `MAX_Tt7` = 3598.35 R gives 17,700 lbf at SLS max AB,
-  down from 3608 R. The wet sweep's default grid moves with it, to
-  3598.35 − 200k R. Combustion efficiency (#35) will move it again:
+- **Calibration.** `MAX_Tt7` = 3598.35 R gave 17,700 lbf at SLS max AB,
+  down from 3608 R. (#37 re-sized DESIGN at static Mach 0.001 and moved it
+  to 3607.68 R.) The wet sweep's default grid moves with it, to
+  `MAX_Tt7` − 200k R. Combustion efficiency (#35) will move it again:
   pyCycle's Combustor burns all the fuel it is given.
 - **The sweep sets the mode by command.** A dry sweep sets `Tt7_cmd = 0` and
   throttles Tt4. A wet sweep holds Tt4 at mil and throttles `Tt7_cmd`.

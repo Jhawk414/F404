@@ -41,17 +41,17 @@ Every requested point is a row, failed ones included
 | `--mach MIN,MAX,STEP` | flight Mach, below 1 | `0.001, 0.2, 0.4, 0.6, 0.8, 0.95` |
 | `--alt MIN,MAX,STEP` | altitude, ft | `0,5000,2500` |
 | `--dts MIN,MAX,STEP` | ISA temperature offset, R | `-50,50,10` |
-| `--throttle MIN,MAX,STEP` | Tt4 (dry) or Tt7 (wet), R | `2500,3100,200` dry, `2998.35,3598.35,200` wet |
+| `--throttle MIN,MAX,STEP` | Tt4 (dry) or Tt7 (wet), R | `2500,3100,200` dry, `3007.68,3607.68,200` wet |
 | `--out DIR` | deck directory, created if missing | `.` |
 
 ```bash
-# Wet sweep: T7 from max AB (3598.35 R) down in 200 R steps (Tt4 held at mil, 3100 R)
+# Wet sweep: T7 from max AB (3607.68 R) down in 200 R steps (Tt4 held at mil, 3100 R)
 f404 sweep --mode wet --alt 0,10000,2500 --dts 0,20,10 --out /tmp/run1
 ```
 
 The wet default steps down from the calibrated max AB, `MAX_Tt7`. Decks from
-before [ADR-0002](https://github.com/Jhawk414/F404/blob/main/docs/adr/0002-single-od-topology.md) used 3608 → 3008 R; to
-compare against one point for point, add `--throttle 3008,3608,200`.
+before [#37](https://github.com/Jhawk414/F404/issues/37) used 3598.35 → 2998.35 R; to
+compare against one point for point, add `--throttle 2998.35,3598.35,200`.
 
 - Each range is one `min,max,step` triple, inclusive of `max`, bare or
   bracketed (`--alt [0,10000,1000]`). The order is fixed.

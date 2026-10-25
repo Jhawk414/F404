@@ -6,7 +6,7 @@ deliberately **not** carried forward, to keep this file
 cheap for agents to read. Only the gotchas that still bite are kept, under
 [Standing gotchas](#standing-gotchas). Full history: `git log --follow -- AGENTS/`.
 
-## Session summary (10–22 Oct 26)
+## Session summary (10–24 Oct 26)
 
 ### 10 Oct — #2 single-engine sizing (PR #23)
 
@@ -140,9 +140,10 @@ partly superseded.
   nozzle. It is explicit, with no Newton state. Wet keeps the gas generator
   within ~0.25 % BPR of dry at each condition. The fan follows its dry-mil
   line (Rline 1.94–2.12), not 2.0.
-- **`MAX_Tt7` = 3598.35 R** (was 3608). The wet default grid is
-  3598.35 → 2998.35 R. To compare a wet deck against an older one, sweep with
-  `--throttle 3008,3608,200`.
+- **`MAX_Tt7` = 3598.35 R** (was 3608; PR B later moved it to 3607.68 R). The
+  wet default grid was then 3598.35 → 2998.35 R. To compare a wet deck against
+  an older one, sweep with `--throttle 2998.35,3598.35,200` (pre-#37) or
+  `3008,3608,200` (pre-#36).
 - **`docs/references/`** is new: general method papers the model uses, kept
   apart from `unclassified_perf_data/` (F404 data to match). Its
   [index](../docs/references/README.md) lists, per paper, the equations and
@@ -214,31 +215,46 @@ Full write-up: [ADR-0003](../docs/adr/0003-fail-fast-sweep.md).
 
 **Numbers (22 Oct):** 237 tests (195 fast).
 
+### 24 Oct — one static Mach (#37) (PR B)
+
+**What shipped:**
+- `DSN_MN = STATIC_MN` (0.001) in `problems.py`, so DESIGN sizes at true static and SLS dry mil reads 11,000 lbf (OD 10,999.98), not 11,044.7.
+- The engine re-sized: W 145.09 → 144.50 lbm/s, TSFC 0.6240 → 0.6214.
+- `MAX_Tt7` recalibrated 3598.35 → **3607.68 R** (17,700.01 lbf). The default wet grid is now 3607.68 → 3007.68 R.
+- Goldens in `tests/problems_test.py` moved, plus one test pinning `DSN_MN == STATIC_MN`.
+- Both default decks regenerated.
+
+**Findings worth keeping:**
+1. **Decks:** dry 643/792 (+1), wet 663/792 (+6). Dry compares directly: no point lost, Fn/Fg/W/A8 −0.40 %, TSFC and BPR ≤ 0.01 %.
+2. **The new wet grid can't be compared to the old deck** (no shared T7 keys). The proof is a wet sweep on the old grid (`--throttle 2998.35,3598.35,200`): +6 points, −2 (2500 ft, M 0.4, dTs −40 and −30 R, the cold corner), values as above.
+3. **Airflow bound:** points hitting the 200 lbm/s bound at M 0.95 fall from 6 to 1, since the engine is 0.4 % smaller (#38).
+4. **Timing:** about 35 min dry and 29 min wet in parallel (each mode on one core).
+
+**Numbers (24 Oct):** 238 tests (196 fast).
+
 ## Open issues at a glance
 
-Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR), #33 (PR #36), #27 and #13 (PR #39).
-New since: #35 (combustion efficiency), #37 (one static Mach), #38 (supersonic envelope), #40 (fail fast on non-converging sweep points).
+Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR), #33 (PR #36), #27 and #13 (PR #39), #40 (PR #41), #37 (PR B).
+New since: #35 (combustion efficiency), #38 (supersonic envelope).
 
 | # | Title | Type | Size / status |
 |---|---|---|---|
-| [#40](https://github.com/Jhawk414/F404/issues/40) | Fail fast on non-converging sweep points | enhancement | PR A, `fix/40-fail-fast-sweep`; closes on merge |
 | [#30](https://github.com/Jhawk414/F404/issues/30) | Define PLA in the cycle (blocks the `--pla` axis) | enhancement | decision first, then small; see [PLA](#pla-what-the-literature-says) |
 | [#17](https://github.com/Jhawk414/F404/issues/17) | Pydantic models for inputs | enhancement | medium |
 | [#8](https://github.com/Jhawk414/F404/issues/8) | PLA/T7-scheduled A8 | enhancement | 🟡 wet half done (PR #36, ADR-0002); **dry schedule open**, with #25/#30 |
 | [#25](https://github.com/Jhawk414/F404/issues/25) | Define idle; calibrate dry part power to F404 data | enhancement | large; tune together with #8 |
-| [#3](https://github.com/Jhawk414/F404/issues/3) | Cold / high-alt / max-AB non-convergence | bug | large; body numbers stale. Now dry 642/792, wet 657/792 over Mach (static alone: 120/132, 96/132); wet fails where dry mil does. Count from the deck's `converged` column |
+| [#3](https://github.com/Jhawk414/F404/issues/3) | Cold / high-alt / max-AB non-convergence | bug | large; body numbers stale. Now dry 643/792, wet 663/792 over Mach (static alone: 120/132, 95/132); wet fails where dry mil does. Count from the deck's `converged` column |
 | [#16](https://github.com/Jhawk414/F404/issues/16) | CLI entry point | enhancement | PR C: `f404 run.yml` sweep config + pydantic `SweepConfig`; `init-config` dropped for a committed `run.yml` |
-| [#37](https://github.com/Jhawk414/F404/issues/37) | One static Mach for DESIGN and OD | bug | PR B, Option A (`DSN_MN = STATIC_MN`); moves goldens and the max-AB calibration |
 | [#38](https://github.com/Jhawk414/F404/issues/38) | Supersonic envelope: inlet recovery, W bound | enhancement | medium; W bound already bites at M 0.95 cold |
 | [#35](https://github.com/Jhawk414/F404/issues/35) | Combustion efficiency in both burners | enhancement | medium; vendored `Combustor` change or F404 wrapper; calibrate max AB after it |
 | [#10](https://github.com/Jhawk414/F404/issues/10) | Inline creep/LCF life estimate | enhancement | exploratory |
 
 ## Recommended order
 
-**Decided 21 Oct 26 (agreed with the user): three PRs first, A → B → C.** PR A is done on its branch; B and C are next.
+**Decided 21 Oct 26 (agreed with the user): three PRs first, A → B → C.** A (#41) and B are done; C is next.
 
-- **PR A: #40 fail-fast sweep** (this branch, `fix/40-fail-fast-sweep`). No model change; proof is `f404 compare` against the #39 decks with nothing lost.
-- **PR B: #37 one static Mach, Option A.** Set `DSN_MN = STATIC_MN` (0.001) in `problems.py`, so DESIGN sizes at true static.
+- **PR A: #40 fail-fast sweep** (merged, #41). No model change; proof is `f404 compare` against the #39 decks with nothing lost.
+- **PR B: #37 one static Mach, Option A** (done, see 24 Oct). Set `DSN_MN = STATIC_MN` (0.001) in `problems.py`, so DESIGN sizes at true static.
   - This re-sizes the engine slightly, so the goldens in `tests/problems_test.py` move.
   - `MAX_Tt7` must be recalibrated to 17,700 lbf at the new static point (the calibration point in `_apply_od_inputs` also uses `DSN_MN`).
   - Every committed deck is regenerated (cheaper after #40).
@@ -285,7 +301,7 @@ PLA before #8 and #25, so agents working those have `--pla` to sweep.
      `a8_sched.A8_dsn` in `NozzleSchedule` (an `A8_dry(Tt4)` or `A8_dry(N2)`
      slot); keep it explicit, with no Newton state. The wet factor then scales
      the dry throat, so dry and wet meet continuously by construction.
-   - **Re-check max-AB calibration** (Tt7 3598.35 R, Kumar loss) after any DESIGN
+   - **Re-check max-AB calibration** (Tt7 3607.68 R, Kumar loss) after any DESIGN
      change; **goldens in `tests/problems_test.py` and the committed decks will
      move by design**.
    - Use the published-data table above and the index README for targets
@@ -389,8 +405,8 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
 
 ## Key model parameters
 
-- DESIGN at SLS (alt 0 ft, MN 0.01; sweeps call 0.001 static; PR B, #37, moves DESIGN to 0.001), sized at dry mil: 11,000 lbf, Tt4 3100 R.
-  Max AB: Tt7 3598.35 R → 17,700 lbf, with the Kumar augmentor loss
+- DESIGN at SLS (alt 0 ft, MN 0.001 = `STATIC_MN`, #37), sized at dry mil: 11,000 lbf, Tt4 3100 R.
+  Max AB: Tt7 3607.68 R → 17,700 lbf, with the Kumar augmentor loss
   (2.1 % cold, 6.6 % at max AB; ADR-0002).
 - Thermo: TABULAR / `AIR_JETA_TAB_SPEC`.
 - Fan PR 4.1 (eff 0.8948), HPC PR 6.5 (eff 0.8707), HPT eff 0.8888, LPT eff
@@ -398,5 +414,5 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
   `num_ports=2`: fan + LPT).
 - LP 10,000 rpm, HP 14,000 rpm, 250 hp customer power extraction; bleeds
   `cool1` 5.07% (HPC interstage → LPT), `cool3` 11.0% (CDP → HPT).
-- Dry MIL at SLS: W 145.1 lbm/s, TSFC 0.624 (optimistic vs published, see #25).
+- Dry MIL at SLS: W 144.5 lbm/s, TSFC 0.621 (optimistic vs published, see #25).
 - Branch hygiene: one narrowly-scoped branch per issue (`IMPROVEMENTS.md` item 4).
