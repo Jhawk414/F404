@@ -229,6 +229,7 @@ Full write-up: [ADR-0003](../docs/adr/0003-fail-fast-sweep.md).
 2. **The new wet grid can't be compared to the old deck** (no shared T7 keys). The proof is a wet sweep on the old grid (`--throttle 2998.35,3598.35,200`): +6 points, −2 (2500 ft, M 0.4, dTs −40 and −30 R, the cold corner), values as above.
 3. **Airflow bound:** points hitting the 200 lbm/s bound at M 0.95 fall from 6 to 1, since the engine is 0.4 % smaller (#38).
 4. **Timing:** about 35 min dry and 29 min wet in parallel (each mode on one core).
+5. **The two lost wet points are not the 20-iteration cap.** A replay of the old-grid wet sweep (661/792 again, so deterministic) re-ran each failing attempt from its exact start state at caps 20 and 50. At (2500 ft, M 0.4, dTs −40, T7 3398.35) Newton diverges and sits at a flat residual norm of 1.76e7 for all 50 iterations. At (dTs −30, T7 3198.35) the first residual is already NaN. Neither is a slow converger, so raising the cap won't recover them; both are sensitive to the warm start (focused probes from other states converge). #3 territory.
 
 **Numbers (24 Oct):** 238 tests (196 fast).
 
