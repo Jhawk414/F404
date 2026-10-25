@@ -64,6 +64,8 @@ setup(name='om-pycycle',
         # f404 only: the f404 command's --help is rendered as rounded
         # panels. Falls back to plain text when output isn't a terminal.
         'rich',
+        'pydantic>=2,<3',
+        'PyYAML>=6',
       ],
     package_dir={'f404': 'src/f404'},
     package_data={
