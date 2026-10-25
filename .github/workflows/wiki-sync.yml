@@ -1,0 +1,39 @@
+name: Wiki sync
+
+# Mirrors docs/guide/ (and nothing else) to the GitHub wiki. Edit the guide in
+# the repo; the wiki is overwritten on every sync.
+on:
+  push:
+    branches: [main]
+    paths: ['docs/guide/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: wiki-sync
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: docs/guide
+
+      - name: Mirror docs/guide to the wiki
+        env:
+          WIKI_URL: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git
+        run: |
+          git clone "$WIKI_URL" wiki
+          find wiki -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp docs/guide/*.md wiki/
+          # Wiki pages are addressed without the extension: [x](cli.md) -> [x](cli)
+          sed -i -E 's#\]\(([A-Za-z0-9_-]+)\.md(\#[^)]*)?\)#](\1\2)#g' wiki/*.md
+          cd wiki
+          git add -A
+          git diff --cached --quiet && { echo "Wiki already up to date"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Sync docs/guide from ${GITHUB_SHA::7}"
+          git push

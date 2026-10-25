@@ -364,6 +364,10 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
   0.01 %; regenerate rather than compare against one.
 
 **CLI behaviour**
+- Full usage detail (flag table, range rules, errors, `compare` rules) lives in
+  `docs/guide/cli.md`, not the README, which keeps a short block per command.
+  `docs/guide/` is mirrored read-only to the GitHub wiki by
+  `.github/workflows/wiki-sync.yml`: edit the repo copy, never the wiki.
 - A range flag takes `min,max,step` or a single value (constant axis). A
   negative-start range works as a separate token; `main()` rewrites it to the
   `--flag=value` form. A new range flag must be added to `_RANGE_FLAGS` in
