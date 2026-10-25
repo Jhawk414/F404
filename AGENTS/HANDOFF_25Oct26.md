@@ -1,12 +1,13 @@
 # Handoff: F404 — Recommended Issue Order
 
-Supersedes `HANDOFF_20Oct26.md` (renamed to this file; before that,
-`HANDOFF_18Oct26.md`, `HANDOFF_11Oct26.md` and `HANDOFF_10Oct26.md`). Everything before the 10 Oct 26 session is
-deliberately **not** carried forward, to keep this file
+Supersedes `HANDOFF_24Oct26.md` (renamed to this file; before that,
+`HANDOFF_22Oct26.md`, `HANDOFF_20Oct26.md`, `HANDOFF_18Oct26.md`,
+`HANDOFF_11Oct26.md` and `HANDOFF_10Oct26.md`). Everything before the 10 Oct 26
+session is deliberately **not** carried forward, to keep this file
 cheap for agents to read. Only the gotchas that still bite are kept, under
 [Standing gotchas](#standing-gotchas). Full history: `git log --follow -- AGENTS/`.
 
-## Session summary (10–24 Oct 26)
+## Session summary (10–25 Oct 26)
 
 ### 10 Oct — #2 single-engine sizing (PR #23)
 
@@ -242,7 +243,7 @@ Full write-up: [ADR-0003](../docs/adr/0003-fail-fast-sweep.md).
 ### 25 Oct — MCAS Iwakuni test cell ground-idle performance data (PR #44, in review)
 
 - Transcribed operator console telemetry (`RUN SHEET PARAMETERS`) across seven high-resolution freeze frames from a 2017 USMC test cell run at MCAS Iwakuni (AiirSource Military).
-- Anchors true **Ground Idle** ($PLA = 18.1^\circ$, $N_1 = 4,089\text{ rpm}$ / $30.8\%$, $N_2 = 10,933\text{ rpm}$ / $65.0\%$, $PS_3 = 36.2\text{ psia}$, $T_5 = 444^\circ\text{C}$, $A_8 = 75.7\%$ open) and low-power throttle ($PLA = 21.4^\circ$, $N_1 = 4,180\text{ rpm}$, $N_2 = 11,067\text{ rpm}$, $PS_3 = 38.4\text{ psia}$, $T_5 = 456^\circ\text{C}$).
+- Anchors true **Ground Idle** (PLA 18.1 deg, N1 4,089 rpm / 30.8%, N2 10,933 rpm / 65.0%, PS3 36.2 psia, T5 444 degC, A8 75.7% open) and low-power throttle (PLA 21.4 deg, N1 4,180 rpm, N2 11,067 rpm, PS3 38.4 psia, T5 456 degC).
 - Added comprehensive report at `docs/unclassified_perf_data/md/MCAS Iwakuni 2017 - F404 Ground Run Test Cell Screen Data.md` and indexed in `docs/unclassified_perf_data/README.md`.
 - Added image assets under `docs/unclassified_perf_data/md/images/mcas-iwakuni-2017/` (verified clean of local machine filepaths and sensitive EXIF data).
 - Relevant to #25 (idle calibration) and #8 (VEN nozzle schedule at idle).
