@@ -215,7 +215,13 @@ Full write-up: [ADR-0003](../docs/adr/0003-fail-fast-sweep.md).
 
 **Numbers (22 Oct):** 237 tests (195 fast).
 
-### 24 Oct — one static Mach (#37) (PR B, [#43](https://github.com/Jhawk414/F404/pull/43), open)
+### 24 Oct — docs: CLI guide and wiki mirror (PR #42, merged)
+
+- Moved README's detailed CLI flag table, range parsing rules, and `compare` details into `docs/guide/cli.md`.
+- Added `docs/guide/Home.md` as wiki index; added `.github/workflows/wiki-sync.yml` to mirror `docs/guide/` to GitHub wiki.
+- Trimmed README Usage to concise per-command blocks linking to the guide.
+
+### 24 Oct — one static Mach (#37) (PR B, [#43](https://github.com/Jhawk414/F404/pull/43), merged)
 
 **What shipped:**
 - `DSN_MN = STATIC_MN` (0.001) in `problems.py`, so DESIGN sizes at true static and SLS dry mil reads 11,000 lbf (OD 10,999.98), not 11,044.7.
@@ -233,14 +239,21 @@ Full write-up: [ADR-0003](../docs/adr/0003-fail-fast-sweep.md).
 
 **Numbers (24 Oct):** 238 tests (196 fast).
 
+### 25 Oct — MCAS Iwakuni test cell ground-idle performance data (PR #44, in review)
+
+- Transcribed operator console telemetry (`RUN SHEET PARAMETERS`) across seven high-resolution freeze frames from a 2017 USMC test cell run at MCAS Iwakuni (AiirSource Military).
+- Anchors true **Ground Idle** ($PLA = 18.1^\circ$, $N_1 = 4,089\text{ rpm}$ / $30.8\%$, $N_2 = 10,933\text{ rpm}$ / $65.0\%$, $PS_3 = 36.2\text{ psia}$, $T_5 = 444^\circ\text{C}$, $A_8 = 75.7\%$ open) and low-power throttle ($PLA = 21.4^\circ$, $N_1 = 4,180\text{ rpm}$, $N_2 = 11,067\text{ rpm}$, $PS_3 = 38.4\text{ psia}$, $T_5 = 456^\circ\text{C}$).
+- Added comprehensive report at `docs/unclassified_perf_data/md/MCAS Iwakuni 2017 - F404 Ground Run Test Cell Screen Data.md` and indexed in `docs/unclassified_perf_data/README.md`.
+- Added image assets under `docs/unclassified_perf_data/md/images/mcas-iwakuni-2017/` (verified clean of local machine filepaths and sensitive EXIF data).
+- Relevant to #25 (idle calibration) and #8 (VEN nozzle schedule at idle).
+
 ## Open issues at a glance
 
-Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR), #33 (PR #36), #27 and #13 (PR #39), #40 (PR #41).
-New since: #35 (combustion efficiency), #38 (supersonic envelope). #37 closes when #43 merges.
+Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR), #33 (PR #36), #27 and #13 (PR #39), #40 (PR #41), #37 (PR #43).
+New since: #35 (combustion efficiency), #38 (supersonic envelope).
 
 | # | Title | Type | Size / status |
 |---|---|---|---|
-| [#37](https://github.com/Jhawk414/F404/issues/37) | One static Mach for DESIGN and OD | bug | PR B, [#43](https://github.com/Jhawk414/F404/pull/43) open; closes on merge |
 | [#30](https://github.com/Jhawk414/F404/issues/30) | Define PLA in the cycle (blocks the `--pla` axis) | enhancement | decision first, then small; see [PLA](#pla-what-the-literature-says) |
 | [#17](https://github.com/Jhawk414/F404/issues/17) | Pydantic models for inputs | enhancement | medium |
 | [#8](https://github.com/Jhawk414/F404/issues/8) | PLA/T7-scheduled A8 | enhancement | 🟡 wet half done (PR #36, ADR-0002); **dry schedule open**, with #25/#30 |
@@ -253,10 +266,10 @@ New since: #35 (combustion efficiency), #38 (supersonic envelope). #37 closes wh
 
 ## Recommended order
 
-**Decided 21 Oct 26 (agreed with the user): three PRs first, A → B → C.** A (#41) is merged and B (#43) is open; C is next.
+**Decided 21 Oct 26 (agreed with the user): three PRs first, A → B → C.** A (#41) and B (#43) are merged; C is next.
 
 - **PR A: #40 fail-fast sweep** (merged, #41). No model change; proof is `f404 compare` against the #39 decks with nothing lost.
-- **PR B: #37 one static Mach, Option A** (PR #43, open; see 24 Oct). Set `DSN_MN = STATIC_MN` (0.001) in `problems.py`, so DESIGN sizes at true static.
+- **PR B: #37 one static Mach, Option A** (merged, #43; see 24 Oct). Set `DSN_MN = STATIC_MN` (0.001) in `problems.py`, so DESIGN sizes at true static.
   - This re-sizes the engine slightly, so the goldens in `tests/problems_test.py` move.
   - `MAX_Tt7` must be recalibrated to 17,700 lbf at the new static point (the calibration point in `_apply_od_inputs` also uses `DSN_MN`).
   - Every committed deck is regenerated (cheaper after #40).

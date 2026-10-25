@@ -23,8 +23,8 @@ off-design point of the same model. It includes sweep infrastructure and an
 `f404` command line. Convergence coverage is in [Current status](#current-status)
 and planned work in [Roadmap](#roadmap).
 
-Not yet validated against public F404 performance data; the public reports are
-archived and indexed in
+Not yet validated against public F404 performance data; public technical reports
+and test cell telemetry runs are archived and indexed in
 [`docs/unclassified_perf_data/`](docs/unclassified_perf_data/README.md). The
 general aerothermal methods the model uses (e.g. the augmentor-loss
 correlation) are in [`docs/references/`](docs/references/README.md).
