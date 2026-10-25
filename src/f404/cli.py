@@ -272,7 +272,7 @@ def build_parser():
         '--throttle', type=_axis_arg(throttle_axis), metavar='MIN,MAX,STEP',
         help="Tt4 in dry mode, Tt7 in wet mode, degR; swept high to low; "
              "a single value holds it constant (default: 2500,3100,200 dry "
-             "/ 2998.35,3598.35,200 wet). Requires --mode dry or wet, since the "
+             "/ 3007.68,3607.68,200 wet). Requires --mode dry or wet, since the "
              "two are different temperatures")
     sweep.add_argument(
         '--out', type=Path, default=Path('.'), metavar='DIR',
@@ -294,7 +294,7 @@ def build_parser():
         help="core burner exit temperature, degR (default: 3100)")
     design.add_argument(
         '--max-tt7', type=float, metavar='DEGR',
-        help="max-afterburner exit temperature, degR (default: 3598.35)")
+        help="max-afterburner exit temperature, degR (default: 3607.68)")
     design.set_defaults(handler=_run_design_command)
 
     compare = sub.add_parser(

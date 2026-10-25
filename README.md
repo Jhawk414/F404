@@ -177,7 +177,7 @@ No flag is required.
 
 - `--fn-target LBF`: SLS dry mil thrust that sizes the engine (default 11000).
 - `--mil-tt4 DEGR`: core burner exit temperature (default 3100).
-- `--max-tt7 DEGR`: max-AB afterburner exit temperature (default 3598.35).
+- `--max-tt7 DEGR`: max-AB afterburner exit temperature (default 3607.68).
 
 ### `f404 sweep`
 
