@@ -48,6 +48,12 @@ STATIC_MN = 0.001
 # requested target for the run to count as a real solution.
 _TARGET_TOL_DEGR = 5.0
 
+# OD Newton iteration cap for every sweep solve (fast, safe, bridge). In the
+# default sweep, converged attempts take at most 15 iterations and the rest
+# run to any cap, so a higher one only makes failures slower (ADR-0003, #40).
+# The model's own default (50) still applies to build_problem()'s cold solve.
+SWEEP_MAXITER = 20
+
 
 def _scalar(value):
     """Collapse an OpenMDAO value to a plain Python float.
@@ -269,7 +275,7 @@ class SweepRunner:
         """Toggle linesearch backtracking on the OD Newton.
 
         'fast' (maxiter=0): no Armijo backtracking — fast path.
-        'safe' (maxiter=3): up to 3 Armijo backtracks — robust fallback for
+        'safe' (maxiter=5): up to 5 Armijo backtracks — robust fallback for
                             points that fail with the fast linesearch.
         """
         self._od_newton().linesearch.options['maxiter'] = (
@@ -469,6 +475,7 @@ class SweepRunner:
         if bridge_threshold is None:
             bridge_threshold = {'alt': 5000, 'dTs': 30}
 
+        self._od_newton().options['maxiter'] = SWEEP_MAXITER
         results = []
         prev_pt = None
         power_label = "Tt7" if self.afterburn else "Tt4"

@@ -15,6 +15,7 @@ from f404.sweep_utils import (
     FAILURE_COLUMN,
     INPUT_COLUMNS,
     STATIC_MN,
+    SWEEP_MAXITER,
     SweepConfigurationError,
     _BOUND_TOL_FRAC,
     _OD_BOUNDS,
@@ -411,14 +412,18 @@ def test_a_sweep_point_that_cannot_converge_is_recorded_as_failed():
     # would have to remove heat — FAR_core pins at its 1e-4 floor.
     points = build_snake_sweep([0.], [0.], [800.])
 
-    deck = SweepRunner(prob, **dry_point(mp),
-                       afterburn=False).run_sweep(points)
+    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
+    deck = runner.run_sweep(points)
 
     row = deck.iloc[0]
     assert len(deck) == 1 and not row['converged']
     assert (row['alt'], row['dTs'], row['T4_cmd']) == (0., 0., 800.)
     assert deck[list(DECK_COLUMNS)].isna().all(axis=None)
     assert row[FAILURE_COLUMN]
+    # It fails fast: the sweep caps OD Newton, not the model's default 50.
+    newton = runner._od_newton()
+    assert newton.options['maxiter'] == SWEEP_MAXITER
+    assert newton._iter_count <= SWEEP_MAXITER
 
 
 @pytest.mark.slow
