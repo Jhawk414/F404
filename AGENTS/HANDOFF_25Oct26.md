@@ -243,7 +243,7 @@ Full write-up: [ADR-0003](../docs/adr/0003-fail-fast-sweep.md).
 ### 25 Oct — MCAS Iwakuni test cell ground-idle performance data (PR #44, in review)
 
 - Transcribed operator console telemetry (`RUN SHEET PARAMETERS`) across seven high-resolution freeze frames from a 2017 USMC test cell run at MCAS Iwakuni (AiirSource Military).
-- Anchors true **Ground Idle** (PLA 18.1 deg, N1 4,089 rpm / 30.8%, N2 10,933 rpm / 65.0%, PS3 36.2 psia, T5 444 degC, A8 75.7% open) and low-power throttle (PLA 21.4 deg, N1 4,180 rpm, N2 11,067 rpm, PS3 38.4 psia, T5 456 degC).
+- Anchors true **Ground Idle** (PLA 18.1 deg, N1 4,089 rpm / 30.8%, N2 10,933 rpm / 65.0%, PS3 36.2 psia giving static proxy PS3/P0 2.47, T5 444 degC unverified station, A8 75.7% open) and low-power throttle (PLA 21.4 deg, N1 4,180 rpm, N2 11,067 rpm, PS3 38.4 psia, T5 456 degC).
 - Added comprehensive report at `docs/unclassified_perf_data/md/MCAS Iwakuni 2017 - F404 Ground Run Test Cell Screen Data.md` and indexed in `docs/unclassified_perf_data/README.md`.
 - Added image assets under `docs/unclassified_perf_data/md/images/mcas-iwakuni-2017/` (verified clean of local machine filepaths and sensitive EXIF data).
 - Relevant to #25 (idle calibration) and #8 (VEN nozzle schedule at idle).

@@ -31,7 +31,7 @@ A sequence in the source video presents the test conductor's supervisory control
 1. **Frames 1–6:** Steady-state Ground Idle operation at $\text{PLA} = 18.1^\circ$.
 2. **Frame 7:** Slightly advanced low-throttle operation at $\text{PLA} = 21.4^\circ$.
 
-Because previously documented F404 unclassified cycle decks and flight-test literature (e.g. [[NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring|Johnson 1990]]) primarily document **Flight Idle** ($\text{PLA} \approx 25.5^\circ \text{ to } 30^\circ$), this dataset provides empirical measurements of the true **Ground Idle** ($\text{PLA} \approx 18.1^\circ$) operating point, including rotor speeds, station pressures, variable geometry positions, and nozzle throat schedule.
+Because previously documented F404 unclassified cycle decks and flight-test literature (e.g. [[NASA TM-4240 - A simple Dynamic Engine Model for Use in a Real-time Aircraft Simulation with Thrust Vectoring|Johnson 1990]]) define **Flight Idle** at $\text{PLA} = 31^\circ$, this dataset provides empirical measurements of the true **Ground Idle** ($\text{PLA} = 18.1^\circ$) operating point, including rotor speeds, station pressures, variable geometry positions, and nozzle throat schedule.
 
 ---
 
@@ -62,8 +62,8 @@ All numerical values transcribed directly from the operator screen displays acro
 | **FN** | Test Cradle Load Cell Net Thrust Reading | lbf | -2025 | -2036 | -2040 | -2039 | -2047 | -2053 | **-2061** |
 | **PS3** | High Pressure Compressor Discharge Static Pressure ($PS_3$) | psia | 36.3 | 36.3 | 36.3 | 36.3 | 36.3 | 36.2 | **38.4** |
 | **PT5.6** | Turbine Exhaust / Mixer Inlet Total Pressure ($Pt_{5.6}$) | psia | 15.1 | 15.1 | 15.1 | 15.1 | 15.1 | 15.1 | **15.2** |
-| **T5C** | Turbine Exhaust Gas Temperature (Control / Calculated) | °C | 443 | 444 | 445 | 445 | 445 | 445 | **456** |
-| **T5Ha** | T5 Thermocouple Harness 'A' Average Temperature | °C | 442 | 443 | 444 | 444 | 444 | 445 | **455** |
+| **T5C** | Turbine Temperature Sensor (Control / Calculated; station unverified) | °C | 443 | 444 | 445 | 445 | 445 | 445 | **456** |
+| **T5Ha** | Turbine Temperature Sensor (Harness 'A' Average; station unverified) | °C | 442 | 443 | 444 | 444 | 444 | 445 | **455** |
 | **J61 T5H** | J61 T5 Thermocouple Harness Differential / Spread | °F | 5 | 5 | 9 | 10 | 10 | 11 | **16** |
 | **T1** | Engine Inlet Total Temperature | °C | 26 | 26 | 26 | 26 | 26 | 26 | 26 |
 | **T0AvgF** | Average Ambient / Test Cell Temperature | °F | 38 | 39 | 39 | 39 | 39 | 39 | **38** |
@@ -89,16 +89,16 @@ All numerical values transcribed directly from the operator screen displays acro
 ## 4. Parameter Definitions & Engineering Interpretation
 
 ### Aerothermodynamic & Performance Parameters
-- **`PLA` (Power Lever Angle, deg):** Commanded cockpit/throttle angle. The F404 mechanical power lever schedule spans from Ground Idle ($\approx 18^\circ$) to Flight Idle ($\approx 25.5^\circ - 30^\circ$), Intermediate / Military Rated Power ($\text{IRP/MIL} \approx 85^\circ$), and Maximum Afterburning ($\text{Max A/B} \approx 130^\circ$). The observed $18.1^\circ$ setting confirms a true Ground Idle condition.
+- **`PLA` (Power Lever Angle, deg):** Commanded cockpit/throttle angle. In NASA TM-4240 (Johnson 1990), flight PLA spans from $31^\circ$ (flight idle) to $87^\circ$ (intermediate / military rated power) and $130^\circ$ (maximum afterburner). The observed $18.1^\circ$ setting confirms a true Ground Idle condition below flight idle.
 - **`Fan Speed` / `N1` (rpm):** Physical rotational speed of the Low-Pressure (LP) spool (3-stage fan driven by the single-stage LPT). At Ground Idle ($4,089\text{ rpm}$), the LP spool runs at $30.8\%$ of its $100\%$ design mechanical rating ($13,270\text{ rpm}$).
 - **`Core Speed` / `N2` (rpm) & `N2%` (%):** Physical rotational speed of the High-Pressure (HP) spool (7-stage HPC driven by single-stage HPT). At Ground Idle ($10,933\text{ rpm}$), the core spool operates at exactly $65.0\%$ of its $100\%$ mechanical rating ($16,810\text{ rpm}$), matching `N2% = 65.0%`.
-- **`PS3` (Compressor Discharge Static Pressure, psia):** Static pressure measured at Station 3 (exit of the 7-stage HPC / diffuser inlet ahead of the combustor dome). With ambient barometric pressure $P_0 = 29.95\text{ inHg} = 14.71\text{ psia}$, the overall compression ratio at Ground Idle is:
-  $$\text{OPR}_{\text{ground-idle}} = \frac{PS_3}{P_0} = \frac{36.3}{14.71} \approx 2.47$$
-  When advanced to $\text{PLA} = 21.4^\circ$, $PS_3$ increases to $38.4\text{ psia}$ ($\text{OPR} \approx 2.61$).
+- **`PS3` (Compressor Discharge Static Pressure, psia):** Static pressure measured at Station 3 (exit of the 7-stage HPC / diffuser inlet ahead of the combustor dome). With ambient barometric pressure $P_0 = 29.95\text{ inHg} = 14.71\text{ psia}$, the compressor discharge static-to-ambient pressure ratio proxy is:
+  $$\left(\frac{PS_3}{P_0}\right)_{\text{ground-idle}} = \frac{36.3}{14.71} \approx 2.47$$
+  *Caution on Cycle OPR Comparison:* This $PS_3 / P_0$ ratio is an exit-static-to-ambient proxy and does not directly equal the total-to-total overall pressure ratio ($\text{OPR} = Pt_3 / Pt_1$) used in aerothermodynamic cycle sizing. At ground idle, the compressor discharge Mach number is small (typically $M_3 \approx 0.15 - 0.25$, giving dynamic head $Pt_3/PS_3 \approx 1.02 - 1.04$) and the test cell inlet is static ($Pt_1 \approx P_0$), meaning total OPR is slightly above this static ratio. When advanced to $\text{PLA} = 21.4^\circ$, $PS_3$ increases to $38.4\text{ psia}$ ($PS_3 / P_0 \approx 2.61$).
 - **`PT5.6` (Turbine Exit / Mixer Inlet Total Pressure, psia):** Total pressure at Station 5.6 (aft of the single-stage LPT exhaust frame and ahead of the confluent mixer). At Ground Idle, $PT_{5.6} = 15.1\text{ psia}$, which is approximately $0.39\text{ psi}$ above ambient barometric pressure ($14.71\text{ psia}$), confirming that exhaust flow through the mixer and augmentor duct is unchoked at idle.
-- **`T5C` & `T5Ha` (Turbine Exit Gas Temperature, °C):** Measured gas temperature at Station 5 (LPT exit).
+- **`T5C` & `T5Ha` (Turbine Temperature Sensors, °C):** Indicated gas temperature from the engine turbine thermocouple harness. The screen display does not identify the physical gas-path station. In general gas turbine conventions, Station 5 denotes the low-pressure turbine exit. However, primary F404 literature (e.g. Henry & Moffatt 1988, ASME 88-GT-222) explicitly defines F404 $T_5$ as the **Low Pressure Turbine Inlet Total Temperature** (SAE/pyCycle Station 4.5, $Tt_{45}$, between the HPT rotor exit and LPT stator inlet), reserving Station 5.5/5.6 for turbine exhaust. Future cycle modelers calibrating turbine temperatures must treat the exact physical sensor station as unverified between Station 4.5 ($Tt_{45}$ interturbine) and Station 5.0/5.6 ($Tt_5$ turbine exhaust) rather than assuming LPT exit. On screen:
   - `T5Ha`: Direct thermocouple average from Harness 'A' of the dual-harness engine sensor installation.
-  - `T5C`: Calculated / Control turbine exhaust gas temperature synthesized by the electronic engine control unit (ECU).
+  - `T5C`: Calculated / Control turbine temperature synthesized by the electronic engine control unit (ECU).
   - Both channels track within $1^\circ\text{C}$ ($442^\circ\text{C} - 445^\circ\text{C}$ at Ground Idle, $455^\circ\text{C} - 456^\circ\text{C}$ at $\text{PLA} = 21.4^\circ$).
 - **`J61 T5H` (°F):** Connector J61 T5 thermocouple harness differential / channel spread. The reading ($5^\circ\text{F} - 16^\circ\text{F}$) monitors channel-to-channel or circumferential thermocouple divergence to verify sensor health.
 - **`FN` (Net Thrust, lbf):** Raw test cradle load cell indication. On ground test stands, load cell instrumentation often incorporates a compression tare/pre-load offset on the restraining linkage, resulting in a signed negative raw channel display ($-2,025 \text{ to } -2,061\text{ lbf}$) prior to test cell tare subtraction.
@@ -114,7 +114,7 @@ All numerical values transcribed directly from the operator screen displays acro
   - `WFCELL` ($665 - 681\text{ pph}$, $\approx 0.185 - 0.189\text{ lbm/s}$): Fuel mass flow measured by the facility's external test cell flowmeter (e.g. Coriolis or calibrated turbine meter).
   - The offset between engine-mounted transmitter output and test cell calibration meters is standard in depot testing due to transmitter density/viscosity calibration curves, bypass/spillback recirculation flows from the hydromechanical fuel control (which uses fuel as actuation hydraulic fluid for VEN and VG actuators), or facility meter calibration factors.
 - **`Pfin` (Fuel Inlet Pressure, psig):** Fuel boost delivery pressure ($55.0 - 55.1\text{ psig}$) from the test facility fuel conditioning skid to the engine high-pressure pump inlet.
-- **`EOP` (Engine Oil Pressure, psid):** Differential lubrication oil pressure across the engine bearing oil supply gallery. Normal operating range is approximately $80 - 100\text{ psid}$. The yellow caution highlight on frames 2–6 ($96.5 - 97.1\text{ psid}$) occurs because the engine oil is still warming up from cold ambient conditions ($T_{\text{sump}} \approx 98^\circ\text{F} - 100^\circ\text{F}$, compared to standard operational oil temperatures of $160^\circ\text{F} - 250^\circ\text{F}$), causing higher oil viscosity and activating the upper advisory band on the test cell DAQ.
+- **`EOP` (Engine Oil Pressure, psid):** Differential lubrication oil pressure across the engine bearing oil supply gallery. The display shows normal background at $97.6\text{ psid}$ (Frame 1) and $98.1\text{ psid}$ (Frame 7), but highlights in yellow caution at $96.5 - 97.1\text{ psid}$ (Frames 2–6). The specific test cell advisory logic (e.g. lower threshold advisory band, rate of change warning, or unacknowledged warning state) cannot be confirmed from the display alone; the data records the observed values and highlight states.
 - **`TSUMPAF` & `TSCAVBF` (Oil Temperatures, °F):**
   - `TSUMPAF` ($98^\circ\text{F} - 100^\circ\text{F}$): Lube oil Sump 'A' temperature.
   - `TSCAVBF` ($103^\circ\text{F} - 105^\circ\text{F}$): Lube oil Scavenge 'B' temperature.
@@ -135,21 +135,23 @@ All numerical values transcribed directly from the operator screen displays acro
 
 ## 5. Aerothermodynamic Cycle Comparison
 
-Comparison of the MCAS Iwakuni Ground Idle test cell data against public F404 literature and the cycle deck:
+Comparison of the MCAS Iwakuni Ground Idle test cell data against substantiated public F404 literature and cycle ratings:
 
-| Cycle Parameter | Ground Idle (MCAS Iwakuni, 2017) | Flight Idle (NASA TM-4240 / Johnson 1990) | Design Point (SLS Dry Mil) |
+| Cycle Parameter | Ground Idle (MCAS Iwakuni, 2017) | Flight Idle (NASA TM-4240 / Johnson 1990) | Design Point (SLS Dry Mil Rating) |
 | :--- | :---: | :---: | :---: |
-| **PLA** | $18.1^\circ$ [M-DIR] | $25.5^\circ - 30.0^\circ$ [M-MOD] | $85.0^\circ$ [M-SPEC] |
-| **$N_1$ Physical Speed** | $4,089\text{ rpm}$ ($30.8\%$) [M-DIR] | $\approx 5,000 - 6,000\text{ rpm}$ [M-MOD] | $13,270\text{ rpm}$ ($100\%$) |
-| **$N_2$ Physical Speed** | $10,933\text{ rpm}$ ($65.0\%$) [M-DIR] | $\approx 10,800 - 11,500\text{ rpm}$ [M-MOD] | $16,810\text{ rpm}$ ($100\%$) |
-| **Overall Pressure Ratio ($PS_3 / P_0$)** | $2.47:1$ [M-DIR] | $\approx 2.8 - 3.2:1$ [M-MOD] | $25.0:1$ |
-| **Compressor Exit Static ($PS_3$)** | $36.3\text{ psia}$ [M-DIR] | $\approx 42 - 48\text{ psia}$ [M-MOD] | $\approx 367\text{ psia}$ |
-| **Turbine Exit Total Pressure ($PT_{5.6}$)** | $15.1\text{ psia}$ [M-DIR] | $\approx 15.5 - 16.0\text{ psia}$ [M-MOD] | $\approx 42\text{ psia}$ |
-| **Turbine Exit Temperature ($T_5$)** | $444^\circ\text{C}$ ($1291\text{ R}$) [M-DIR] | $\approx 480 - 520^\circ\text{C}$ [M-MOD] | $1,675\text{ R}$ ($658^\circ\text{C}$) |
-| **Core Fuel Flow ($W_f$)** | $941\text{ pph}$ ($0.261\text{ lbm/s}$) [M-DIR] | $\approx 950 - 1,100\text{ pph}$ [M-MOD] | $\approx 8,500\text{ pph}$ |
-| **Nozzle Position ($A_8$)** | $75.7\%$ open [M-DIR] | $\approx 400\text{ in}^2$ ($\approx 75 - 80\%$) [M-MOD] | $\approx 232 - 249\text{ in}^2$ ($0\% - 20\%$) |
+| **PLA** | $18.1^\circ$ [M-DIR] | $31.0^\circ$ [M-SPEC] (p. 2) | $87.0^\circ$ (Johnson 1990) / $\approx 85^\circ$ [M-SPEC] |
+| **$N_1$ Physical Speed** | $4,089\text{ rpm}$ ($30.8\%$) [M-DIR] | *Not reported* | $13,270\text{ rpm}$ ($100\%$) [M-SPEC] (Frith 1985) |
+| **$N_2$ Physical Speed** | $10,933\text{ rpm}$ ($65.0\%$) [M-DIR] | *Not reported* | $16,810\text{ rpm}$ ($100\%$) [M-SPEC] (Frith 1985) |
+| **Static Pressure Ratio ($PS_3 / P_0$)** | $2.47:1$ [M-DIR] *(proxy)* | *Not reported* | $\approx 25.0:1$ (Total OPR $Pt_3/Pt_1$) [M-SPEC] |
+| **Compressor Exit Static ($PS_3$)** | $36.3\text{ psia}$ [M-DIR] | *Not reported* | $\approx 367\text{ psia}$ (nominal CDP) |
+| **Turbine Exit Total Pressure ($PT_{5.6}$)** | $15.1\text{ psia}$ [M-DIR] | *Not reported* | $\approx 42\text{ psia}$ |
+| **Turbine Temp ($T_5$)** | $444^\circ\text{C}$ ($1,291^\circ\text{R}$) [M-DIR] *(unverified station)* | *Not reported* | $1,692 - 1,746^\circ\text{R}$ (LPT inlet $Tt_{45}$) [M-PLOT] (Henry 1988) |
+| **Core Fuel Flow ($W_f$)** | $941\text{ pph}$ ($0.261\text{ lbm/s}$) [M-DIR] | *Not reported* | $\approx 8,500\text{ pph}$ [M-SPEC] |
+| **Nozzle Position ($A_8$)** | $75.7\%$ open [M-DIR] | $400\text{ in}^2$ [M-MOD] (p. 8) | $\approx 232 - 249\text{ in}^2$ [M-DIR] (TM-4538, TM-4140) |
+
+*Note on Johnson (1990) Flight Idle Data:* NASA TM-4240 developed a simplified real-time dynamic simulation model whose tabular lookup blocks only recorded steady-state gross thrust ($FG$), ram drag ($F_{\text{ram}}$), nozzle pressure ratio (NPR), nozzle throat area ($A_8$), and installation drags as functions of Mach, altitude, and PLA (breakpoints: flight idle $31^\circ$, Mil power $87^\circ$, Min AB, Max AB). Internal turbomachinery spool speeds, station pressures, gas temperatures, and fuel flows were not included in the simple model tables and are therefore designated as *Not reported* rather than speculative.
 
 ### Modeling Significance
-1. **Low-Power Off-Design Sizing Anchor:** Provides direct empirical validation points for pyCycle off-design part-power operating lines at ground idle ($PLA = 18.1^\circ$) where public data has historically been sparse.
+1. **Low-Power Off-Design Sizing Anchor:** Provides direct empirical validation points for pyCycle off-design part-power operating lines at ground idle ($\text{PLA} = 18.1^\circ$) where public data has historically been sparse.
 2. **Variable Exhaust Nozzle Schedule Validation:** Confirms the F404 VEN schedule holds $A_8$ at $\approx 75.7\%$ open at idle to prevent turbine backpressure and eliminate residual ground idle thrust.
 3. **Spool Speed Matching:** Verifies that at ground idle, the core spool governs at $\approx 65\%$ mechanical speed while the LP fan spool windmilling/driving speed drops to $\approx 31\%$.

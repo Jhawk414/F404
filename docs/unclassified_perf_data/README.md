@@ -564,24 +564,24 @@ Turbomachinery component matching ($N_1/N_2$ spool split, airflow vs corrected s
 
 | Parameter | Ground Idle ($\text{PLA} = 18.1^\circ$) | Advanced Idle ($\text{PLA} = 21.4^\circ$) | Operating Condition & Notes |
 | :--- | :---: | :---: | :--- |
-| **Power Lever Angle (PLA)** | $18.1^\circ$ | $21.4^\circ$ | Ground idle setting (below $\approx 25.5^\circ - 30^\circ$ flight idle) |
+| **Power Lever Angle (PLA)** | $18.1^\circ$ | $21.4^\circ$ | Ground idle setting (below $31.0^\circ$ flight idle, Johnson 1990) |
 | **Fan Physical Speed ($N_1$)** | $4,089\text{ rpm}$ ($30.8\%$) | $4,180\text{ rpm}$ ($31.5\%$) | LP spool mechanical speed (design $13,270\text{ rpm}$) |
 | **Core Physical Speed ($N_2$)** | $10,933\text{ rpm}$ ($65.0\%$) | $11,067\text{ rpm}$ ($65.8\%$) | HP spool mechanical speed (design $16,810\text{ rpm}$) |
 | **Core Speed Fraction (`N2%`)** | $65.0\%$ | $65.8\%$ | Direct ECU tachometer speed percentage |
-| **Compressor Discharge Static ($PS_3$)** | $36.2 - 36.3\text{ psia}$ | $38.4\text{ psia}$ | Combustor entrance; idle $\text{OPR} \approx 2.47$ at $P_0 = 14.71\text{ psia}$ |
+| **Compressor Discharge Static ($PS_3$)** | $36.2 - 36.3\text{ psia}$ | $38.4\text{ psia}$ | Combustor entrance; static-to-ambient proxy $PS_3/P_0 \approx 2.47$ at $P_0 = 14.71\text{ psia}$ |
 | **Turbine Exit Total Pressure ($PT_{5.6}$)** | $15.1\text{ psia}$ | $15.2\text{ psia}$ | LPT frame exit / mixer inlet; $0.39\text{ psi}$ above ambient |
-| **Turbine Exit Temperature ($T_5$)** | $444^\circ\text{C}$ ($1,291^\circ\text{R}$) | $456^\circ\text{C}$ ($1,313^\circ\text{R}$) | Control/calculated ($T_{5C}$) and Harness A ($T_{5Ha}$) |
+| **Turbine Temperature ($T_5$)** | $444^\circ\text{C}$ ($1,291^\circ\text{R}$) | $456^\circ\text{C}$ ($1,313^\circ\text{R}$) | $T_{5C}$ control and $T_{5Ha}$ harness A; station unverified (4.5 vs 5.0) |
 | **Variable Exhaust Nozzle ($A_8$)** | $75.7\%$ open | $75.7\%$ open | Wide open idle nozzle schedule to reduce idle ground thrust |
 | **Fan Variable Guide Vane (`FVG`)** | $49.4^\circ$ | $49.4^\circ$ | Closed stop schedule for low-speed surge margin |
 | **Compressor Variable Geometry (`CVG`)** | $52.5^\circ$ | $52.3^\circ$ | HPC stator vane angle |
 | **Core Fuel Flow (`Wfcore`)** | $941\text{ pph}$ ($0.261\text{ lbm/s}$) | $946\text{ pph}$ ($0.263\text{ lbm/s}$) | Engine internal fuel flow transmitter |
-| **Facility Fuel Flow (`WFCELL`)** | $666\text{ pph}$ ($0.185\text{ lbm/s}$) | $681\text{ lbm/s}$ ($0.189\text{ lbm/s}$) | Test cell calibrated facility meter |
-| **Engine Oil Pressure (`EOP`)** | $96.5 - 97.6\text{ psid}$ | $98.1\text{ psid}$ | Lube pump differential; yellow caution due to cold oil warmup |
+| **Facility Fuel Flow (`WFCELL`)** | $666\text{ pph}$ ($0.185\text{ lbm/s}$) | $681\text{ pph}$ ($0.189\text{ lbm/s}$) | Test cell calibrated facility meter |
+| **Engine Oil Pressure (`EOP`)** | $96.5 - 97.6\text{ psid}$ | $98.1\text{ psid}$ | Lube pump differential; yellow highlight on 96.5–97.1 psid frames |
 | **Ambient Barometric Pressure** | $29.95\text{ inHg}$ ($14.71\text{ psia}$) | $29.95\text{ inHg}$ ($14.71\text{ psia}$) | MCAS Iwakuni sea-level barometric pressure |
 | **Test Cell Ambient Temperature** | $38 - 39^\circ\text{F}$ ($3.3 - 3.9^\circ\text{C}$) | $38^\circ\text{F}$ ($3.3^\circ\text{C}$) | Test cell intake average ($T_{0\text{AvgF}}$) |
 
 #### Cycle Modeling Relevance
-Anchors the low-power ground-idle operating point for the pyCycle model. Establishes the ground idle spool match ($N_1/N_2 = 4089 / 10933 = 0.374$), overall pressure ratio ($\approx 2.47$), turbine backpressure, and variable exhaust nozzle opening ($75.7\%$).
+Anchors the low-power ground-idle operating point for the pyCycle model. Establishes the ground idle spool match ($N_1/N_2 = 4089 / 10933 = 0.374$), exit-static-to-ambient pressure ratio ($PS_3/P_0 \approx 2.47$), turbine backpressure, and variable exhaust nozzle opening ($75.7\%$).
 
 ---
 
@@ -620,9 +620,9 @@ The table below cross-indexes key performance metrics and aerothermodynamic para
 | **Transient Military Takeoff OPR** | 17.0 to 18.5:1 ($PS_3/\delta = 250\text{ to }272\text{ psia}$) | Sea Level Static Takeoff Roll (Military power endpoint) | [M-PLOT] Henry & Moffatt (1988, Figs 2, 7) | Operational transient compressor pressure ratio vs 25:1 design rating |
 | **Ground Idle Fan Speed ($N_1$)** | 4,089 rpm (30.8% of design) | Sea Level Static Test Cell ($P_0 = 29.95\text{ inHg}$, $39^\circ\text{F}$, $\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Uninstalled ground idle LP spool operating line |
 | **Ground Idle Core Speed ($N_2$)** | 10,933 rpm (65.0% of design, `N2%` = 65.0%) | Sea Level Static Test Cell ($\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Ground idle HP spool governing speed |
-| **Ground Idle Overall Pressure Ratio (OPR)** | 2.47:1 ($PS_3 = 36.3\text{ psia}$) | Sea Level Static Test Cell ($P_0 = 14.71\text{ psia}$, $\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Ground idle compressor exit pressure anchor |
+| **Ground Idle Static Pressure Ratio ($PS_3/P_0$)** | 2.47:1 ($PS_3 = 36.3\text{ psia}$) | Sea Level Static Test Cell ($P_0 = 14.71\text{ psia}$, $\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Compressor exit static-to-ambient proxy (not total OPR) |
 | **Ground Idle Turbine Exit Total Press ($PT_{5.6}$)** | 15.1 psia (0.39 psi over ambient) | Sea Level Static Test Cell ($\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Confirms unchoked mixer/afterburner duct flow at idle |
-| **Ground Idle Turbine Exhaust Temp ($T_5$)** | 444 °C (1,291 °R / 717 K) | Sea Level Static Test Cell ($\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Ground idle turbine discharge gas temperature |
+| **Ground Idle Turbine Temp ($T_5$)** | 444 °C (1,291 °R / 717 K) | Sea Level Static Test Cell ($\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Ground idle thermocouple reading; station unverified (4.5 vs 5.0) |
 | **Ground Idle Nozzle Position ($A_8$)** | 75.7% open | Sea Level Static Test Cell ($\text{PLA} = 18.1^\circ$ & $21.4^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Exhaust nozzle schedule at ground idle |
 | **Ground Idle Core Fuel Flow ($W_{f,\text{core}}$)** | 941 pph (0.261 lbm/s) | Sea Level Static Test Cell ($\text{PLA} = 18.1^\circ$) | [M-DIR] MCAS Iwakuni (2017) | Engine internal transmitter flow at idle |
 
