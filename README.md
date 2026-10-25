@@ -92,7 +92,7 @@ Key cycle components and mechanical couplings:
 - **High Pressure (HP) Spool**: 7-stage HP compressor driven by the single-stage HP turbine via `hp_shaft` (14,000 rpm, 250 hp customer power extraction).
 - **Cooling Bleeds**: HPC interstage bleed (`cool1`, 5.07% flow) cools the LPT; compressor discharge bleed (`cool3`, 11.0% flow) cools the HPT.
 - **Mixed Exhaust & Augmentor**: Core flow and bypass flow mix in a confluent mixer, then pass through the afterburner and expand through a variable convergent-divergent nozzle (`mixed_nozz`). Off-design, the afterburner is always a combustor: a commanded Tt7 at or below its inlet temperature (0 included) is dry, with zero fuel. Its pressure loss is a flameholder drag loss (2.1%, dry and wet, also in the DESIGN sizing) plus a Rayleigh loss that grows with heat addition (6.6% in total at SLS max AB), after Kumar (1980) ([#33](https://github.com/Jhawk414/F404/issues/33)).
-- **One engine, two modes**: the engine is sized once, at SLS dry mil (11,000 lbf, Tt4 3100 R). Dry and wet run on one off-design point. When dry, it uses the DESIGN nozzle throat (A8). When wet, A8 opens by choked-throat continuity, just enough to pass the hotter flow, so the gas generator stays within about 0.25% BPR of where dry put it at that flight condition ([#8](https://github.com/Jhawk414/F404/issues/8), wet half). Max AB is Tt7 3607.68 R, calibrated to 17,700 lbf SLS. See [ADR-0001](docs/adr/0001-single-engine-sizing.md) for the sizing and [ADR-0002](docs/adr/0002-single-od-topology.md) for the single OD topology, the loss and the A8 law.
+- **One engine, two modes**: the engine is sized once, at SLS dry mil (11,000 lbf, Tt4 3100 R). Dry and wet run on one off-design point. When dry, it uses the DESIGN nozzle throat (A8). When wet, A8 opens by choked-throat continuity, just enough to pass the hotter flow, so the gas generator stays within about 0.25% BPR of where dry put it at SLS (up to 0.43% across the swept envelope) ([#8](https://github.com/Jhawk414/F404/issues/8), wet half). Max AB is Tt7 3607.68 R, calibrated to 17,700 lbf SLS. See [ADR-0001](docs/adr/0001-single-engine-sizing.md) for the sizing and [ADR-0002](docs/adr/0002-single-od-topology.md) for the single OD topology, the loss and the A8 law.
 
 ## Software architecture and data flow
 
@@ -235,7 +235,7 @@ tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-237 tests (195 fast), 97% coverage. The driver and
+238 tests (196 fast), 97% coverage. The driver and
 CLI are importable and covered; what remains uncovered is mostly
 `sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 
@@ -274,10 +274,10 @@ Where the failures are, tracked in
 `failure` column:
 
 - **Dry part power (Tt4 2500 R) gets worse with Mach.** BPR climbs toward its 1.0 bound ([#25](https://github.com/Jhawk414/F404/issues/25)); 3 of 33 converge at M 0.95.
-- **Dry and wet mil fail on the cold side (dTs < 0).** Wet fails where dry mil does, because the A8 law holds the wet gas generator at the dry-mil operating point.
+- **Dry and wet mil fail on the cold side (dTs < 0).** Wet fails where dry mil does, because the A8 law holds the wet gas generator at the dry-mil operating point. The one exception is 2500 ft, static, dTs −20 R, T7 3007.68 R, where dry mil converges.
 - **Airflow ceiling.** One cold-day point at M 0.95 hits the 200 lbm/s OD airflow bound (six before #37 sized the engine 0.4 % smaller) ([#38](https://github.com/Jhawk414/F404/issues/38)).
 
-Against the pre-#37 decks (sized at Mach 0.01), thrust, airflow and A8 are 0.40 % lower; TSFC and BPR move by under 0.01 %.
+Against the pre-#37 decks (sized at Mach 0.01), dry points, and wet points at the same T7, have thrust, airflow and A8 0.40 % lower; TSFC and BPR move by under 0.01 %. The default wet grid also moved up 9.33 R, so its levels compare at 0.16–0.26 % lower thrust and 0.20–0.30 % higher TSFC.
 
 ## Roadmap
 

@@ -140,7 +140,7 @@ partly superseded.
   nozzle. It is explicit, with no Newton state. Wet keeps the gas generator
   within ~0.25 % BPR of dry at each condition. The fan follows its dry-mil
   line (Rline 1.94–2.12), not 2.0.
-- **`MAX_Tt7` = 3598.35 R** (was 3608; PR B later moved it to 3607.68 R). The
+- **`MAX_Tt7` = 3598.35 R** (was 3608; #43, for #37, later moved it to 3607.68 R). The
   wet default grid was then 3598.35 → 2998.35 R. To compare a wet deck against
   an older one, sweep with `--throttle 2998.35,3598.35,200` (pre-#37) or
   `3008,3608,200` (pre-#36).
@@ -215,7 +215,7 @@ Full write-up: [ADR-0003](../docs/adr/0003-fail-fast-sweep.md).
 
 **Numbers (22 Oct):** 237 tests (195 fast).
 
-### 24 Oct — one static Mach (#37) (PR B)
+### 24 Oct — one static Mach (#37) (PR B, [#43](https://github.com/Jhawk414/F404/pull/43), open)
 
 **What shipped:**
 - `DSN_MN = STATIC_MN` (0.001) in `problems.py`, so DESIGN sizes at true static and SLS dry mil reads 11,000 lbf (OD 10,999.98), not 11,044.7.
@@ -234,11 +234,12 @@ Full write-up: [ADR-0003](../docs/adr/0003-fail-fast-sweep.md).
 
 ## Open issues at a glance
 
-Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR), #33 (PR #36), #27 and #13 (PR #39), #40 (PR #41), #37 (PR B).
-New since: #35 (combustion efficiency), #38 (supersonic envelope).
+Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR), #33 (PR #36), #27 and #13 (PR #39), #40 (PR #41).
+New since: #35 (combustion efficiency), #38 (supersonic envelope). #37 closes when #43 merges.
 
 | # | Title | Type | Size / status |
 |---|---|---|---|
+| [#37](https://github.com/Jhawk414/F404/issues/37) | One static Mach for DESIGN and OD | bug | PR B, [#43](https://github.com/Jhawk414/F404/pull/43) open; closes on merge |
 | [#30](https://github.com/Jhawk414/F404/issues/30) | Define PLA in the cycle (blocks the `--pla` axis) | enhancement | decision first, then small; see [PLA](#pla-what-the-literature-says) |
 | [#17](https://github.com/Jhawk414/F404/issues/17) | Pydantic models for inputs | enhancement | medium |
 | [#8](https://github.com/Jhawk414/F404/issues/8) | PLA/T7-scheduled A8 | enhancement | 🟡 wet half done (PR #36, ADR-0002); **dry schedule open**, with #25/#30 |
@@ -251,10 +252,10 @@ New since: #35 (combustion efficiency), #38 (supersonic envelope).
 
 ## Recommended order
 
-**Decided 21 Oct 26 (agreed with the user): three PRs first, A → B → C.** A (#41) and B are done; C is next.
+**Decided 21 Oct 26 (agreed with the user): three PRs first, A → B → C.** A (#41) is merged and B (#43) is open; C is next.
 
 - **PR A: #40 fail-fast sweep** (merged, #41). No model change; proof is `f404 compare` against the #39 decks with nothing lost.
-- **PR B: #37 one static Mach, Option A** (done, see 24 Oct). Set `DSN_MN = STATIC_MN` (0.001) in `problems.py`, so DESIGN sizes at true static.
+- **PR B: #37 one static Mach, Option A** (PR #43, open; see 24 Oct). Set `DSN_MN = STATIC_MN` (0.001) in `problems.py`, so DESIGN sizes at true static.
   - This re-sizes the engine slightly, so the goldens in `tests/problems_test.py` move.
   - `MAX_Tt7` must be recalibrated to 17,700 lbf at the new static point (the calibration point in `_apply_od_inputs` also uses `DSN_MN`).
   - Every committed deck is regenerated (cheaper after #40).
@@ -390,8 +391,9 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
   `cli.py` or it won't get this.
 - Axis order is fixed regardless of flag order: `--dts` hot side first, then
   cold; `--throttle` high power to low. The warm-start was built around it.
-  `-50,50,10`, `2500,3100,200`, `3200,3800,200` reproduce the old default
-  grids exactly (pinned by tests). `--mach` is ascending; Mach steps reverse
+  `-50,50,10`, `2500,3100,200` and `3007.68,3607.68,200` reproduce the
+  current default grids exactly (the wet one is pinned by `cli_test.py`;
+  pre-#37 it was `2998.35,3598.35,200`). `--mach` is ascending; Mach steps reverse
   the alt/dTs block (`build_snake_sweep`).
 - Validation fails before OpenMDAO loads (exit 2): not one or three finite
   numbers, step ≤ 0, min > max, a step that doesn't divide `max − min`,
