@@ -7,6 +7,7 @@ matters because those guards are the regression surface — they are what
 distinguishes a real solution from a bound-clipped one that Newton is willing
 to call converged.
 """
+import openmdao.api as om
 import pytest
 
 from f404.problems import build_problem
@@ -15,6 +16,7 @@ from f404.sweep_utils import (
     FAILURE_COLUMN,
     INPUT_COLUMNS,
     STATIC_MN,
+    SWEEP_MAXITER,
     SweepConfigurationError,
     _BOUND_TOL_FRAC,
     _OD_BOUNDS,
@@ -320,6 +322,49 @@ def test_target_not_met_when_temperature_is_unreadable():
     assert runner({}, afterburn=False)._target_met(3100.) is False
 
 
+# ── Bridges ───────────────────────────────────────────────────────────────────
+
+@pytest.mark.slow
+def test_a_bridge_that_does_not_converge_is_rolled_back():
+    """The next point warm-starts from the last good state, not the bridge's.
+
+    Partial progress used to be kept as the warm start. In the default sweep
+    it never led to a converged point, so a bridge that runs out of
+    iterations is now rolled back (ADR-0003). Every bridge here leaves a
+    sane but unconverged state, as Newton does when it runs out of
+    iterations, and raises only if ``err_on_non_converge`` is on, as Newton
+    does. The real points solve normally.
+    """
+    prob, mp = build_problem(verbose=False)
+    prob.set_solver_print(level=-1)
+    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
+    od_outputs = prob.model._get_subsystem(mp.od_pt)._outputs
+    real_run_model = prob.run_model
+    solutions, warm_starts, n_bridges = [], [], 0
+
+    def run_model():
+        nonlocal n_bridges
+        if prob.get_val(f'{mp.od_pt}.fc.dTs', units='degR')[0] in (0., 50.):
+            warm_starts.append(od_outputs.asarray().copy())
+            real_run_model()
+            solutions.append(od_outputs.asarray().copy())
+            return
+        n_bridges += 1
+        od_outputs.asarray()[:] *= 1.001      # partial progress
+        if runner._od_newton().options['err_on_non_converge']:
+            raise om.AnalysisError("Solver 'NL: Newton' on system 'OD' "
+                                   "failed to converge in 20 iterations.")
+
+    prob.run_model = run_model
+    # dTs 0 → 50 exceeds the 30 R threshold, so bridges run in between.
+    deck = runner.run_sweep(build_snake_sweep([0.], [0., 50.], [3100.]),
+                            bridge_threshold={'dTs': 30}, max_bridge_steps=2)
+
+    assert deck['converged'].iloc[0] and n_bridges == 2
+    # The dTs 50 point started exactly where the dTs 0 point converged.
+    assert (warm_starts[1] == solutions[0]).all()
+
+
 # ── _OD_BOUNDS drift ──────────────────────────────────────────────────────────
 
 def test_od_bounds_table_matches_the_bounds_the_model_declares(problem):
@@ -411,14 +456,18 @@ def test_a_sweep_point_that_cannot_converge_is_recorded_as_failed():
     # would have to remove heat — FAR_core pins at its 1e-4 floor.
     points = build_snake_sweep([0.], [0.], [800.])
 
-    deck = SweepRunner(prob, **dry_point(mp),
-                       afterburn=False).run_sweep(points)
+    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
+    deck = runner.run_sweep(points)
 
     row = deck.iloc[0]
     assert len(deck) == 1 and not row['converged']
     assert (row['alt'], row['dTs'], row['T4_cmd']) == (0., 0., 800.)
     assert deck[list(DECK_COLUMNS)].isna().all(axis=None)
     assert row[FAILURE_COLUMN]
+    # It fails fast: the sweep caps OD Newton, not the model's default 50.
+    newton = runner._od_newton()
+    assert newton.options['maxiter'] == SWEEP_MAXITER
+    assert newton._iter_count <= SWEEP_MAXITER
 
 
 @pytest.mark.slow

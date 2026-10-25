@@ -352,7 +352,7 @@ class MixedFlowTurbofan(pyc.Cycle):
         newton.options['atol'] = 1e-5 #1e-6
         newton.options['rtol'] = 1e-9 #1e-10
         newton.options['iprint'] = 1 #2
-        newton.options['maxiter'] = 50
+        newton.options['maxiter'] = 50  # SweepRunner caps sweeps at SWEEP_MAXITER
         newton.options['solve_subsystems'] = True
         newton.options['max_sub_solves'] = 100 #100
         newton.options['reraise_child_analysiserror'] = False
@@ -363,11 +363,11 @@ class MixedFlowTurbofan(pyc.Cycle):
         newton.options['err_on_non_converge'] = True
         # ArmijoGoldsteinLS with maxiter=0 by default — skips the Armijo
         # backtracking loop entirely and behaves like BoundsEnforceLS (fast).
-        # SweepRunner toggles maxiter to 3 on per-point failure to enable
+        # SweepRunner toggles maxiter to 5 on per-point failure to enable
         # backtracking as a fallback strategy. This avoids paying Armijo's
         # overhead on the ~95% of points that converge cleanly without it.
         newton.linesearch = om.ArmijoGoldsteinLS(bound_enforcement='scalar')
-        newton.linesearch.options['maxiter'] = 0  # SweepRunner bumps to 3 on retry
+        newton.linesearch.options['maxiter'] = 0  # SweepRunner bumps to 5 on retry
         newton.linesearch.options['rho'] = 0.5    # halve step on rejection
         newton.linesearch.options['c'] = 0.1      # Armijo sufficient-decrease constant
         newton.linesearch.options['iprint'] = -1  # suppress per-backtrack residual lines

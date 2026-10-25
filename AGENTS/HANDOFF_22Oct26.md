@@ -1,12 +1,12 @@
 # Handoff: F404 — Recommended Issue Order
 
-Supersedes `HANDOFF_18Oct26.md` (renamed to this file; before that,
-`HANDOFF_11Oct26.md` and `HANDOFF_10Oct26.md`). Everything before the 10 Oct 26 session is
+Supersedes `HANDOFF_20Oct26.md` (renamed to this file; before that,
+`HANDOFF_18Oct26.md`, `HANDOFF_11Oct26.md` and `HANDOFF_10Oct26.md`). Everything before the 10 Oct 26 session is
 deliberately **not** carried forward, to keep this file
 cheap for agents to read. Only the gotchas that still bite are kept, under
 [Standing gotchas](#standing-gotchas). Full history: `git log --follow -- AGENTS/`.
 
-## Session summary (10–20 Oct 26)
+## Session summary (10–22 Oct 26)
 
 ### 10 Oct — #2 single-engine sizing (PR #23)
 
@@ -187,7 +187,7 @@ raises `MaxTt7TooLowError` (a `ValueError`) if `max_Tt7` ≤ the solved Tt6.
 - Filed #37 (DESIGN at MN 0.01 vs static 0.001; SLS mil reads 11,044.7 lbf, not 11,000) and #38 (supersonic inlet recovery and the W bound).
 
 **Findings worth keeping:**
-1. **Full default sweep:** dry 642/792, wet 657/792 converged, in 2 h 5 min. A failed point costs ~20 s, a converged one ~0.4 s. Per-Mach counts are in the README.
+1. **Full default sweep:** dry 642/792, wet 657/792 converged, in 2 h 5 min (about 1 h after #40). A failed point cost ~20 s (9.3 s after #40), a converged one ~0.4 s. Per-Mach counts are in the README.
 2. **Dry part power collapses with Mach.** Tt4 2500 R converges 30 of 33 points static and 3 at M 0.95, as BPR runs into its 1.0 bound (`bound:balance.BPR`). This is #25's BPR problem, now visible across Mach.
 3. **The mil cold corner (dry, and wet with it) shrinks up to M 0.6** (24 → 32 of 33), then grows again.
 4. **The OD W bound (200 lbm/s) bites on cold days at M 0.95** (6 points). Mil W reaches 197.6 at M 0.8, −30 R. Raise it before any supersonic work (#38 comment).
@@ -195,27 +195,68 @@ raises `MaxTt7TooLowError` (a `ValueError`) if `max_Tt7` ≤ the solved Tt6.
 
 **Numbers (20 Oct, PR #39):** 236 tests (195 fast).
 
+### 21–22 Oct — fail-fast sweep (#40) (PR A)
+
+Full write-up: [ADR-0003](../docs/adr/0003-fail-fast-sweep.md).
+
+**What shipped:**
+- `SweepRunner.run_sweep` caps OD Newton at `SWEEP_MAXITER` = 20 (`sweep_utils.py`) for the fast attempt, the safe retry and bridges. The model default stays 50, so `build_problem()`'s cold solve keeps its headroom.
+- A bridge that doesn't converge within the cap is rolled back to the last good state, like one that ends at a bound. It used to keep its partial progress.
+- The fast → safe retry is kept: it rescues one point (dry mil, 2500 ft, −10 R, static).
+- **No model change.** Both decks are bit-identical to the #39 decks (`f404 compare`: no value changed, no convergence change).
+
+**Findings worth keeping:**
+1. **Converged attempts are fast or never.** Over the full default sweep, converged fast attempts take 1–5 iterations, the one safe rescue 12, converged bridges up to 15. Every other attempt ran to the old 50 limit or failed earlier (NaN/inf, bound). Nothing converged between 16 and 50.
+2. **The safe retry was 55 % of the sweep's solver time** and rescued 1 of 286 fast failures.
+3. **Timing** (instrumented, dry and wet in parallel, one core each): dry 64.6 → 33.0 min, wet 48.6 → 29.3 min. A failed point costs 9.3 s (was 19.7 s). A default `f404 sweep --mode both` is about 1 h (was 2 h 5 min).
+4. **Fallbacks, if a later model change pushes converged attempts toward 20 iterations:** OpenMDAO stall detection at `stall_limit` 5, `stall_tol` 1e-2 stopped 459 of 488 hopeless attempts at ~13 iterations and never a converging one. Re-validate those thresholds on the new model's residual histories before relying on them, then add it before raising the cap. A residual-growth guard also separates cleanly (converged ≤ 32× the initial norm, failures to 10⁹×) but needs a solver subclass.
+5. **Sleep inflates wall-clock timings.** Lock the screen, don't sleep, during a timed sweep. `time.time()` counts the sleep; `perf_counter()` doesn't.
+
+**Numbers (22 Oct):** 237 tests (195 fast).
+
 ## Open issues at a glance
 
 Closed since the last full table: #2 (PR #23), #4, #5, #6, #12, #18, and #22, #24, #31 (13 Oct PR), #33 (PR #36), #27 and #13 (PR #39).
-New since: #35 (combustion efficiency), #37 (one static Mach), #38 (supersonic envelope).
+New since: #35 (combustion efficiency), #37 (one static Mach), #38 (supersonic envelope), #40 (fail fast on non-converging sweep points).
 
 | # | Title | Type | Size / status |
 |---|---|---|---|
+| [#40](https://github.com/Jhawk414/F404/issues/40) | Fail fast on non-converging sweep points | enhancement | PR A, `fix/40-fail-fast-sweep`; closes on merge |
 | [#30](https://github.com/Jhawk414/F404/issues/30) | Define PLA in the cycle (blocks the `--pla` axis) | enhancement | decision first, then small; see [PLA](#pla-what-the-literature-says) |
 | [#17](https://github.com/Jhawk414/F404/issues/17) | Pydantic models for inputs | enhancement | medium |
 | [#8](https://github.com/Jhawk414/F404/issues/8) | PLA/T7-scheduled A8 | enhancement | 🟡 wet half done (PR #36, ADR-0002); **dry schedule open**, with #25/#30 |
 | [#25](https://github.com/Jhawk414/F404/issues/25) | Define idle; calibrate dry part power to F404 data | enhancement | large; tune together with #8 |
 | [#3](https://github.com/Jhawk414/F404/issues/3) | Cold / high-alt / max-AB non-convergence | bug | large; body numbers stale. Now dry 642/792, wet 657/792 over Mach (static alone: 120/132, 96/132); wet fails where dry mil does. Count from the deck's `converged` column |
-| [#16](https://github.com/Jhawk414/F404/issues/16) | CLI entry point | enhancement | 🟡 `sweep`/`design` done; **`init-config`/YAML open** (needs #17) |
-| [#37](https://github.com/Jhawk414/F404/issues/37) | One static Mach for DESIGN and OD | bug | small; moves goldens and the max-AB calibration |
+| [#16](https://github.com/Jhawk414/F404/issues/16) | CLI entry point | enhancement | PR C: `f404 run.yml` sweep config + pydantic `SweepConfig`; `init-config` dropped for a committed `run.yml` |
+| [#37](https://github.com/Jhawk414/F404/issues/37) | One static Mach for DESIGN and OD | bug | PR B, Option A (`DSN_MN = STATIC_MN`); moves goldens and the max-AB calibration |
 | [#38](https://github.com/Jhawk414/F404/issues/38) | Supersonic envelope: inlet recovery, W bound | enhancement | medium; W bound already bites at M 0.95 cold |
 | [#35](https://github.com/Jhawk414/F404/issues/35) | Combustion efficiency in both burners | enhancement | medium; vendored `Combustor` change or F404 wrapper; calibrate max AB after it |
 | [#10](https://github.com/Jhawk414/F404/issues/10) | Inline creep/LCF life estimate | enhancement | exploratory |
 
 ## Recommended order
 
-**#30 → `--pla` → #17 → #8 + #25 (+ #3, #37 re-measured) → #16 remainder → #10**
+**Decided 21 Oct 26 (agreed with the user): three PRs first, A → B → C.** PR A is done on its branch; B and C are next.
+
+- **PR A: #40 fail-fast sweep** (this branch, `fix/40-fail-fast-sweep`). No model change; proof is `f404 compare` against the #39 decks with nothing lost.
+- **PR B: #37 one static Mach, Option A.** Set `DSN_MN = STATIC_MN` (0.001) in `problems.py`, so DESIGN sizes at true static.
+  - This re-sizes the engine slightly, so the goldens in `tests/problems_test.py` move.
+  - `MAX_Tt7` must be recalibrated to 17,700 lbf at the new static point (the calibration point in `_apply_od_inputs` also uses `DSN_MN`).
+  - Every committed deck is regenerated (cheaper after #40).
+  - The rejected Option B (run "static" sweeps at 0.01 instead) leaves the engine making ~11,045 lbf at real static, against the 11,000 lbf static rating.
+  - Kept separate from #40 so a lost point in the regenerated deck can be attributed.
+- **PR C: #16 YAML run config + a thin pydantic slice of #17.** Independent of A and B; the pydantic scope may still change. Agreed design:
+  - `f404 run.yml`: a bare `.yml`/`.yaml` first argument, dispatched in `cli.main()` before argparse. No `--config` flag; extra tokens after it are an error.
+  - Sweep settings only for now, under a top-level `sweep:` section so a `design:` section can be added later. Every key is required and unknown keys are rejected (fail fast).
+  - Ranges are a `"min,max,step"` string, a scalar (constant), or an explicit YAML list of values (needed to write the default Mach grid).
+  - Throttle is per mode (`throttle: {dry: ..., wet: ...}`), so `mode: both` works with throttle.
+  - A relative `out:` resolves against the current directory, like `--out`. The resolved config is copied next to the decks.
+  - A committed `run.yml` reproducing the default decks replaces the proposed `init-config` subcommand. `init-config` was only ever proposed (#16's text, `IMPROVEMENTS.md` items 7–8, the docs); no code exists.
+  - A pydantic `SweepConfig` model validates both the YAML and the CLI flags (same rules, one path). New runtime dependencies: pydantic v2 and pyyaml (pyyaml is in the venv today but undeclared).
+  - Deck writing and `compare_decks` stay on plain checks, not pydantic. Known gap: `f404 compare` on a CSV that isn't a deck (no `T4_cmd` and no `T4` column) ends in a bare `KeyError`.
+
+Then the existing staged order:
+
+**#30 → `--pla` → #17 → #8 + #25 (+ #3 re-measured) → #10**
 
 #27 and #13 are done (PR #39). Finish the sweep-axis side of the CLI with
 PLA before #8 and #25, so agents working those have `--pla` to sweep.
@@ -228,10 +269,10 @@ PLA before #8 and #25, so agents working those have `--pla` to sweep.
    - Findings are in [PLA](#pla-what-the-literature-says) below.
 
 **Stage 2: inputs as data**
-2. **#17 pydantic.** Not CLI, but placed before the solver cluster because #25
+2. **#17 pydantic**, continuing from PR C's `SweepConfig` slice: design inputs, sweep points and `_OD_BOUNDS`. Not CLI, but placed before the solver cluster because #25
    edits the DESIGN defaults in `problems._apply_design_inputs`, which #17
    turns into data; #17's own text asks to land before #2/#3/#8 churn the
-   same signatures. It also unblocks `init-config`/YAML (#16).
+   same signatures.
 
 **Stage 3: coupled physics cluster (one effort)**
 3. **#8 + #25 together, with #3 measured alongside.** #8 and #3 are the same
@@ -259,8 +300,7 @@ PLA before #8 and #25, so agents working those have `--pla` to sweep.
      fuel, so max AB recalibrates after it (#33's loss is already in).
 
 **Stage 4: the rest**
-4. **#16 remainder: `init-config`/YAML**, after #17.
-5. **#10 creep/LCF.** Additive and independent; last, incrementally.
+4. **#10 creep/LCF.** Additive and independent; last, incrementally.
 
 ### PLA: what the literature says
 
@@ -307,6 +347,12 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
   the sweep carries on (pinned by a test). A grid that starts far from SLS
   (e.g. `--mach 0.6,0.9,0.3`) still warm-starts its first point from SLS, so
   expect more failures at its head than in the same points mid-sweep.
+- Sweeps cap OD Newton at `SWEEP_MAXITER` = 20 (ADR-0003). A model change
+  that makes a point need more iterations fails it rather than slowing it
+  down, and `f404 compare` lists it under "converged only in base". Before
+  raising the cap, re-measure the iteration histogram and consider stall
+  detection (ADR-0003, *To revisit*). Running `SweepRunner` leaves the cap
+  set on that problem's OD solver.
 - `printer.py` takes a `file` argument because pyCycle's `print_*` helpers
   bind `sys.stdout` at import, which defeats `capsys`.
 - Decks are full float64 precision (`write_deck_csv()`), with columns
@@ -339,7 +385,7 @@ in [#30](https://github.com/Jhawk414/F404/issues/30); the essentials:
 
 ## Key model parameters
 
-- DESIGN at SLS (alt 0 ft, MN 0.01; sweeps call 0.001 static, #37), sized at dry mil: 11,000 lbf, Tt4 3100 R.
+- DESIGN at SLS (alt 0 ft, MN 0.01; sweeps call 0.001 static; PR B, #37, moves DESIGN to 0.001), sized at dry mil: 11,000 lbf, Tt4 3100 R.
   Max AB: Tt7 3598.35 R → 17,700 lbf, with the Kumar augmentor loss
   (2.1 % cold, 6.6 % at max AB; ADR-0002).
 - Thermo: TABULAR / `AIR_JETA_TAB_SPEC`.

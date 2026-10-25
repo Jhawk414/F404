@@ -48,6 +48,12 @@ STATIC_MN = 0.001
 # requested target for the run to count as a real solution.
 _TARGET_TOL_DEGR = 5.0
 
+# OD Newton iteration cap for every sweep solve (fast, safe, bridge). In the
+# default sweep, converged attempts take at most 15 iterations and the rest
+# run to any cap, so a higher one only makes failures slower (ADR-0003, #40).
+# The model's own default (50) still applies to build_problem()'s cold solve.
+SWEEP_MAXITER = 20
+
 
 def _scalar(value):
     """Collapse an OpenMDAO value to a plain Python float.
@@ -269,7 +275,7 @@ class SweepRunner:
         """Toggle linesearch backtracking on the OD Newton.
 
         'fast' (maxiter=0): no Armijo backtracking — fast path.
-        'safe' (maxiter=3): up to 3 Armijo backtracks — robust fallback for
+        'safe' (maxiter=5): up to 5 Armijo backtracks — robust fallback for
                             points that fail with the fast linesearch.
         """
         self._od_newton().linesearch.options['maxiter'] = (
@@ -379,27 +385,19 @@ class SweepRunner:
         return abs(t4 - power) <= _TARGET_TOL_DEGR
 
     def _run_bridge(self):
-        """Run a bridge point, accepting any forward progress.
+        """Run a bridge point; True if its state is a usable warm start.
 
         Bridges exist only to warm-start Newton toward the next real sweep
-        point — they do not need to converge to their intermediate target.
-        Partial progress (e.g. T7 moved from 3800 toward 3766 without fully
-        landing on 3766) is still a better warm-start than the previous state.
-
-        Only hard failures (bound saturation / NaN) trigger a state restore;
-        an unconverged-but-sane intermediate state is kept.  To allow partial
-        convergence without an AnalysisError, err_on_non_converge is
-        temporarily disabled for the duration of this run.
+        point, so they skip the target check. A bridge that doesn't converge
+        within the cap, or ends at a bound, returns False and the caller
+        rolls it back. Partial progress used to be kept, but in the default
+        sweep no point that converged had depended on it (ADR-0003).
         """
-        newton = self._od_newton()
-        newton.options['err_on_non_converge'] = False
         try:
             self.prob.run_model()
         except (om.AnalysisError, RuntimeError) as err:
             log.warning("Bridge point failed (%s): %s", type(err).__name__, err)
             return False
-        finally:
-            newton.options['err_on_non_converge'] = True
         return not self._state_at_bounds()
 
     def _run_point(self, power=None):
@@ -469,6 +467,7 @@ class SweepRunner:
         if bridge_threshold is None:
             bridge_threshold = {'alt': 5000, 'dTs': 30}
 
+        self._od_newton().options['maxiter'] = SWEEP_MAXITER
         results = []
         prev_pt = None
         power_label = "Tt7" if self.afterburn else "Tt4"

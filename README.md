@@ -51,7 +51,7 @@ vendored upstream `pycycle` library at the repo root (see
 | `src/f404/engine_model.py` | `MixedFlowTurbofan(pyc.Cycle)`: single-point thermodynamic cycle (fan, HPC, burner, HPT/LPT, mixer, afterburner, nozzle), plus `AugmentorControl` (afterburner command and pressure loss) and `NozzleSchedule` (A8) |
 | `src/f404/mp_cycle.py` | `MPMixedFlowTurbofan(pyc.MPCycle)`: one DESIGN point (dry mil) feeding one off-design point, `OD`, for dry and wet alike, with map scalars, station areas and the nozzle throat; the augmentor-loss constants |
 | `src/f404/problems.py` | `build_problem()`: design targets, the max-AB calibration, initial guesses and input validation |
-| `src/f404/sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner`, result extraction |
+| `src/f404/sweep_utils.py` | Sweep infrastructure: snake-pattern sweep grid, bridge-point warm-starting, `SweepRunner` (with its fail-fast Newton cap, ADR-0003), result extraction |
 | `src/f404/cli.py` | `f404` command line: `sweep`, `design` and `compare` subcommands, `min,max,step` range parsing (`--mach`, `--alt`, `--dts`, `--throttle`) and validation |
 | `src/f404/sweep_full_envelope.py` | Sweep driver: default grid, `run_sweeps()` for dry, wet, or both modes, and the cycle-deck CSV writer |
 | `src/f404/printer.py` | Console table formatter for DESIGN/OD results |
@@ -284,13 +284,14 @@ tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-236 tests (195 fast), 97% coverage. The driver and
+237 tests (195 fast), 97% coverage. The driver and
 CLI are importable and covered; what remains uncovered is mostly
 `sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 
 ## Current status
 
-Latest full-envelope sweep (`--mode both`, OpenMDAO 3.39.0, 2 h 5 min).
+Latest full-envelope sweep (`--mode both`, OpenMDAO 3.39.0). It took 2 h 5 min; since
+[#40](https://github.com/Jhawk414/F404/issues/40) the same sweep, with bit-identical decks, takes about 1 h.
 - Grid: MN ∈ {0.001, 0.2, 0.4, 0.6, 0.8, 0.95}, alt ∈ {0, 2500, 5000} ft, dTs ∈ {0, ±10 … ±50} R, and 4 throttle levels per mode.
 - That is 792 points per mode, all on the one sized engine.
 
@@ -339,82 +340,13 @@ Where the failures are, tracked in
 
 ## Roadmap
 
-Done:
+Planned work is tracked in [GitHub issues](https://github.com/Jhawk414/F404/issues).
+The recommended order for taking it on is in the latest `AGENTS/HANDOFF_*.md`,
+and design decisions are recorded in [`docs/adr/`](docs/adr/). What has shipped
+is in the git history and the merged pull requests.
 
-- [x] Modular cycle model (`engine_model.py` / `mp_cycle.py`), refactored off
-      the original monolithic `MFTF_od_CRZ.py`
-- [x] Full alt/dTs/throttle sweep infrastructure with bridge-point
-      warm-starting (`sweep_utils.py`)
-- [x] Dry (MIL) / wet (max-AB) mode split, with convergence-detection bugs
-      fixed (bound-saturated states no longer reported as converged)
-- [x] Repo-root cleanup: removed the superseded `MFTF_od_CRZ.py` monolith
-      and unused vendor/CI cruft (`release_notes.md`, `.travis.yml`,
-      `.bumpversion.cfg`), moved reference PDFs into `docs/unclassified_perf_data/`
-- [x] Single `write_deck_csv()` writer for every deck
-      ([#12](https://github.com/Jhawk414/F404/issues/12)), now at full
-      float64 precision with station data included (61 columns since #27), so deck-to-deck
-      comparisons measure the model rather than the rounding
-- [x] Per-module test suite (`tests/<module>_test.py`), 97% coverage, with
-      golden DESIGN/OD baselines and regression cover on the
-      false-convergence guards ([#5](https://github.com/Jhawk414/F404/issues/5))
-- [x] Single-engine sizing: one DESIGN at dry mil feeding dry and wet OD
-      points, wet A8 control law, max AB calibrated to 17,700 lbf
-      ([#2](https://github.com/Jhawk414/F404/issues/2),
-      [ADR-0001](docs/adr/0001-single-engine-sizing.md))
-- [x] One OD point from dry to max AB, a closed-form augmentor loss
-      ([#33](https://github.com/Jhawk414/F404/issues/33)) and a
-      choked-continuity wet A8 schedule
-      ([#8](https://github.com/Jhawk414/F404/issues/8), wet half;
-      [ADR-0002](docs/adr/0002-single-od-topology.md))
-- [x] `src/` restructure: F404 app code separated from the vendored pyCycle
-      library, now the `f404` package under `src/f404/`
-      ([#4](https://github.com/Jhawk414/F404/issues/4))
-- [x] Vendored `pycycle/` synced against upstream
-      ([#6](https://github.com/Jhawk414/F404/issues/6))
-- [x] Failed sweep points recorded in the deck, with `converged` and
-      `failure` columns, and `f404 compare` reporting convergence changes
-      ([#27](https://github.com/Jhawk414/F404/issues/27))
-- [x] Mach sweep axis, static to 0.95
-      ([#13](https://github.com/Jhawk414/F404/issues/13))
-- [x] `f404` CLI with `sweep`, `design` and `compare`, and `--mach` / `--alt` /
-      `--dts` / `--throttle` range flags; single-value constant axes
-      ([#24](https://github.com/Jhawk414/F404/issues/24)) and negative-start
-      ranges ([#22](https://github.com/Jhawk414/F404/issues/22))
-- [x] CI: fast tests on PRs, full matrix on merge or the `full-ci` label
-      ([#31](https://github.com/Jhawk414/F404/issues/31))
-- [x] Published F404 performance reports archived as Obsidian-compatible
-      markdown, with an index and cross-study reference map
-      ([`docs/unclassified_perf_data/`](docs/unclassified_perf_data/README.md))
-- [x] Method references library, indexed by model topic with the equations
-      and constants the code uses: Kumar (1980) flameholder pressure loss
-      ([`docs/references/`](docs/references/README.md))
-
-Planned (see `docs/improvements/IMPROVEMENTS.md` for full detail), roughly in
-order:
-
-- [ ] PLA sweep axis (needs PLA defined in the cycle first,
-      [#30](https://github.com/Jhawk414/F404/issues/30)), mapping onto the
-      same `T4_cmd`/`T7_cmd` commands; `--throttle` stays as the
-      temperature-based throttle
-- [ ] One static Mach for DESIGN and off-design
-      ([#37](https://github.com/Jhawk414/F404/issues/37)); supersonic inlet
-      recovery and envelope ([#38](https://github.com/Jhawk414/F404/issues/38))
-- [ ] Pydantic models for design-point inputs, sweep points and the
-      duplicated OD bounds table ([#17](https://github.com/Jhawk414/F404/issues/17))
-- [ ] Dry (part-power) nozzle throat schedule
-      ([#8](https://github.com/Jhawk414/F404/issues/8), dry half), together with
-      defining idle and calibrating the dry part-power end against the
-      published data ([#25](https://github.com/Jhawk414/F404/issues/25))
-- [ ] Resolve remaining cold/high-alt/max-AB Newton convergence failures
-      ([#3](https://github.com/Jhawk414/F404/issues/3))
-- [ ] CLI `init-config` and YAML configuration
-      ([#16](https://github.com/Jhawk414/F404/issues/16))
-- [ ] Inline creep/LCF life estimation
-      ([#10](https://github.com/Jhawk414/F404/issues/10))
-- [ ] `deck/` as a durable, reviewed home for cycle-deck CSVs + solver logs
-- [ ] YAML-driven run configuration (`run.yml`), on top of
-      [#17](https://github.com/Jhawk414/F404/issues/17)'s models
-- [ ] Auto-generated sweep-envelope coverage plot
+Next up: [#37](https://github.com/Jhawk414/F404/issues/37) (one static Mach)
+and [#16](https://github.com/Jhawk414/F404/issues/16) (YAML run config).
 
 ## Acknowledgments
 
