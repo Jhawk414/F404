@@ -105,10 +105,12 @@ side, where the data is closest to the limit.
 
 From the logs, scaling each over-limit attempt's time by 20/iterations: about
 46.5 min saved on failed fast and safe attempts and 8.4 min on bridges, so
-roughly 113 → 58 min of solver time. The deck is predicted to be
-bit-identical. The only possible exception: a failed point that converges
-from its new warm start after a rolled-back bridge (a gain), and the rows
-after it, which would then agree to Newton tolerance. See [Result](#result).
+roughly 113 → 58 min of solver time. The default decks were expected to stay
+bit-identical, but that is not guaranteed: a rolled-back bridge changes the
+next point's warm start, which can change its solve path, and any point that
+changes outcome changes the warm starts after it. The evidence is the
+measured result (see [Result](#result)), not a general rule. Other grids, and
+the same grid after a model change, need their own `f404 compare`.
 
 ## Options considered
 
@@ -216,8 +218,10 @@ The cap trades a small risk that a future, harder point needs 21+ iterations
 for a halved sweep time and the simplest possible mechanism. Stall detection
 and a divergence guard each save little beyond the cap and both still need
 it, so they are left as fallbacks: **if a later model change pushes
-converged attempts towards 20 iterations, add stall detection at (5, 1e-2)
-and raise the cap**, rather than raising the cap alone.
+converged attempts towards 20 iterations, consider stall detection and
+raise the cap**, rather than raising the cap alone. (5, 1e-2) is only today's
+candidate: its thresholds were fitted to this model's residual histories and
+need fresh validation against the new ones.
 
 ## Result
 
@@ -234,7 +238,7 @@ machine sleep):
 | Converged | 642 dry, 657 wet | 642 dry, 657 wet |
 
 `f404 compare` of both decks against the committed #39 decks: every value
-identical, no point converged in only one deck. The prediction held with no
+identical, no point converged in only one deck. The expectation held with no
 exception: the one safe rescue still converges (12 iterations), and no
 failed point changed outcome.
 
@@ -259,7 +263,7 @@ costs two capped attempts plus its bridges.
 
 - After #8, #25 or #37: re-measure the iteration histogram (the spike is
   cheap: wrap `_run_point` and `_run_bridge` and log `_iter_count`). If
-  converged attempts approach 20, add stall detection before raising the
-  cap.
+  converged attempts approach 20, validate stall thresholds on the new
+  residual histories before raising the cap.
 - The safe retry earns its keep with one point. If a future sweep shows it
   rescuing none, drop it.

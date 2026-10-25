@@ -209,10 +209,10 @@ Full write-up: [ADR-0003](../docs/adr/0003-fail-fast-sweep.md).
 1. **Converged attempts are fast or never.** Over the full default sweep, converged fast attempts take 1–5 iterations, the one safe rescue 12, converged bridges up to 15. Every other attempt ran to the old 50 limit or failed earlier (NaN/inf, bound). Nothing converged between 16 and 50.
 2. **The safe retry was 55 % of the sweep's solver time** and rescued 1 of 286 fast failures.
 3. **Timing** (instrumented, dry and wet in parallel, one core each): dry 64.6 → 33.0 min, wet 48.6 → 29.3 min. A failed point costs 9.3 s (was 19.7 s). A default `f404 sweep --mode both` is about 1 h (was 2 h 5 min).
-4. **Fallbacks, if a later model change pushes converged attempts toward 20 iterations:** OpenMDAO stall detection at `stall_limit` 5, `stall_tol` 1e-2 stopped 459 of 488 hopeless attempts at ~13 iterations and never a converging one. Add it before raising the cap. A residual-growth guard also separates cleanly (converged ≤ 32× the initial norm, failures to 10⁹×) but needs a solver subclass.
+4. **Fallbacks, if a later model change pushes converged attempts toward 20 iterations:** OpenMDAO stall detection at `stall_limit` 5, `stall_tol` 1e-2 stopped 459 of 488 hopeless attempts at ~13 iterations and never a converging one. Re-validate those thresholds on the new model's residual histories before relying on them, then add it before raising the cap. A residual-growth guard also separates cleanly (converged ≤ 32× the initial norm, failures to 10⁹×) but needs a solver subclass.
 5. **Sleep inflates wall-clock timings.** Lock the screen, don't sleep, during a timed sweep. `time.time()` counts the sleep; `perf_counter()` doesn't.
 
-**Numbers (22 Oct):** 237 tests (196 fast).
+**Numbers (22 Oct):** 237 tests (195 fast).
 
 ## Open issues at a glance
 
