@@ -284,7 +284,7 @@ tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-237 tests (196 fast), 97% coverage. The driver and
+237 tests (195 fast), 97% coverage. The driver and
 CLI are importable and covered; what remains uncovered is mostly
 `sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
 
@@ -345,10 +345,8 @@ The recommended order for taking it on is in the latest `AGENTS/HANDOFF_*.md`,
 and design decisions are recorded in [`docs/adr/`](docs/adr/). What has shipped
 is in the git history and the merged pull requests.
 
-Next up: [#40](https://github.com/Jhawk414/F404/issues/40) (fail fast on
-non-converging sweep points), [#37](https://github.com/Jhawk414/F404/issues/37)
-(one static Mach) and [#16](https://github.com/Jhawk414/F404/issues/16)
-(YAML run config).
+Next up: [#37](https://github.com/Jhawk414/F404/issues/37) (one static Mach)
+and [#16](https://github.com/Jhawk414/F404/issues/16) (YAML run config).
 
 ## Acknowledgments
 
