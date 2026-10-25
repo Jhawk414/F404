@@ -324,19 +324,45 @@ def test_target_not_met_when_temperature_is_unreadable():
 
 # ── Bridges ───────────────────────────────────────────────────────────────────
 
-class NonConvergingProblem(StubProblem):
-    def run_model(self):
-        raise om.AnalysisError("Solver 'NL: Newton' on system 'OD' failed to "
-                               "converge in 20 iterations.")
-
-
+@pytest.mark.slow
 def test_a_bridge_that_does_not_converge_is_rolled_back():
-    # Partial progress used to be kept as the warm start. In the default
-    # sweep it never led to a converged point, so now a bridge that runs out
-    # of iterations is reported unusable and run_sweep restores the last
-    # good state (ADR-0003).
-    bridge_runner = SweepRunner(NonConvergingProblem(CLEAN_STATE), od_pt=OD)
-    assert bridge_runner._run_bridge() is False
+    """The next point warm-starts from the last good state, not the bridge's.
+
+    Partial progress used to be kept as the warm start. In the default sweep
+    it never led to a converged point, so a bridge that runs out of
+    iterations is now rolled back (ADR-0003). Every bridge here leaves a
+    sane but unconverged state, as Newton does when it runs out of
+    iterations, and raises only if ``err_on_non_converge`` is on, as Newton
+    does. The real points solve normally.
+    """
+    prob, mp = build_problem(verbose=False)
+    prob.set_solver_print(level=-1)
+    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
+    od_outputs = prob.model._get_subsystem(mp.od_pt)._outputs
+    real_run_model = prob.run_model
+    solutions, warm_starts, n_bridges = [], [], 0
+
+    def run_model():
+        nonlocal n_bridges
+        if prob.get_val(f'{mp.od_pt}.fc.dTs', units='degR')[0] in (0., 50.):
+            warm_starts.append(od_outputs.asarray().copy())
+            real_run_model()
+            solutions.append(od_outputs.asarray().copy())
+            return
+        n_bridges += 1
+        od_outputs.asarray()[:] *= 1.001      # partial progress
+        if runner._od_newton().options['err_on_non_converge']:
+            raise om.AnalysisError("Solver 'NL: Newton' on system 'OD' "
+                                   "failed to converge in 20 iterations.")
+
+    prob.run_model = run_model
+    # dTs 0 → 50 exceeds the 30 R threshold, so bridges run in between.
+    deck = runner.run_sweep(build_snake_sweep([0.], [0., 50.], [3100.]),
+                            bridge_threshold={'dTs': 30}, max_bridge_steps=2)
+
+    assert deck['converged'].iloc[0] and n_bridges == 2
+    # The dTs 50 point started exactly where the dTs 0 point converged.
+    assert (warm_starts[1] == solutions[0]).all()
 
 
 # ── _OD_BOUNDS drift ──────────────────────────────────────────────────────────
