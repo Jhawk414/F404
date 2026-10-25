@@ -22,28 +22,28 @@ from f404.sweep_utils import _scalar
 
 REL = 1e-4
 
-# Converged DESIGN-point baseline, SLS (0 ft, MN 0.01), dry mil.
+# Converged DESIGN-point baseline, SLS (0 ft, MN 0.001), dry mil.
 # Fn is the balance target, not a result; the rest fall out of the cycle.
 DRY_DESIGN = {
-    'perf.Fg': 11050.35026922,     # lbf
-    'perf.TSFC': 0.62400003,
-    'balance.W': 145.09320130,     # lbm/s
-    'balance.BPR': 0.75281208,
-    'balance.FAR_core': 0.02726298,
-    'hpt.PR': 2.64073722,
-    'lpt.PR': 2.44776515,
+    'perf.Fg': 11005.01451726,     # lbf
+    'perf.TSFC': 0.62144387,
+    'balance.W': 144.50217961,     # lbm/s
+    'balance.BPR': 0.75287320,
+    'balance.FAR_core': 0.02726330,
+    'hpt.PR': 2.64068934,
+    'lpt.PR': 2.44780953,
 }
 # The same engine at SLS max afterburner (OD at Tt7 = MAX_Tt7). Thrust is
 # an output here, not a target.
 MAX_AB = {
-    'perf.Fg': 17750.31313128,     # lbf
-    'perf.TSFC': 1.48100684,
-    'balance.W': 144.99912325,     # lbm/s
-    'balance.BPR': 0.75102649,
-    'balance.FAR_core': 0.02726201,
-    'balance.FAR_ab': 0.03706443,
-    'a8_sched.A8': 332.10478489,   # in**2
-    'afterburner.dPqP': 0.06578783,
+    'perf.Fg': 17705.02439903,     # lbf
+    'perf.TSFC': 1.48094658,
+    'balance.W': 144.41428112,     # lbm/s
+    'balance.BPR': 0.75119816,
+    'balance.FAR_core': 0.02726239,
+    'balance.FAR_ab': 0.03726690,
+    'a8_sched.A8': 331.39681755,   # in**2
+    'afterburner.dPqP': 0.06600499,
 }
 
 # Lighting the afterburner moves the gas generator off dry mil by no more
@@ -97,7 +97,7 @@ def test_non_positive_augmentor_target_is_rejected(max_Tt7):
 def test_augmentor_target_below_core_temperature_still_burns_fuel():
     # The augmentor heats mixed flow at ~1500 R, downstream of the turbines,
     # so T7 below Tt4 is a valid min-AB setting, not negative fuel flow. The
-    # default wet grid bottoms out at 2998 R, below MIL_Tt4.
+    # default wet grid bottoms out at 3008 R, below MIL_Tt4.
     prob, mp = build_problem(max_Tt7=MIL_Tt4 - 92., verbose=False)
 
     assert _scalar(prob.get_val(f"{mp.od_pt}.balance.FAR_ab")) > 1e-3
