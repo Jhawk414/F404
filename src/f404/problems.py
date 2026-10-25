@@ -13,13 +13,13 @@ import openmdao.api as om
 
 from f404.mp_cycle import MPMixedFlowTurbofan
 from f404.printer import page_viewer
-from f404.sweep_utils import _scalar
+from f404.sweep_utils import STATIC_MN, _scalar
 
 # ── Design-point targets ──────────────────────────────────────────────────────
 MIL_Tt4    = 3100.   # degR — core burner exit at mil power (throttle wall)
 DRY_DSN_FN = 11000.  # lbf  — SLS mil power (no afterburner); sizes the engine
 MAX_AB_FN  = 17700.  # lbf  — SLS max afterburner; an output the next line calibrates to
-MAX_Tt7    = 3598.35 # degR — afterburner exit at max AB. With the augmentor
+MAX_Tt7    = 3607.68 # degR — afterburner exit at max AB. With the augmentor
                      # loss (mp_cycle.py; 6.6% at this point) the dry-sized
                      # engine makes MAX_AB_FN here. The cycle's augmentation
                      # ratio exceeds the targets' (ADR-0001), so this sits below
@@ -28,7 +28,7 @@ MAX_Tt7    = 3598.35 # degR — afterburner exit at max AB. With the augmentor
 
 # ── Design-point conditions and component performance ─────────────────────────
 DSN_ALT = 0.0   # ft  — sea level static
-DSN_MN  = 0.01  # Mach — nominally static; 0 is singular in the flow solve
+DSN_MN  = STATIC_MN   # Mach — the sweeps' static Mach, so DESIGN and OD agree (#37)
 
 
 class MaxTt7TooLowError(ValueError):

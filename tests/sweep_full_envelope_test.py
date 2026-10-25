@@ -67,7 +67,7 @@ def test_default_grid_is_the_committed_envelope():
     assert DEFAULT_DTS == [0., 10., 20., 30., 40., 50.,
                            -10., -20., -30., -40., -50.]
     assert DEFAULT_DRY_POWERS == [3100., 2900., 2700., 2500.]
-    assert DEFAULT_WET_POWERS == pytest.approx([3598.35, 3398.35, 3198.35, 2998.35])
+    assert DEFAULT_WET_POWERS == pytest.approx([3607.68, 3407.68, 3207.68, 3007.68])
 
 
 @pytest.mark.parametrize('call', [
