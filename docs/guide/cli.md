@@ -5,6 +5,8 @@ result, and compares decks. Install with `pip install -e .[all]`; see the
 [README](https://github.com/Jhawk414/F404/blob/main/README.md#installation).
 
 ```bash
+f404 run.yml                    # run the committed YAML grid; decks in deck/
+f404 --example-yaml             # print a blank commented template
 f404 sweep                      # dry + wet, default grid, decks in the cwd
 f404 sweep --mode wet           # one mode only
 f404 sweep --mach 0             # static only (flown at Mach 0.001)
@@ -14,6 +16,68 @@ f404 compare old.csv new.csv    # % change of every deck column, new vs old
 f404 --help                     # and `f404 sweep --help`, `f404 design --help`
                                 # (rich panels; plain argparse text for usage errors)
 ```
+
+## YAML run configuration
+
+Pass a single `.yml` or `.yaml` filename: `f404 run.yml`. Extra arguments are
+rejected; edit the file to change settings. The committed
+[`run.yml`](https://github.com/Jhawk414/F404/blob/main/run.yml) reproduces the
+default dry and wet grids, with output in `deck/`.
+
+```yaml
+sweep:
+  mode: both
+  mach: [0.001, 0.2, 0.4, 0.6, 0.8, 0.95]
+  alt: "0,5000,2500"
+  dts: "-50,50,10"
+  throttle:
+    dry: "2500,3100,200"
+    wet: "3007.68,3607.68,200"
+  out: deck
+```
+
+Every key shown is required, including both `throttle` keys even when running
+one mode. Unknown keys at any level and duplicate YAML keys are errors. Only
+`sweep:` is supported today; design inputs and PLA will be added separately.
+
+| Key | Accepted input | Meaning |
+|---|---|---|
+| `mode` | `dry`, `wet`, `both` | Which deck modes to run |
+| `mach` | scalar, range string, numeric list | Flight Mach, at least 0 and below 1 |
+| `alt` | scalar, range string, numeric list | Altitude, ft |
+| `dts` | scalar, range string, numeric list | ISA temperature offset, R |
+| `throttle.dry` | scalar, range string, numeric list | Core Tt4, R |
+| `throttle.wet` | scalar, range string, numeric list | Augmentor Tt7, R |
+| `out` | non-empty path string | Output directory, created if missing |
+
+A scalar holds an axis constant. A quoted range is `"min,max,step"`, inclusive
+of max; a YAML list is an explicit set of points, never a range triple.
+Lists must be nonempty and contain finite numbers, with no booleans, numeric
+strings, or duplicate points. Mach and altitude lists must ascend. Temperature
+offsets are reordered hot-first and throttle temperatures high-to-low, matching
+the CLI. Throttle temperatures must be positive. Mach values below 0.001 are
+flown at 0.001; two inputs that collapse to that same point are rejected.
+
+`out` is relative to the **working directory**, just like `--out`, rather than
+the YAML file's directory. Before solving, YAML and flag sweeps write
+`run.resolved.yml` in that directory with expanded axes and an absolute output
+path. This file can be passed back to `f404` to repeat the requested run. It is
+overwritten on each invocation and ignored by Git; use separate output
+directories for runs you want to retain. A configuration or snapshot-write error exits 2 before solving.
+
+Print a blank template with a short type/required/description comment beside
+every key:
+
+```bash
+f404 --example-yaml > custom.yml
+# Fill every blank value, then:
+f404 custom.yml
+```
+
+The template intentionally has no defaults and cannot run until filled in.
+`--example-yaml` runs without a subcommand. Existing `sweep`, `design`, and
+`compare` commands remain available; the sweep flags and YAML use the same
+`SweepConfig` validation and axis rules.
 
 ## `f404 sweep`
 
