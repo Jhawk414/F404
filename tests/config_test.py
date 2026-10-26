@@ -105,8 +105,13 @@ def test_mach_requires_ascending_explicit_values():
 
 
 def test_alt_requires_ascending_explicit_values():
-    with pytest.raises(ValidationError, match='ascending'):
-        SweepConfig.model_validate(raw_sweep(alt=[2500, 0]))
+    with pytest.raises(ValidationError, match='ascending.*quote min,max,step'):
+        SweepConfig.model_validate(raw_sweep(alt=[0, 10000, 1000]))
+
+
+def test_out_expands_home_directory():
+    config = SweepConfig.model_validate(raw_sweep(out='~/decks'))
+    assert config.out == Path.home() / 'decks'
 
 
 def test_throttle_requires_both_axes_and_positive_levels():

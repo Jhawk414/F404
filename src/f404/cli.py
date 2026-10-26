@@ -1,9 +1,9 @@
 """CLI entry point for YAML runs, sweeps, design solves, and deck comparisons."""
 import argparse
 import re
-from reprlib import repr as short_repr
 import sys
 from pathlib import Path
+from reprlib import repr as short_repr
 
 import openmdao.api as om
 import yaml

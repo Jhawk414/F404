@@ -15,6 +15,7 @@ class RangeError(ValueError):
 
 _STEP_TOL = 1e-9
 MAX_AXIS_POINTS = 10_000
+_ORDER_HINT = " For a range, quote min,max,step."
 
 
 def parse_range(text):
@@ -105,7 +106,7 @@ def throttle_axis(text):
 
 def _numeric_axis(value, name):
     if isinstance(value, bool):
-        raise ValueError(f"{name} must be a number, range string, or list of numbers")
+        raise RangeError(f"{name} must be a number, range string, or list of numbers")
     if isinstance(value, (int, float)):
         try:
             values = [float(value)]
@@ -148,11 +149,11 @@ def axis(value, name):
         if any(v < 0 or v >= 1 for v in values):
             raise RangeError("Mach values must be at least 0 and below 1")
         if any(a >= b for a, b in zip(values, values[1:])):
-            raise RangeError("mach values must be strictly ascending")
+            raise RangeError("mach values must be strictly ascending." + _ORDER_HINT)
         if len({max(v, STATIC_MN) for v in values}) != len(values):
             raise RangeError("Mach values contain duplicates after static Mach normalization")
     elif name == 'alt' and any(a >= b for a, b in zip(values, values[1:])):
-        raise RangeError("alt values must be strictly ascending")
+        raise RangeError("alt values must be strictly ascending." + _ORDER_HINT)
     elif name == 'dts':
         expected = sorted((v for v in values if v >= 0)) + sorted(
             (v for v in values if v < 0), reverse=True
@@ -160,15 +161,14 @@ def axis(value, name):
         if values != expected:
             raise RangeError(
                 "dts values must be in traversal order: non-negative ascending, "
-                "then negative descending. For a range, quote min,max,step."
+                "then negative descending." + _ORDER_HINT
             )
     elif name == 'throttle':
         if any(v <= 0 for v in values):
             raise RangeError("throttle temperatures must be positive degR")
         if any(a <= b for a, b in zip(values, values[1:])):
             raise RangeError(
-                "throttle values must be in descending traversal order. "
-                "For a range, quote min,max,step."
+                "throttle values must be in descending traversal order." + _ORDER_HINT
             )
     return values
 
@@ -203,10 +203,8 @@ class SweepConfig(BaseModel):
     @field_validator('out', mode='before')
     @classmethod
     def strict_out_path(cls, value):
-        if isinstance(value, Path):
-            return value
-        if isinstance(value, str) and value:
-            return Path(value)
+        if isinstance(value, (str, Path)) and str(value):
+            return Path(value).expanduser()
         raise ValueError("out must be a non-empty path string or Path")
 
 
@@ -256,13 +254,20 @@ def load_config(path) -> RunConfig:
     return RunConfig.model_validate(raw)
 
 
-EXAMPLE_YAML = '''sweep: # map; required. Full-envelope run settings
-  mode: both # str; required. dry, wet, or both
-  mach: '0,0.4,0.2' # range str; required. Flight Mach values
-  alt: [0, 2500, 5000] # number list; required. Altitude in ft
-  dts: 0 # number; required. Temperature offset in degR
-  throttle: # map; required. Dry and wet power axes
-    dry: '2900,3100,200' # range str; required. Dry Tt4 levels in degR
-    wet: [3607.68, 3407.68] # number list; required. Wet Tt7 levels in degR
-  out: deck/example # path str; required. Output directory
+EXAMPLE_YAML = '''\
+# f404 sweep run: f404 <file>.yml. Every key is required.
+# Each axis (mach, alt, dts, throttle.dry, throttle.wet) takes any of:
+#   number          0             one held point
+#   quoted range    '0,0.4,0.2'   min,max,step, inclusive of max
+#   list            [0, 2500]     these points, already in sweep order
+# A list is never a range: [0, 5000, 2500] is three points.
+sweep:
+  mode: both                # dry, wet, or both
+  mach: '0,0.4,0.2'         # flight Mach below 1; 0 flies at 0.001; lists ascend
+  alt: [0, 2500, 5000]      # ft; lists ascend
+  dts: 0                    # ISA offset, degR; lists go 0, 10, 20, then -10, -20
+  throttle:                 # dry and wet both required, even for a single mode
+    dry: '2900,3100,200'    # Tt4, degR; lists go high to low
+    wet: [3607.68, 3407.68] # Tt7, degR; lists go high to low
+  out: deck/example         # output directory, relative to the working directory
 '''
