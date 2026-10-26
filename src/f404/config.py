@@ -1,13 +1,10 @@
 """Validated YAML configuration for a full-envelope sweep."""
-from __future__ import annotations
-
 import math
 from pathlib import Path
 from typing import Literal
 
-import numpy as np
 import yaml
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from f404.sweep_utils import STATIC_MN
 
@@ -17,6 +14,7 @@ class RangeError(ValueError):
 
 
 _STEP_TOL = 1e-9
+MAX_AXIS_POINTS = 10_000
 
 
 def parse_range(text):
@@ -67,14 +65,17 @@ def parse_range(text):
 
 def expand_range(lo, hi, step):
     """Return inclusive ascending range values, rounded as the CLI has done."""
-    n = int(round((hi - lo) / step)) + 1
-    if n > np.iinfo(np.intp).max:
+    n_steps = (hi - lo) / step
+    if not math.isfinite(n_steps):
         raise RangeError("range has too many steps to represent as an axis")
-    try:
-        with np.errstate(over='ignore', invalid='ignore'):
-            values = [float(v) for v in np.round(lo + step * np.arange(n), 9)]
-    except (ValueError, OverflowError, MemoryError) as exc:
-        raise RangeError(f"cannot expand range into an axis: {exc}") from exc
+    n = int(round(n_steps)) + 1
+    if n > MAX_AXIS_POINTS:
+        raise RangeError(
+            f"range has too many steps: axis has {n} points; "
+            f"maximum is {MAX_AXIS_POINTS}. "
+            "Use a larger step or a narrower range."
+        )
+    values = [round(lo + step * index, 9) for index in range(n)]
     if not all(math.isfinite(v) for v in values):
         raise RangeError("range expansion produced non-finite axis values")
     if len(set(values)) != len(values):
@@ -84,39 +85,22 @@ def expand_range(lo, hi, step):
 
 def mach_axis(text):
     """Flight Mach axis; zero represents the sweep's static Mach."""
-    values = expand_range(*parse_range(text))
-    if values[0] < 0 or values[-1] >= 1:
-        raise RangeError(
-            f"Mach must be at least 0 and below 1 (the inlet model is subsonic "
-            f"only), got {values[0]:g} to {values[-1]:g}"
-        )
-    if len({max(value, STATIC_MN) for value in values}) != len(values):
-        raise RangeError("Mach values contain duplicates after static Mach normalization")
-    return values
+    return axis(text, 'mach')
 
 
 def alt_axis(text):
     """Altitude axis in ft, ascending."""
-    return expand_range(*parse_range(text))
+    return axis(text, 'alt')
 
 
 def dts_axis(text):
     """Temperature offsets in hot-ascending, then cold-descending order."""
-    values = expand_range(*parse_range(text))
-    return sorted((v for v in values if v >= 0)) + sorted(
-        (v for v in values if v < 0), reverse=True
-    )
+    return axis(text, 'dts')
 
 
 def throttle_axis(text):
     """Throttle temperature axis in positive, descending order."""
-    values = expand_range(*parse_range(text))
-    if values[0] <= 0:
-        raise RangeError(
-            f"throttle temperatures must be positive degR, got a minimum of "
-            f"{values[0]:g}"
-        )
-    return values[::-1]
+    return axis(text, 'throttle')
 
 
 def _numeric_axis(value, name):
@@ -126,47 +110,79 @@ def _numeric_axis(value, name):
         try:
             values = [float(value)]
         except (OverflowError, ValueError):
-            raise ValueError(f"{name} values must be finite representable numbers") from None
+            raise RangeError(f"{name} values must be finite representable numbers") from None
     elif isinstance(value, list):
+        if len(value) > MAX_AXIS_POINTS:
+            raise RangeError(
+                f"{name} axis has {len(value)} points; maximum is "
+                f"{MAX_AXIS_POINTS}"
+            )
         if not value or any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in value):
-            raise ValueError(f"{name} list must be non-empty and contain only numbers")
+            raise RangeError(f"{name} list must be non-empty and contain only numbers")
         try:
             values = [float(v) for v in value]
         except (OverflowError, ValueError):
-            raise ValueError(f"{name} values must be finite representable numbers") from None
+            raise RangeError(f"{name} values must be finite representable numbers") from None
     else:
-        raise ValueError(f"{name} must be a number, range string, or list of numbers")
+        raise RangeError(f"{name} must be a number, range string, or list of numbers")
     if not all(math.isfinite(v) for v in values):
-        raise ValueError(f"{name} values must be finite")
+        raise RangeError(f"{name} values must be finite")
     if len(set(values)) != len(values):
-        raise ValueError(f"{name} values must not contain duplicates")
+        raise RangeError(f"{name} values must not contain duplicates")
     return values
 
 
-def _axis(value, name):
-    builders = {'mach': mach_axis, 'alt': alt_axis, 'dts': dts_axis,
-                'throttle': throttle_axis}
+def axis(value, name):
+    """Parse and validate one sweep axis, preserving explicit list order."""
     if isinstance(value, str):
-        return builders[name](value)
-    values = _numeric_axis(value, name)
+        values = expand_range(*parse_range(value))
+        if name == 'dts':
+            values = sorted((v for v in values if v >= 0)) + sorted(
+                (v for v in values if v < 0), reverse=True
+            )
+        elif name == 'throttle':
+            values.reverse()
+    else:
+        values = _numeric_axis(value, name)
     if name == 'mach':
         if any(v < 0 or v >= 1 for v in values):
-            raise ValueError("Mach values must be at least 0 and below 1")
+            raise RangeError("Mach values must be at least 0 and below 1")
         if any(a >= b for a, b in zip(values, values[1:])):
-            raise ValueError("mach values must be strictly ascending")
+            raise RangeError("mach values must be strictly ascending")
         if len({max(v, STATIC_MN) for v in values}) != len(values):
-            raise ValueError("Mach values contain duplicates after static Mach normalization")
+            raise RangeError("Mach values contain duplicates after static Mach normalization")
     elif name == 'alt' and any(a >= b for a, b in zip(values, values[1:])):
-        raise ValueError("alt values must be strictly ascending")
+        raise RangeError("alt values must be strictly ascending")
     elif name == 'dts':
-        values = sorted((v for v in values if v >= 0)) + sorted(
+        expected = sorted((v for v in values if v >= 0)) + sorted(
             (v for v in values if v < 0), reverse=True
         )
+        if values != expected:
+            raise RangeError(
+                "dts values must be in traversal order: non-negative ascending, "
+                "then negative descending. For a range, quote min,max,step."
+            )
     elif name == 'throttle':
         if any(v <= 0 for v in values):
-            raise ValueError("throttle temperatures must be positive degR")
-        values.sort(reverse=True)
+            raise RangeError("throttle temperatures must be positive degR")
+        if any(a <= b for a, b in zip(values, values[1:])):
+            raise RangeError(
+                "throttle values must be in descending traversal order. "
+                "For a range, quote min,max,step."
+            )
     return values
+
+
+class ThrottleConfig(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+
+    dry: list[float]
+    wet: list[float]
+
+    @field_validator('dry', 'wet', mode='before')
+    @classmethod
+    def normalize_axis(cls, value):
+        return axis(value, 'throttle')
 
 
 class SweepConfig(BaseModel):
@@ -176,20 +192,13 @@ class SweepConfig(BaseModel):
     mach: list[float]
     alt: list[float]
     dts: list[float]
-    throttle: dict[str, list[float]]
+    throttle: ThrottleConfig
     out: Path
 
     @field_validator('mach', 'alt', 'dts', mode='before')
     @classmethod
     def normalize_axis(cls, value, info):
-        return _axis(value, info.field_name)
-
-    @field_validator('throttle', mode='before')
-    @classmethod
-    def normalize_throttle(cls, value):
-        if not isinstance(value, dict) or set(value) != {'dry', 'wet'}:
-            raise ValueError("throttle must contain exactly 'dry' and 'wet'")
-        return {key: _axis(axis, 'throttle') for key, axis in value.items()}
+        return axis(value, info.field_name)
 
     @field_validator('out', mode='before')
     @classmethod
@@ -199,15 +208,6 @@ class SweepConfig(BaseModel):
         if isinstance(value, str) and value:
             return Path(value)
         raise ValueError("out must be a non-empty path string or Path")
-
-    @field_validator('out')
-    @classmethod
-    def valid_out_path(cls, value):
-        if value.exists() and not value.is_dir():
-            raise ValueError(f"out path exists and is not a directory: {value}")
-        if any(parent.exists() and not parent.is_dir() for parent in value.parents):
-            raise ValueError(f"an ancestor of out is not a directory: {value}")
-        return value
 
 
 class RunConfig(BaseModel):
@@ -246,26 +246,23 @@ _UniqueKeyLoader.add_constructor(
 
 
 def load_config(path) -> RunConfig:
-    """Read and validate a YAML run file; file/YAML errors are ValueErrors."""
+    """Read a YAML run file; file/YAML errors are ValueErrors."""
     path = Path(path)
     try:
         with path.open(encoding='utf-8') as stream:
             raw = yaml.load(stream, Loader=_UniqueKeyLoader)
     except (OSError, UnicodeError, yaml.YAMLError) as exc:
         raise ValueError(f"cannot read YAML config {path}: {exc}") from exc
-    try:
-        return RunConfig.model_validate(raw)
-    except ValidationError as exc:
-        raise ValueError(f"invalid run config {path}: {exc}") from exc
+    return RunConfig.model_validate(raw)
 
 
-EXAMPLE_YAML = '''sweep: # dict; required. Full-envelope run settings
-  mode: # str; required. dry, wet, or both
-  mach: # float/int/list/range; required. Flight Mach values
-  alt: # float/int/list/range; required. Altitudes in ft
-  dts: # float/int/list/range; required. Temperature offsets in degR
-  throttle: # dict; required. Dry and wet power axes
-    dry: # float/int/list/range; required. Dry Tt4 levels in degR
-    wet: # float/int/list/range; required. Wet Tt7 levels in degR
-  out: # str; required. Output directory path
+EXAMPLE_YAML = '''sweep: # map; required. Full-envelope run settings
+  mode: both # str; required. dry, wet, or both
+  mach: '0,0.4,0.2' # range str; required. Flight Mach values
+  alt: [0, 2500, 5000] # number list; required. Altitude in ft
+  dts: 0 # number; required. Temperature offset in degR
+  throttle: # map; required. Dry and wet power axes
+    dry: '2900,3100,200' # range str; required. Dry Tt4 levels in degR
+    wet: [3607.68, 3407.68] # number list; required. Wet Tt7 levels in degR
+  out: deck/example # path str; required. Output directory
 '''

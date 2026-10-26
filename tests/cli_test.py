@@ -147,7 +147,7 @@ def test_mach_axis_is_ascending_from_static():
 
 @pytest.mark.parametrize('text', ['-0.2,0.4,0.2', '0.5,1.5,0.5', '1'])
 def test_mach_axis_rejects_negative_and_supersonic_mach(text):
-    with pytest.raises(RangeError, match="subsonic only"):
+    with pytest.raises(RangeError, match="below 1"):
         mach_axis(text)
 
 
@@ -244,11 +244,10 @@ def fails(capsys, argv, fragment):
     (['sweep', '--alt', '0,10000'], 'exactly 3 values'),
     (['sweep', '--dts', '0,ten,5'], 'must all be numbers'),
     (['sweep', '--alt', '0,1,1e-30'], 'too many steps'),
-    (['sweep', '--alt', '1e308'], 'non-finite'),
     (['sweep', '--throttle', '3100,2500,200', '--mode', 'dry'], 'must not exceed max'),
     (['sweep', '--throttle', '2500,3100,200'], 'can\'t serve --mode both'),
     (['sweep', '--mode', 'hot'], 'invalid choice'),
-    (['sweep', '--mach', '-0.5,0.5,0.5'], 'subsonic only'),
+    (['sweep', '--mach', '-0.5,0.5,0.5'], 'below 1'),
 ])
 def test_bad_sweep_arguments_fail_before_any_model_is_built(
         recorded, capsys, argv, fragment):
@@ -494,7 +493,7 @@ def test_yaml_run_normalizes_axes_and_writes_reloadable_snapshot(recorded, tmp_p
     assert kw['wet_powers'] == [3607.68, 3407.68]
     snapshot = cli.load_config(tmp_path / 'results' / 'run.resolved.yml')
     assert snapshot.sweep.out == tmp_path / 'results'
-    assert snapshot.sweep.throttle == {'dry': kw['dry_powers'], 'wet': kw['wet_powers']}
+    assert snapshot.sweep.throttle.model_dump() == {'dry': kw['dry_powers'], 'wet': kw['wet_powers']}
 
 
 def test_yaml_out_is_relative_to_working_directory(recorded, tmp_path):

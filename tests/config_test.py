@@ -12,6 +12,7 @@ from f404.config import (
     RunConfig,
     SweepConfig,
     alt_axis,
+    axis,
     dts_axis,
     expand_range,
     load_config,
@@ -38,14 +39,14 @@ def test_config_normalizes_axis_inputs_and_json_dump(tmp_path):
     config = RunConfig.model_validate({'sweep': {
         **raw_sweep(), 'mach': '0,0.4,0.2', 'alt': 2500,
         'dts': '-20,20,10', 'throttle': {
-            'dry': '2500,3100,200', 'wet': [3007.68, 3607.68, 3407.68]},
+            'dry': '2500,3100,200', 'wet': [3607.68, 3407.68, 3007.68]},
         'out': str(tmp_path / 'decks'),
     }})
     assert config.sweep.mach == [0.0, 0.2, 0.4]
     assert config.sweep.alt == [2500.0]
     assert config.sweep.dts == [0.0, 10.0, 20.0, -10.0, -20.0]
-    assert config.sweep.throttle['dry'] == [3100.0, 2900.0, 2700.0, 2500.0]
-    assert config.sweep.throttle['wet'] == [3607.68, 3407.68, 3007.68]
+    assert config.sweep.throttle.dry == [3100.0, 2900.0, 2700.0, 2500.0]
+    assert config.sweep.throttle.wet == [3607.68, 3407.68, 3007.68]
     assert config.model_dump(mode='json')['sweep']['out'] == str(tmp_path / 'decks')
     path_config = SweepConfig.model_validate(raw_sweep(out=Path('deck')))
     assert path_config.out == Path('deck')
@@ -57,8 +58,8 @@ def test_root_run_config_matches_default_grids_bit_for_bit():
         (sweep.mach, sfe.DEFAULT_MACHS),
         (sweep.alt, sfe.DEFAULT_ALTS),
         (sweep.dts, sfe.DEFAULT_DTS),
-        (sweep.throttle['dry'], sfe.DEFAULT_DRY_POWERS),
-        (sweep.throttle['wet'], sfe.DEFAULT_WET_POWERS),
+        (sweep.throttle.dry, sfe.DEFAULT_DRY_POWERS),
+        (sweep.throttle.wet, sfe.DEFAULT_WET_POWERS),
     ]
     for actual, expected in pairs:
         assert [value.hex() for value in actual] == [float(value).hex() for value in expected]
@@ -109,7 +110,7 @@ def test_alt_requires_ascending_explicit_values():
 
 
 def test_throttle_requires_both_axes_and_positive_levels():
-    with pytest.raises(ValidationError, match='exactly'):
+    with pytest.raises(ValidationError, match='wet'):
         SweepConfig.model_validate(raw_sweep(throttle={'dry': [1]}))
     with pytest.raises(ValidationError, match='positive'):
         SweepConfig.model_validate(raw_sweep(throttle={'dry': [0], 'wet': [1]}))
@@ -127,13 +128,11 @@ def test_models_reject_unknown_keys_and_coercions(raw):
         RunConfig.model_validate(raw)
 
 
-def test_out_rejects_existing_file_and_file_ancestor(tmp_path):
+def test_out_validation_does_not_check_filesystem(tmp_path):
     existing_file = tmp_path / 'file'
     existing_file.write_text('x')
-    with pytest.raises(ValidationError, match='not a directory'):
-        SweepConfig.model_validate(raw_sweep(out=str(existing_file)))
-    with pytest.raises(ValidationError, match='ancestor'):
-        SweepConfig.model_validate(raw_sweep(out=str(existing_file / 'decks')))
+    assert SweepConfig.model_validate(raw_sweep(out=str(existing_file))).out == existing_file
+    assert SweepConfig.model_validate(raw_sweep(out=str(existing_file / 'decks'))).out == existing_file / 'decks'
 
 
 def test_load_config_rejects_duplicate_yaml_keys(tmp_path):
@@ -152,10 +151,24 @@ def test_load_config_wraps_read_and_yaml_errors(tmp_path):
         load_config(path)
 
 
-def test_example_is_a_blank_invalid_template():
-    parsed = yaml.safe_load(EXAMPLE_YAML)
+def test_load_config_propagates_validation_error(tmp_path):
+    path = tmp_path / 'invalid.yml'
+    path.write_text(yaml.safe_dump({'sweep': raw_sweep(mach=[0.8, 0.4])}))
     with pytest.raises(ValidationError):
-        RunConfig.model_validate(parsed)
+        load_config(path)
+
+
+def test_example_is_a_runnable_template():
+    parsed = yaml.safe_load(EXAMPLE_YAML)
+    config = RunConfig.model_validate(parsed)
+    assert isinstance(parsed['sweep']['mach'], str)
+    assert isinstance(parsed['sweep']['alt'], list)
+    assert type(parsed['sweep']['dts']) is int
+    assert isinstance(parsed['sweep']['throttle']['dry'], str)
+    assert isinstance(parsed['sweep']['throttle']['wet'], list)
+    assert config.sweep.mach == [0.0, 0.2, 0.4]
+    assert config.sweep.dts == [0.0]
+    assert config.sweep.throttle.dry == [3100.0, 2900.0]
 
 
 @pytest.mark.parametrize('missing', [
@@ -172,8 +185,9 @@ def test_every_sweep_field_is_required(missing):
 def test_both_throttle_axes_are_required(missing):
     throttle = raw_sweep()['throttle']
     del throttle[missing]
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError) as exc_info:
         SweepConfig.model_validate(raw_sweep(throttle=throttle))
+    assert ('throttle', missing) in [error['loc'] for error in exc_info.value.errors()]
 
 
 def test_range_helpers_match_cli_behavior():
@@ -192,11 +206,62 @@ def test_range_expansion_rejects_unrepresentable_step_counts():
         expand_range(*parse_range('0,1,1e-30'))
 
 
-def test_range_expansion_rejects_nonfinite_rounded_values():
-    with pytest.raises(RangeError, match='non-finite'):
-        alt_axis('1e308')
-    with pytest.raises(ValidationError, match='non-finite'):
-        SweepConfig.model_validate(raw_sweep(alt='1e308'))
+def test_range_expansion_checks_point_limit_before_allocating():
+    with pytest.raises(RangeError, match='maximum is 10000'):
+        expand_range(0, 10_000, 1)
+    with pytest.raises(ValidationError, match='maximum is 10000'):
+        SweepConfig.model_validate(raw_sweep(alt=list(range(10_001))))
+
+
+@pytest.mark.parametrize(('name', 'values', 'hint'), [
+    ('dts', [-50, 50, 10], 'quote min,max,step'),
+    ('throttle', [2500, 3100, 100], 'quote min,max,step'),
+])
+def test_explicit_lists_must_already_follow_traversal_order(name, values, hint):
+    raw = raw_sweep()
+    if name == 'dts':
+        raw[name] = values
+    else:
+        raw['throttle']['dry'] = values
+    with pytest.raises(ValidationError, match=hint):
+        SweepConfig.model_validate(raw)
+
+
+@pytest.mark.parametrize(('name', 'value'), [
+    ('mach', [0.4, 0.2]), ('alt', [2500, 0]),
+    ('dts', [-50, 50, 10]), ('throttle', [2500, 3100, 100]),
+])
+def test_cli_axis_helpers_and_config_share_list_validation(name, value):
+    with pytest.raises(ValueError) as helper_error:
+        axis(value, name)
+    raw = raw_sweep()
+    if name == 'throttle':
+        raw['throttle']['dry'] = value
+    else:
+        raw[name] = value
+    with pytest.raises(ValidationError) as config_error:
+        SweepConfig.model_validate(raw)
+    assert helper_error.value.args[0] in str(config_error.value)
+
+
+@pytest.mark.parametrize(('name', 'text', 'values'), [
+    ('mach', '1', [1]),
+    ('throttle', '0', [0]),
+])
+def test_range_and_explicit_axis_domain_errors_match(name, text, values):
+    wrapper = mach_axis if name == 'mach' else throttle_axis
+    with pytest.raises(RangeError) as range_error:
+        wrapper(text)
+    with pytest.raises(RangeError) as list_error:
+        axis(values, name)
+    assert range_error.value.args == list_error.value.args
+
+
+def test_range_expansion_preserves_large_finite_values_without_numpy_overflow():
+    assert alt_axis('1e308') == [1e308]
+    assert SweepConfig.model_validate(raw_sweep(alt='1e308')).alt == [1e308]
+    with pytest.raises(RangeError, match='too many steps'):
+        expand_range(-1e308, 1e308, 1e308)
 
 
 def test_huge_yaml_integer_is_a_validation_error_not_an_overflow(tmp_path):

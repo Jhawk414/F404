@@ -25,7 +25,6 @@ import time
 import warnings
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 from openmdao.utils.om_warnings import SolverWarning
 
@@ -36,7 +35,7 @@ from f404.sweep_utils import build_snake_sweep, STATIC_MN, SweepRunner, _scalar
 # Static to high subsonic; the inlet's fixed ram recovery is subsonic only.
 DEFAULT_MACHS = [STATIC_MN, 0.2, 0.4, 0.6, 0.8, 0.95]
 # Crawl-walk-run scope: low altitudes.
-DEFAULT_ALTS = np.arange(0, 5001, 2500)        # [0, 2500, 5000] ft — 3 pts
+DEFAULT_ALTS = [0., 2500., 5000.]              # ft — 3 pts
 # dTs ordering: anchor at 0 (matches OD verification), walk hot first
 # (+10..+50), then jump to cold side (-10..-50). Bridge logic handles
 # the +50 → -10 jump within each alt level.

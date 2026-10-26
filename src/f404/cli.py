@@ -114,7 +114,7 @@ def build_parser():
         epilog="Run a YAML sweep: f404 run.yml",
     )
     parser.add_argument('--example-yaml', action='store_true',
-                        help='print a blank, commented YAML run template')
+                        help='print a runnable, commented YAML run example')
     sub = parser.add_subparsers(dest='command', metavar='COMMAND')
 
     sweep = sub.add_parser(
@@ -205,7 +205,7 @@ def _run_sweep_command(args, parser):
         config = SweepConfig(
             mode=args.mode,
             mach=args.mach if args.mach is not None else sfe.DEFAULT_MACHS,
-            alt=args.alt if args.alt is not None else list(map(float, sfe.DEFAULT_ALTS)),
+            alt=args.alt if args.alt is not None else sfe.DEFAULT_ALTS,
             dts=args.dts if args.dts is not None else sfe.DEFAULT_DTS,
             throttle=throttle,
             out=args.out,
@@ -228,7 +228,7 @@ def _run_sweep(config, parser):
     sfe.configure_runtime()
     sfe.run_sweeps(
         config.mode, alts=config.alt, dTs_vals=config.dts,
-        dry_powers=config.throttle['dry'], wet_powers=config.throttle['wet'],
+        dry_powers=config.throttle.dry, wet_powers=config.throttle.wet,
         machs=config.mach, out_dir=config.out,
     )
     return 0
