@@ -220,8 +220,11 @@ def _run_sweep(config, parser):
         config.out.mkdir(parents=True, exist_ok=True)
         resolved = config.model_dump(mode='json')
         resolved['out'] = str(config.out.resolve())
-        (config.out / 'run.resolved.yml').write_text(
-            yaml.safe_dump({'sweep': resolved}, sort_keys=False), encoding='utf-8')
+        modes = ('dry', 'wet', 'both') if config.mode == 'both' else (config.mode,)
+        for mode in modes:
+            resolved['mode'] = mode
+            (config.out / f'run_{mode}.resolved.yml').write_text(
+                yaml.safe_dump({'sweep': resolved}, sort_keys=False), encoding='utf-8')
     except OSError as exc:
         parser.error(f"cannot write sweep configuration in {config.out}: {exc}")
 

@@ -491,7 +491,7 @@ def test_yaml_run_normalizes_axes_and_writes_reloadable_snapshot(recorded, tmp_p
     assert kw['machs'] == [0.001, 0.2]
     assert kw['dry_powers'] == [3100., 2900.]
     assert kw['wet_powers'] == [3607.68, 3407.68]
-    snapshot = cli.load_config(tmp_path / 'results' / 'run.resolved.yml')
+    snapshot = cli.load_config(tmp_path / 'results' / 'run_both.resolved.yml')
     assert snapshot.sweep.out == tmp_path / 'results'
     assert snapshot.sweep.throttle.model_dump() == {'dry': kw['dry_powers'], 'wet': kw['wet_powers']}
 
@@ -501,7 +501,7 @@ def test_yaml_out_is_relative_to_working_directory(recorded, tmp_path):
     source.mkdir()
     path = write_run(source / 'run.yml')
     cli.main([str(path)])
-    assert (tmp_path / 'results' / 'run.resolved.yml').is_file()
+    assert (tmp_path / 'results' / 'run_both.resolved.yml').is_file()
     assert not (source / 'results').exists()
 
 
@@ -558,7 +558,7 @@ def test_missing_yaml_has_a_clear_usage_error(recorded, tmp_path, capsys):
 def test_snapshot_write_failure_stops_before_sweep(recorded, tmp_path, capsys):
     out = tmp_path / 'results'
     out.mkdir()
-    (out / 'run.resolved.yml').mkdir()
+    (out / 'run_both.resolved.yml').mkdir()
     path = write_run(tmp_path / 'run.yml')
     fails(capsys, [str(path)], 'cannot write sweep configuration')
     assert recorded == []
@@ -591,3 +591,56 @@ def test_yaml_sweep_and_cli_sweep_produce_identical_decks(tmp_path, capsys):
         actual = pd.read_csv(yaml_out / f'cycle_deck_{mode}.csv', float_precision='round_trip')
         pd.testing.assert_frame_equal(actual, expected.iloc[:1])
     assert (yaml_out / 'cycle_deck_full_envelope.csv').is_file()
+
+
+@pytest.mark.parametrize('first,second', [('dry', 'wet'), ('wet', 'dry')])
+def test_mode_snapshots_keep_each_decks_settings(recorded, tmp_path, first, second):
+    out = tmp_path / 'shared'
+    cli.main(['sweep', '--mode', first, '--out', str(out)])
+    original = (out / f'run_{first}.resolved.yml').read_bytes()
+    cli.main(['sweep', '--mode', second, '--out', str(out)])
+
+    assert (out / f'run_{first}.resolved.yml').read_bytes() == original
+    for mode in (first, second):
+        snapshot = cli.load_config(out / f'run_{mode}.resolved.yml').sweep
+        assert snapshot.mode == mode
+        assert snapshot.out == out
+
+
+def test_both_snapshot_survives_later_single_mode_runs(recorded, tmp_path):
+    out = tmp_path / 'shared'
+    cli.main(['sweep', '--out', str(out)])
+    combined = (out / 'run_both.resolved.yml').read_bytes()
+    wet = (out / 'run_wet.resolved.yml').read_bytes()
+    cli.main(['sweep', '--mode', 'dry', '--alt', '2500', '--out', str(out)])
+
+    assert (out / 'run_both.resolved.yml').read_bytes() == combined
+    assert (out / 'run_wet.resolved.yml').read_bytes() == wet
+    assert cli.load_config(out / 'run_dry.resolved.yml').sweep.alt == [2500.]
+    assert cli.load_config(out / 'run_wet.resolved.yml').sweep.mode == 'wet'
+    assert cli.load_config(out / 'run_both.resolved.yml').sweep.mode == 'both'
+
+
+@pytest.mark.slow
+def test_real_single_mode_runs_preserve_other_decks_and_snapshots(tmp_path, capsys):
+    path = write_run(tmp_path / 'run.yml', mach=0, alt=0, dts=0,
+                     throttle={'dry': 3100, 'wet': 3607.68}, out=str(tmp_path / 'decks'))
+    assert cli.main([str(path)]) == 0
+    out = tmp_path / 'decks'
+    combined = (out / 'cycle_deck_full_envelope.csv').read_bytes()
+    combined_config = (out / 'run_both.resolved.yml').read_bytes()
+    wet = (out / 'cycle_deck_wet.csv').read_bytes()
+    wet_config = (out / 'run_wet.resolved.yml').read_bytes()
+    cli.main(['sweep', '--mode', 'dry', '--mach', '0', '--alt', '0', '--dts', '0',
+              '--throttle', '2900', '--out', str(out)])
+    assert (out / 'cycle_deck_wet.csv').read_bytes() == wet
+    assert (out / 'run_wet.resolved.yml').read_bytes() == wet_config
+    assert (out / 'cycle_deck_full_envelope.csv').read_bytes() == combined
+    assert (out / 'run_both.resolved.yml').read_bytes() == combined_config
+    dry = (out / 'cycle_deck_dry.csv').read_bytes()
+    dry_config = (out / 'run_dry.resolved.yml').read_bytes()
+    cli.main(['sweep', '--mode', 'wet', '--mach', '0', '--alt', '0', '--dts', '0',
+              '--throttle', '3407.68', '--out', str(out)])
+    assert (out / 'cycle_deck_dry.csv').read_bytes() == dry
+    assert (out / 'run_dry.resolved.yml').read_bytes() == dry_config
+    assert (out / 'run_both.resolved.yml').read_bytes() == combined_config
