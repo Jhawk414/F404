@@ -1,11 +1,13 @@
 """CLI entry point for YAML runs, sweeps, design solves, and deck comparisons."""
 import argparse
 import re
+from reprlib import repr as short_repr
 import sys
 from pathlib import Path
 
 import openmdao.api as om
 import yaml
+from pydantic import ValidationError
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
@@ -210,9 +212,19 @@ def _run_sweep_command(args, parser):
             throttle=throttle,
             out=args.out,
         )
-    except ValueError as exc:
-        parser.error(str(exc))
+    except ValidationError as exc:
+        parser.error(_validation_errors(exc, prefix='sweep'))
     return _run_sweep(config, parser)
+
+
+def _validation_errors(exc, prefix=''):
+    lines = []
+    for error in exc.errors(include_url=False):
+        field = '.'.join(str(part) for part in error['loc'])
+        location = '.'.join(part for part in (prefix, field) if part) or 'config'
+        message = error['msg'].removeprefix('Value error, ')
+        lines.append(f"{location}: {message} (got {short_repr(error['input'])})")
+    return '\n'.join(lines)
 
 
 def _run_sweep(config, parser):
@@ -304,6 +316,8 @@ def main(argv=None):
             parser.error("a YAML run file must be the only argument")
         try:
             config = load_config(Path(argv[0]))
+        except ValidationError as exc:
+            parser.error(f"invalid run config {argv[0]}:\n{_validation_errors(exc)}")
         except ValueError as exc:
             parser.error(str(exc))
         return _run_sweep(config.sweep, parser)

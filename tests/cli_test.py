@@ -259,7 +259,7 @@ def test_out_pointing_at_a_file_is_rejected(recorded, capsys, tmp_path):
     a_file = tmp_path / 'deck.csv'
     a_file.write_text('x')
 
-    fails(capsys, ['sweep', '--out', str(a_file)], 'not a directory')
+    fails(capsys, ['sweep', '--out', str(a_file)], 'cannot write sweep configuration')
     assert recorded == []
 
 
@@ -535,6 +535,9 @@ def test_bad_yaml_fails_before_sweep(recorded, tmp_path, capsys, contents, fragm
     ({'mach': [0, 0.001]}, 'static Mach'),
     ({'alt': [0, float('nan')]}, 'finite'),
     ({'dts': [True]}, 'numbers'),
+    ({'dts': [-50, 50, 10]}, 'traversal order'),
+    ({'throttle': {'dry': [2500, 3100, 100], 'wet': [3607.68]}}, 'traversal order'),
+    ({'alt': '0,1e7,1'}, 'maximum is 10000'),
     ({'throttle': {'dry': [0], 'wet': [3607.68]}}, 'positive'),
     ({'extra': 1}, 'Extra inputs'),
 ])
@@ -619,6 +622,41 @@ def test_both_snapshot_survives_later_single_mode_runs(recorded, tmp_path):
     assert cli.load_config(out / 'run_dry.resolved.yml').sweep.alt == [2500.]
     assert cli.load_config(out / 'run_wet.resolved.yml').sweep.mode == 'wet'
     assert cli.load_config(out / 'run_both.resolved.yml').sweep.mode == 'both'
+
+
+def test_yaml_errors_identify_each_nested_field_without_pydantic_internals(recorded, tmp_path, capsys):
+    path = write_run(tmp_path / 'bad.yml', mach=[1.2],
+                     throttle={'dry': [2500, 3100, 100], 'wet': [0]})
+    with pytest.raises(SystemExit) as exc:
+        cli.main([str(path)])
+    assert exc.value.code == 2
+    error = capsys.readouterr().err
+    assert 'sweep.mach: Mach values must be at least 0 and below 1 (got [1.2])' in error
+    assert 'sweep.throttle.dry: throttle values must be in descending traversal order' in error
+    assert 'sweep.throttle.wet: throttle temperatures must be positive degR (got [0])' in error
+    for internal in ('input_type=', 'type=value_error', 'errors.pydantic.dev', 'Traceback'):
+        assert internal not in error
+    assert recorded == []
+    assert not (tmp_path / 'results').exists()
+
+
+@pytest.mark.parametrize('suffix', ['', '/child'])
+def test_output_file_or_file_ancestor_fails_before_sweep(recorded, tmp_path, capsys, suffix):
+    out = tmp_path / 'file'
+    out.write_text('preserve me')
+    fails(capsys, ['sweep', '--out', str(out) + suffix], 'cannot write sweep configuration')
+    assert out.read_text() == 'preserve me'
+    assert recorded == []
+
+
+def test_printed_example_validates_and_runs_through_the_cli(recorded, tmp_path, capsys):
+    cli.main(['--example-yaml'])
+    template = capsys.readouterr().out
+    path = tmp_path / 'example.yml'
+    path.write_text(template)
+    assert cli.main([str(path)]) == 0
+    assert recorded[0][0] == ('both',)
+    assert (tmp_path / 'deck' / 'example' / 'run_both.resolved.yml').is_file()
 
 
 @pytest.mark.slow
