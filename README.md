@@ -72,7 +72,8 @@ F404/
 │   └── f404_cycle.{typ,svg}    # cycle diagram and its source
 ├── AGENTS/                     # session handoff notes
 ├── meta/                       # vendored-library provenance (LICENSE.txt)
-└── pycycle/, setup.py, pyproject.toml, example_cycles/   # vendored upstream pyCycle
+├── pycycle/, example_cycles/   # vendored upstream pyCycle
+└── setup.py, pyproject.toml     # shared packaging and F404 test configuration
 ```
 
 The [performance-data index](docs/unclassified_perf_data/README.md) is a
@@ -163,7 +164,7 @@ Pydantic v2 and PyYAML, installed with the package.
 ## Usage
 
 `pip install -e .[all]` installs an `f404` command (re-run it in an existing
-checkout to pick up the entry point). `python -m f404` is equivalent
+checkout to install the new Pydantic/PyYAML dependencies). `python -m f404` is equivalent
 and needs no install beyond the package being importable. Full flag tables,
 range rules and error behaviour are in the [CLI guide](docs/guide/cli.md).
 `f404 --help`, `f404 design --help` and so on print the same flag summaries.
@@ -171,20 +172,16 @@ range rules and error behaviour are in the [CLI guide](docs/guide/cli.md).
 ### YAML run configuration
 
 The committed [`run.yml`](run.yml) reproduces the default sweep grid. Copy it
-and edit the sweep settings, or print a blank commented template:
+and edit the sweep settings, or print a runnable commented example:
 
 ```bash
 f404 run.yml                  # default dry + wet grid; output in deck/
-f404 --example-yaml           # blank template, with per-key descriptions
+f404 --example-yaml           # runnable example, with per-key descriptions
 f404 --example-yaml > custom.yml
 ```
 
-Fill every key before running a blank template. YAML supports a scalar, a
-`"min,max,step"` range, or an explicit numeric list for each axis, with separate
-dry and wet throttle axes. Unknown and duplicate keys are errors. A YAML file
-must be the only argument; relative output paths use the working directory.
-Every YAML or flag sweep saves `run.resolved.yml` beside its decks. See the
-[CLI guide](docs/guide/cli.md#yaml-run-configuration) for the schema and rules.
+See the [CLI guide](docs/guide/cli.md#yaml-run-configuration) for required keys,
+axis forms/order, and the per-mode resolved snapshots written beside the decks.
 
 ### `f404 design`
 
@@ -243,7 +240,7 @@ f404 compare old.csv new.csv --cols Fn,TSFC,BPR --changed-only
 ## Testing
 
 ```bash
-pytest tests                    # full suite, ~2 min
+pytest tests                    # full suite, ~3 min
 pytest tests -m "not slow"      # structural and unit tests only, ~7 s
 ```
 
@@ -258,7 +255,7 @@ tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-305 tests (262 fast), 97% coverage. The driver and
+325 tests (281 fast), 97% coverage. The driver and
 CLI are importable and covered; remaining gaps are mainly uncommon input/IO
 errors, solver-failure paths, and the one-line `__main__` shims.
 
@@ -318,8 +315,8 @@ configuration into design inputs, sweep points, and shared bounds.
 This repo is a fork of NASA Glenn's
 [pyCycle](https://github.com/OpenMDAO/pyCycle) (`om-pycycle` on PyPI),
 built on the [OpenMDAO](https://openmdao.org/) framework. The `pycycle/`
-library code, `setup.py`, and `example_cycles/` are vendored upstream
-scaffolding, not F404-specific.
+library code and `example_cycles/` are vendored upstream scaffolding.
+`setup.py` also carries the F404 package, CLI entry point, and dependencies.
 
 If you use pyCycle itself, please cite:
 

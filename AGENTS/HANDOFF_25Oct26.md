@@ -2,7 +2,6 @@
 
 Current state and next work only. Earlier session history is in
 `git log --follow -- AGENTS/`; architecture decisions are in `docs/adr/`.
-Use the `agentic-coding` skill supplied in the agent environment for coding, commits, PRs, and review conventions.
 
 ## Current model and verification
 
@@ -18,7 +17,7 @@ Use the `agentic-coding` skill supplied in the agent environment for coding, com
   The README holds the per-Mach counts; decks are committed under `deck/`.
 - Current local reference environment: Python 3.9.6, OpenMDAO 3.39.0,
   NumPy 2.0.2. CI also tests newer OpenMDAO releases; results can differ.
-- The full local suite passes **305 tests (262 fast), 97% coverage**. It covers
+- The full local suite passes **325 tests (281 fast), 97% coverage**. It covers
   sizing goldens, convergence regressions, CLI behavior, and validation. Fast PR CI excludes tests marked `slow`; the full
   matrix runs on `main`, manual dispatch, or the user-applied `full-ci` label.
   **Agents must not add `full-ci`.**
@@ -34,32 +33,26 @@ Architecture records:
 
 ## Latest work: YAML config and thin Pydantic validation
 
-[PR #45](https://github.com/Jhawk414/F404/pull/45) completes the remaining
-[#16](https://github.com/Jhawk414/F404/issues/16) run-config work and starts
-[#17](https://github.com/Jhawk414/F404/issues/17). It does not implement PLA
-or the full input-model refactor.
+[PR #45](https://github.com/Jhawk414/F404/pull/45) closes
+[#16](https://github.com/Jhawk414/F404/issues/16) and starts the thin sweep-run
+slice of [#17](https://github.com/Jhawk414/F404/issues/17). `f404 run.yml` runs
+the committed full grid; `--example-yaml` replaces the proposed `init-config`
+and prints a runnable example with inline descriptions. The complete schema,
+axis order/10,000-point limit, and snapshot rules live in the
+[CLI guide](../docs/guide/cli.md#yaml-run-configuration).
 
-- `f404 run.yml`: a sole `.yml`/`.yaml` argument. No `--config` flag and no
-  overrides after the file; extra tokens are an error.
-- Top-level `sweep:` only, with required `mode`, `mach`, `alt`, `dts`,
-  `throttle: {dry: ..., wet: ...}`, and `out`. Both throttle keys are required
-  even for a single-mode run. Unknown and duplicate YAML keys fail fast.
-- Axes accept a scalar, a `"min,max,step"` string, or an explicit numeric
-  list. Explicit Mach/altitude lists ascend; dTs is normalized hot-first,
-  throttle high-to-low. Empty, non-finite, boolean, duplicate, and invalid
-  Mach/throttle values are rejected, including duplicate effective static Mach.
-- `config.SweepConfig` validates both YAML and flag sweeps. `RunConfig` holds
-  the `sweep:` section for later extension. Range helpers moved from `cli.py`
-  into `config.py`. Dependencies are Pydantic v2 and PyYAML.
-- Relative `out` paths use the working directory. Every CLI sweep writes
-  normalized axes and an absolute output path in `out/run.resolved.yml`
-  before solving. A snapshot-write failure stops the run. Reuse that file to
-  repeat settings; separate output directories preserve separate runs.
-- `f404 --example-yaml` prints a blank template, each key with a concise
-  inline comment. Every blank must be filled before it can run. The committed
-  `run.yml` contains the default grid; a bitwise axis test guards against drift.
-- No model/default-grid/solver change. Full-deck proof and test results are in
-  the PR's **Proof of function / behavior** section.
+- `RunConfig`/`SweepConfig` and nested `ThrottleConfig` share axis validation
+  with CLI flags. Range strings expand into traversal order; explicit lists
+  must already be in that order or fail before output/solver work.
+- Dry, wet, and combined decks have corresponding `run_dry.resolved.yml`,
+  `run_wet.resolved.yml`, and `run_both.resolved.yml` snapshots. Single-mode
+  runs preserve the other mode and combined snapshots.
+- Physics, default grids, and solver settings are unchanged. CLI behavior does
+  change: help now eagerly imports OpenMDAO, and every sweep writes snapshots
+  before solving, exiting 2 if output setup or snapshot writing fails.
+- Full-deck SHA-256 proof and current validation results are in the PR's
+  **Proof of function / behavior** section. Review regressions reject ambiguous
+  lists before starting a run and preserve snapshots across successive modes.
 
 Still deferred under #17: design/component inputs, individual sweep points,
 shared solver bounds, and better DESIGN feasibility diagnostics. Existing
@@ -73,7 +66,7 @@ Deck writing and comparison retain plain validation rather than Pydantic.
 
 | Issue | Remaining scope |
 |---|---|
-| [#30](https://github.com/Jhawk414/F404/issues/30) | Decide what PLA commands, record an ADR, add a provisional schedule and `--pla`/YAML axis |
+| [#30](https://github.com/Jhawk414/F404/issues/30) | Decide what PLA commands, record an ADR and provisional schedule; add the PLA axis afterward |
 | [#17](https://github.com/Jhawk414/F404/issues/17) | Extend input validation beyond sweep-run settings; consolidate bounds |
 | [#8](https://github.com/Jhawk414/F404/issues/8) + [#25](https://github.com/Jhawk414/F404/issues/25) | Dry A8 scheduling and idle/part-power calibration, together |
 | [#35](https://github.com/Jhawk414/F404/issues/35) | Combustion efficiency in both burners; recalibrate max AB afterward |

@@ -6,7 +6,7 @@ result, and compares decks. Install with `pip install -e .[all]`; see the
 
 ```bash
 f404 run.yml                    # run the committed YAML grid; decks in deck/
-f404 --example-yaml             # print a blank commented template
+f404 --example-yaml             # print a runnable commented example
 f404 sweep                      # dry + wet, default grid, decks in the cwd
 f404 sweep --mode wet           # one mode only
 f404 sweep --mach 0             # static only (flown at Mach 0.001)
@@ -51,33 +51,64 @@ one mode. Unknown keys at any level and duplicate YAML keys are errors. Only
 | `out` | non-empty path string | Output directory, created if missing |
 
 A scalar holds an axis constant. A quoted range is `"min,max,step"`, inclusive
-of max; a YAML list is an explicit set of points, never a range triple.
-Lists must be nonempty and contain finite numbers, with no booleans, numeric
-strings, or duplicate points. Mach and altitude lists must ascend. Temperature
-offsets are reordered hot-first and throttle temperatures high-to-low, matching
-the CLI. Throttle temperatures must be positive. Mach values below 0.001 are
-flown at 0.001; two inputs that collapse to that same point are rejected.
+of max; a YAML list contains explicit points, never a range triple. Each axis
+is limited to **10,000 points**, checked before range expansion. This caps one
+axis, not the product of the sweep dimensions.
+
+Explicit lists must be nonempty, finite, and duplicate-free, with no booleans
+or numeric strings. They must already follow traversal order:
+
+- Mach and altitude: ascending.
+- dTs: non-negative values ascending, then negative values descending
+  (`[0, 10, 20, -10, -20]`).
+- Dry/wet throttle: descending, with positive temperatures.
+
+An out-of-order list is an error, never silently sorted. For example,
+`dts: [-50, 50, 10]` is rejected; write `dts: "-50,50,10"` for a range.
+Range strings are expanded into the same traversal order used by CLI flags.
+Mach values below 0.001 are flown at 0.001; inputs that collapse to duplicate
+static points are rejected.
 
 `out` is relative to the **working directory**, just like `--out`, rather than
-the YAML file's directory. Before solving, YAML and flag sweeps write
-`run.resolved.yml` in that directory with expanded axes and an absolute output
-path. This file can be passed back to `f404` to repeat the requested run. It is
-overwritten on each invocation and ignored by Git; use separate output
-directories for runs you want to retain. A configuration or snapshot-write error exits 2 before solving.
+the YAML file's directory. The models validate path syntax independently of the
+filesystem; the CLI creates the directory and checks snapshot writes before
+solving. Invalid settings or unusable output paths exit 2 with field/input or
+filesystem error context. For example:
 
-Print a blank template with a short type/required/description comment beside
-every key:
+```text
+sweep.throttle.dry: throttle values must be in descending traversal order. For a range, quote min,max,step. (got [2500, 3100, 100])
+```
+
+Every YAML or flag sweep saves resolved axes and an absolute output path in a
+snapshot matching each deck:
+
+| Deck | Snapshot |
+|---|---|
+| `cycle_deck_dry.csv` | `run_dry.resolved.yml` |
+| `cycle_deck_wet.csv` | `run_wet.resolved.yml` |
+| `cycle_deck_full_envelope.csv` | `run_both.resolved.yml` |
+
+A `both` run writes all three snapshots. A later single-mode run replaces only
+its own snapshot and deck, preserving the other mode and combined snapshots.
+Snapshots record requested settings before solving, are ignored by Git, and
+can be rerun with `f404 path/to/run_dry.resolved.yml`. Reusing the same mode
+and output directory overwrites that mode's files; use separate directories
+to retain multiple runs.
+
+Print a runnable example with all three axis forms and a short inline comment
+beside every key:
 
 ```bash
 f404 --example-yaml > custom.yml
-# Fill every blank value, then:
+# Review or edit the example settings, then:
 f404 custom.yml
 ```
 
-The template intentionally has no defaults and cannot run until filled in.
-`--example-yaml` runs without a subcommand. Existing `sweep`, `design`, and
-`compare` commands remain available; the sweep flags and YAML use the same
-`SweepConfig` validation and axis rules.
+The example writes a small grid to `deck/example/`; it is distinct from the
+full default envelope in the committed `run.yml`. `--example-yaml` runs without
+a subcommand. Existing `sweep`, `design`, and `compare` commands remain available.
+Help and validation import OpenMDAO eagerly, but no model is built or solved
+until inputs and snapshot writes succeed.
 
 ## `f404 sweep`
 

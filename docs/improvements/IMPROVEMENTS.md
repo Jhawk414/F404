@@ -247,8 +247,8 @@ Implemented in [PR #45](https://github.com/Jhawk414/F404/pull/45), closing
 [#16](https://github.com/Jhawk414/F404/issues/16) with the CLI work below.
 `f404 run.yml` accepts required sweep settings under `sweep:` and validates
 them through Pydantic v2. The committed `run.yml` reproduces the default grid;
-`f404 --example-yaml` prints a blank commented template. Every sweep saves
-`run.resolved.yml` beside its decks. See the [CLI guide](../guide/cli.md).
+`f404 --example-yaml` prints a runnable commented example. Every sweep saves
+per-mode resolved snapshots beside its decks. See the [CLI guide](../guide/cli.md).
 
 Design inputs, PLA, transient settings, and solver-log configuration remain
 future work; unknown keys are rejected rather than silently ignored. Continue
@@ -259,7 +259,7 @@ the broader Pydantic refactor under item 3 / #17 as those inputs are exposed.
 Implemented: `f404 design`, `f404 sweep`, and `f404 compare`, plus a sole YAML
 filename for configured sweeps. `python -m f404` uses the same entry point.
 The driver is importable and tested; no separate scripts or `init-config`
-subcommand are needed. `--example-yaml` supplies the blank template.
+subcommand are needed. `--example-yaml` supplies the runnable example.
 
 The next command axis is PLA (#30). Keep future CLI options and YAML fields
 on the same validation path rather than adding parallel configuration logic.
