@@ -56,9 +56,11 @@ F404/
 │   ├── problems.py             # build_problem(): design targets, max-AB calibration, initial guesses, input validation
 │   ├── sweep_utils.py          # snake sweep grid, bridge warm-starting, SweepRunner (fail-fast Newton cap, ADR-0003), result extraction
 │   ├── sweep_full_envelope.py  # default grid, run_sweeps() for dry, wet or both, cycle-deck CSV writer
-│   ├── cli.py                  # f404 command: design, sweep, compare; min,max,step range parsing and validation
+│   ├── config.py               # YAML loading, Pydantic sweep validation, shared range parsing
+│   ├── cli.py                  # f404 command: YAML runs, design, sweep, compare
 │   ├── compare_decks.py        # column-by-column deck comparison behind f404 compare
 │   └── printer.py              # console tables for DESIGN/OD results
+├── run.yml                     # reproducible default sweep configuration
 ├── tests/                      # pytest suite, one <module>_test.py per module (#5)
 ├── deck/                       # cycle-deck output CSVs
 ├── docs/
@@ -70,7 +72,8 @@ F404/
 │   └── f404_cycle.{typ,svg}    # cycle diagram and its source
 ├── AGENTS/                     # session handoff notes
 ├── meta/                       # vendored-library provenance (LICENSE.txt)
-└── pycycle/, setup.py, pyproject.toml, example_cycles/   # vendored upstream pyCycle
+├── pycycle/, example_cycles/   # vendored upstream pyCycle
+└── setup.py, pyproject.toml     # shared packaging and F404 test configuration
 ```
 
 The [performance-data index](docs/unclassified_perf_data/README.md) is a
@@ -101,7 +104,8 @@ Current data flow from CLI invocation to output CSV.
 ```mermaid
 flowchart TD
     subgraph Drivers["Entry point (src/f404/)"]
-        CLI["cli.py  (f404)<br/>sweep · design · compare<br/>--mode · --mach · --alt · --dts · --throttle · --out"]
+        CLI["cli.py  (f404)<br/>run.yml · sweep · design · compare<br/>--mode · --mach · --alt · --dts · --throttle · --out"]
+        CFG["config.py<br/>SweepConfig · RunConfig<br/>YAML and flag sweep validation"]
         A["sweep_full_envelope.py<br/>run_sweeps · write_deck_csv"]
     end
 
@@ -120,7 +124,8 @@ flowchart TD
         G["deck/*.csv<br/>cycle_deck_dry / _wet / _full_envelope"]
     end
 
-    CLI --> A
+    CLI --> CFG
+    CFG --> A
     CLI --> B
     A --> B
     B --> C
@@ -153,15 +158,30 @@ cd F404
 pip install -e .[all]
 ```
 
-Requires Python 3.9+ and OpenMDAO 3.10.0+.
+Requires Python 3.9+ and OpenMDAO 3.10.0+. Sweep configuration uses
+Pydantic v2 and PyYAML, installed with the package.
 
 ## Usage
 
 `pip install -e .[all]` installs an `f404` command (re-run it in an existing
-checkout to pick up the entry point). `python -m f404` is equivalent
+checkout to install the new Pydantic/PyYAML dependencies). `python -m f404` is equivalent
 and needs no install beyond the package being importable. Full flag tables,
 range rules and error behaviour are in the [CLI guide](docs/guide/cli.md).
 `f404 --help`, `f404 design --help` and so on print the same flag summaries.
+
+### YAML run configuration
+
+The committed [`run.yml`](run.yml) reproduces the default sweep grid. Copy it
+and edit the sweep settings, or print a runnable commented example:
+
+```bash
+f404 run.yml                  # default dry + wet grid; output in deck/
+f404 --example-yaml           # runnable example, with per-key descriptions
+f404 --example-yaml > custom.yml
+```
+
+See the [CLI guide](docs/guide/cli.md#yaml-run-configuration) for required keys,
+axis forms/order, and the per-mode resolved snapshots written beside the decks.
 
 ### `f404 design`
 
@@ -220,7 +240,7 @@ f404 compare old.csv new.csv --cols Fn,TSFC,BPR --changed-only
 ## Testing
 
 ```bash
-pytest tests                    # full suite, ~2 min
+pytest tests                    # full suite, ~3 min
 pytest tests -m "not slow"      # structural and unit tests only, ~7 s
 ```
 
@@ -235,9 +255,9 @@ tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-238 tests (196 fast), 97% coverage. The driver and
-CLI are importable and covered; what remains uncovered is mostly
-`sweep_utils.py`'s solver-failure paths and the one-line `__main__` shims.
+325 tests (281 fast), 97% coverage. The driver and
+CLI are importable and covered; remaining gaps are mainly uncommon input/IO
+errors, solver-failure paths, and the one-line `__main__` shims.
 
 ## Current status
 
@@ -286,15 +306,17 @@ The recommended order for taking it on is in the latest `AGENTS/HANDOFF_*.md`,
 and design decisions are recorded in [`docs/adr/`](docs/adr/). What has shipped
 is in the git history and the merged pull requests.
 
-Next up: [#16](https://github.com/Jhawk414/F404/issues/16) (YAML run config).
+Next up: [#30](https://github.com/Jhawk414/F404/issues/30) (define PLA), then
+continue [#17](https://github.com/Jhawk414/F404/issues/17) beyond sweep-run
+configuration into design inputs, sweep points, and shared bounds.
 
 ## Acknowledgments
 
 This repo is a fork of NASA Glenn's
 [pyCycle](https://github.com/OpenMDAO/pyCycle) (`om-pycycle` on PyPI),
 built on the [OpenMDAO](https://openmdao.org/) framework. The `pycycle/`
-library code, `setup.py`, and `example_cycles/` are vendored upstream
-scaffolding, not F404-specific.
+library code and `example_cycles/` are vendored upstream scaffolding.
+`setup.py` also carries the F404 package, CLI entry point, and dependencies.
 
 If you use pyCycle itself, please cite:
 

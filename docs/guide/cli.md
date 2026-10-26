@@ -5,6 +5,8 @@ result, and compares decks. Install with `pip install -e .[all]`; see the
 [README](https://github.com/Jhawk414/F404/blob/main/README.md#installation).
 
 ```bash
+f404 run.yml                    # run the committed YAML grid; decks in deck/
+f404 --example-yaml             # print a runnable commented example
 f404 sweep                      # dry + wet, default grid, decks in the cwd
 f404 sweep --mode wet           # one mode only
 f404 sweep --mach 0             # static only (flown at Mach 0.001)
@@ -14,6 +16,99 @@ f404 compare old.csv new.csv    # % change of every deck column, new vs old
 f404 --help                     # and `f404 sweep --help`, `f404 design --help`
                                 # (rich panels; plain argparse text for usage errors)
 ```
+
+## YAML run configuration
+
+Pass a single `.yml` or `.yaml` filename: `f404 run.yml`. Extra arguments are
+rejected; edit the file to change settings. The committed
+[`run.yml`](https://github.com/Jhawk414/F404/blob/main/run.yml) reproduces the
+default dry and wet grids, with output in `deck/`.
+
+```yaml
+sweep:
+  mode: both
+  mach: [0.001, 0.2, 0.4, 0.6, 0.8, 0.95]
+  alt: "0,5000,2500"
+  dts: "-50,50,10"
+  throttle:
+    dry: "2500,3100,200"
+    wet: "3007.68,3607.68,200"
+  out: deck
+```
+
+Every key shown is required, including both `throttle` keys even when running
+one mode. Unknown keys at any level and duplicate YAML keys are errors. Only
+`sweep:` is supported today; design inputs and PLA will be added separately.
+
+| Key | Accepted input | Meaning |
+|---|---|---|
+| `mode` | `dry`, `wet`, `both` | Which deck modes to run |
+| `mach` | scalar, range string, numeric list | Flight Mach, at least 0 and below 1 |
+| `alt` | scalar, range string, numeric list | Altitude, ft |
+| `dts` | scalar, range string, numeric list | ISA temperature offset, R |
+| `throttle.dry` | scalar, range string, numeric list | Core Tt4, R |
+| `throttle.wet` | scalar, range string, numeric list | Augmentor Tt7, R |
+| `out` | non-empty path string | Output directory, created if missing |
+
+A scalar holds an axis constant. A quoted range is `"min,max,step"`, inclusive
+of max; a YAML list contains explicit points, never a range triple. Each axis
+is limited to **10,000 points**, checked before range expansion. This caps one
+axis, not the product of the sweep dimensions.
+
+Explicit lists must be nonempty, finite, and duplicate-free, with no booleans
+or numeric strings. They must already follow traversal order:
+
+- Mach and altitude: ascending.
+- dTs: non-negative values ascending, then negative values descending
+  (`[0, 10, 20, -10, -20]`).
+- Dry/wet throttle: descending, with positive temperatures.
+
+An out-of-order list is an error, never silently sorted. For example,
+`dts: [-50, 50, 10]` is rejected; write `dts: "-50,50,10"` for a range.
+Range strings are expanded into the same traversal order used by CLI flags.
+Mach values below 0.001 are flown at 0.001; inputs that collapse to duplicate
+static points are rejected.
+
+`out` is relative to the **working directory**, just like `--out`, rather than
+the YAML file's directory. The models validate path syntax independently of the
+filesystem; the CLI creates the directory and checks snapshot writes before
+solving. Invalid settings or unusable output paths exit 2 with field/input or
+filesystem error context. For example:
+
+```text
+sweep.throttle.dry: throttle values must be in descending traversal order. For a range, quote min,max,step. (got [2500, 3100, 100])
+```
+
+Every YAML or flag sweep saves resolved axes and an absolute output path in a
+snapshot matching each deck:
+
+| Deck | Snapshot |
+|---|---|
+| `cycle_deck_dry.csv` | `run_dry.resolved.yml` |
+| `cycle_deck_wet.csv` | `run_wet.resolved.yml` |
+| `cycle_deck_full_envelope.csv` | `run_both.resolved.yml` |
+
+A `both` run writes all three snapshots. A later single-mode run replaces only
+its own snapshot and deck, preserving the other mode and combined snapshots.
+Snapshots record requested settings before solving, are ignored by Git, and
+can be rerun with `f404 path/to/run_dry.resolved.yml`. Reusing the same mode
+and output directory overwrites that mode's files; use separate directories
+to retain multiple runs.
+
+Print a runnable example with all three axis forms and a short inline comment
+beside every key:
+
+```bash
+f404 --example-yaml > custom.yml
+# Review or edit the example settings, then:
+f404 custom.yml
+```
+
+The example writes a small grid to `deck/example/`; it is distinct from the
+full default envelope in the committed `run.yml`. `--example-yaml` runs without
+a subcommand. Existing `sweep`, `design`, and `compare` commands remain available.
+Help and validation import OpenMDAO eagerly, but no model is built or solved
+until inputs and snapshot writes succeed.
 
 ## `f404 sweep`
 

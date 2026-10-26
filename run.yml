@@ -1,0 +1,10 @@
+# Full-envelope sweep using the calibrated default grid.
+sweep:
+  mode: both # required; dry, wet, or both
+  mach: [0.001, 0.2, 0.4, 0.6, 0.8, 0.95] # required; number, min,max,step string, or numeric list (Mach)
+  alt: [0, 2500, 5000] # required; number, min,max,step string, or numeric list (ft)
+  dts: [0, 10, 20, 30, 40, 50, -10, -20, -30, -40, -50] # required; number, min,max,step string, or numeric list (degR)
+  throttle: # required; dry and wet axes, number, range string, or numeric list (degR)
+    dry: [3100, 2900, 2700, 2500] # required dry Tt4 levels
+    wet: [3607.68, 3407.68, 3207.68, 3007.68] # required wet Tt7 levels
+  out: deck # required output directory

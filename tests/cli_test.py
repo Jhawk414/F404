@@ -8,9 +8,10 @@ import importlib
 
 import pandas as pd
 import pytest
+import yaml
 
 from f404 import cli, sweep_full_envelope as sfe
-from f404.cli import (
+from f404.config import (
     RangeError,
     alt_axis,
     dts_axis,
@@ -146,7 +147,7 @@ def test_mach_axis_is_ascending_from_static():
 
 @pytest.mark.parametrize('text', ['-0.2,0.4,0.2', '0.5,1.5,0.5', '1'])
 def test_mach_axis_rejects_negative_and_supersonic_mach(text):
-    with pytest.raises(RangeError, match="subsonic only"):
+    with pytest.raises(RangeError, match="below 1"):
         mach_axis(text)
 
 
@@ -160,8 +161,9 @@ def test_throttle_axis_rejects_non_positive_temperatures():
 # CLI asks the driver to do without building a model.
 
 @pytest.fixture
-def recorded(monkeypatch):
+def recorded(monkeypatch, tmp_path):
     """Capture the arguments `f404 sweep` hands to run_sweeps."""
+    monkeypatch.chdir(tmp_path)
     calls = []
     monkeypatch.setattr(sfe, 'run_sweeps', lambda *a, **k: calls.append((a, k)))
     monkeypatch.setattr(sfe, 'configure_runtime', lambda: None)
@@ -241,10 +243,11 @@ def fails(capsys, argv, fragment):
 @pytest.mark.parametrize('argv, fragment', [
     (['sweep', '--alt', '0,10000'], 'exactly 3 values'),
     (['sweep', '--dts', '0,ten,5'], 'must all be numbers'),
+    (['sweep', '--alt', '0,1,1e-30'], 'too many steps'),
     (['sweep', '--throttle', '3100,2500,200', '--mode', 'dry'], 'must not exceed max'),
     (['sweep', '--throttle', '2500,3100,200'], 'can\'t serve --mode both'),
     (['sweep', '--mode', 'hot'], 'invalid choice'),
-    (['sweep', '--mach', '-0.5,0.5,0.5'], 'subsonic only'),
+    (['sweep', '--mach', '-0.5,0.5,0.5'], 'below 1'),
 ])
 def test_bad_sweep_arguments_fail_before_any_model_is_built(
         recorded, capsys, argv, fragment):
@@ -256,7 +259,7 @@ def test_out_pointing_at_a_file_is_rejected(recorded, capsys, tmp_path):
     a_file = tmp_path / 'deck.csv'
     a_file.write_text('x')
 
-    fails(capsys, ['sweep', '--out', str(a_file)], 'not a directory')
+    fails(capsys, ['sweep', '--out', str(a_file)], 'cannot write sweep configuration')
     assert recorded == []
 
 
@@ -462,3 +465,220 @@ def test_compare_exits_1_when_a_deck_has_a_blank_value(tmp_path, capsys):
 
     assert status == 1
     assert "non-finite values in ['Fn']" in capsys.readouterr().err
+
+
+# ── YAML runs ────────────────────────────────────────────────────────────────
+
+def write_run(path, **changes):
+    sweep = {
+        'mode': 'both', 'mach': [0.001, 0.2], 'alt': 0, 'dts': '-10,10,10',
+        'throttle': {'dry': '2900,3100,200', 'wet': [3607.68, 3407.68]},
+        'out': 'results',
+    }
+    sweep.update(changes)
+    path.write_text(yaml.safe_dump({'sweep': sweep}), encoding='utf-8')
+    return path
+
+
+def test_yaml_run_normalizes_axes_and_writes_reloadable_snapshot(recorded, tmp_path):
+    path = write_run(tmp_path / 'input.yaml')
+    assert cli.main([str(path)]) == 0
+
+    (mode,), kw = recorded[0]
+    assert mode == 'both'
+    assert kw['alts'] == [0.]
+    assert kw['dTs_vals'] == [0., 10., -10.]
+    assert kw['machs'] == [0.001, 0.2]
+    assert kw['dry_powers'] == [3100., 2900.]
+    assert kw['wet_powers'] == [3607.68, 3407.68]
+    snapshot = cli.load_config(tmp_path / 'results' / 'run_both.resolved.yml')
+    assert snapshot.sweep.out == tmp_path / 'results'
+    assert snapshot.sweep.throttle.model_dump() == {'dry': kw['dry_powers'], 'wet': kw['wet_powers']}
+
+
+def test_yaml_out_is_relative_to_working_directory(recorded, tmp_path):
+    source = tmp_path / 'inputs'
+    source.mkdir()
+    path = write_run(source / 'run.yml')
+    cli.main([str(path)])
+    assert (tmp_path / 'results' / 'run_both.resolved.yml').is_file()
+    assert not (source / 'results').exists()
+
+
+def test_flag_and_yaml_sweeps_use_the_same_normalized_settings(recorded, tmp_path):
+    path = write_run(tmp_path / 'run.yml', mode='dry', mach='0,0.4,0.2')
+    cli.main([str(path)])
+    cli.main(['sweep', '--mode', 'dry', '--mach', '0,0.4,0.2', '--alt', '0',
+              '--dts', '-10,10,10', '--throttle', '2900,3100,200', '--out', 'results'])
+    assert recorded[0][0] == recorded[1][0]
+    for key in ('machs', 'alts', 'dTs_vals', 'dry_powers', 'out_dir'):
+        assert recorded[0][1][key] == recorded[1][1][key]
+
+
+@pytest.mark.parametrize('contents, fragment', [
+    ('sweep: [', 'cannot read YAML config'),
+    ('sweep:\n  mode: dry\n  mode: wet\n', 'duplicate key'),
+    ('sweep: {}', 'Field required'),
+    ('design: {}', 'Extra inputs'),
+    ('sweep: null', 'sweep'),
+    ('', 'invalid run config'),
+])
+def test_bad_yaml_fails_before_sweep(recorded, tmp_path, capsys, contents, fragment):
+    path = tmp_path / 'bad.yml'
+    path.write_text(contents)
+    fails(capsys, [str(path)], fragment)
+    assert recorded == []
+
+
+@pytest.mark.parametrize('changes, fragment', [
+    ({'mach': []}, 'non-empty'),
+    ({'mach': [0, 0.001]}, 'static Mach'),
+    ({'alt': [0, float('nan')]}, 'finite'),
+    ({'dts': [True]}, 'numbers'),
+    ({'dts': [-50, 50, 10]}, 'traversal order'),
+    ({'throttle': {'dry': [2500, 3100, 100], 'wet': [3607.68]}}, 'traversal order'),
+    ({'alt': '0,1e7,1'}, 'maximum is 10000'),
+    ({'throttle': {'dry': [0], 'wet': [3607.68]}}, 'positive'),
+    ({'extra': 1}, 'Extra inputs'),
+])
+def test_invalid_yaml_settings_fail_before_sweep(recorded, tmp_path, capsys, changes, fragment):
+    path = write_run(tmp_path / 'bad.yml', **changes)
+    fails(capsys, [str(path)], fragment)
+    assert recorded == []
+
+
+def test_yaml_rejects_extra_cli_arguments(recorded, tmp_path, capsys):
+    path = write_run(tmp_path / 'run.yml')
+    fails(capsys, [str(path), '--mode', 'dry'], 'only argument')
+    assert recorded == []
+
+
+def test_missing_yaml_has_a_clear_usage_error(recorded, tmp_path, capsys):
+    fails(capsys, [str(tmp_path / 'missing.yml')], 'cannot read YAML config')
+    assert recorded == []
+
+
+def test_snapshot_write_failure_stops_before_sweep(recorded, tmp_path, capsys):
+    out = tmp_path / 'results'
+    out.mkdir()
+    (out / 'run_both.resolved.yml').mkdir()
+    path = write_run(tmp_path / 'run.yml')
+    fails(capsys, [str(path)], 'cannot write sweep configuration')
+    assert recorded == []
+
+
+def test_example_yaml_prints_only_the_template(recorded, capsys):
+    assert cli.main(['--example-yaml']) == 0
+    assert capsys.readouterr().out == cli.EXAMPLE_YAML
+    assert recorded == []
+
+
+def test_example_yaml_cannot_hide_a_command(recorded, capsys):
+    fails(capsys, ['--example-yaml', 'sweep'], 'without a command')
+    assert recorded == []
+
+
+@pytest.mark.slow
+def test_yaml_sweep_and_cli_sweep_produce_identical_decks(tmp_path, capsys):
+    yaml_out = tmp_path / 'yaml'
+    cli_out = tmp_path / 'flags'
+    path = write_run(tmp_path / 'run.yml', mach=0, dts=0, out=str(yaml_out),
+                     throttle={'dry': 3100, 'wet': 3607.68})
+    assert cli.main([str(path)]) == 0
+    assert cli.main(['sweep', '--mach', '0', '--alt', '0', '--dts', '0',
+                     '--out', str(cli_out)]) == 0
+    # The flag run includes four power levels; its first point in each mode
+    # must match the YAML run with one level exactly.
+    for mode in ('dry', 'wet'):
+        expected = pd.read_csv(cli_out / f'cycle_deck_{mode}.csv', float_precision='round_trip')
+        actual = pd.read_csv(yaml_out / f'cycle_deck_{mode}.csv', float_precision='round_trip')
+        pd.testing.assert_frame_equal(actual, expected.iloc[:1])
+    assert (yaml_out / 'cycle_deck_full_envelope.csv').is_file()
+
+
+@pytest.mark.parametrize('first,second', [('dry', 'wet'), ('wet', 'dry')])
+def test_mode_snapshots_keep_each_decks_settings(recorded, tmp_path, first, second):
+    out = tmp_path / 'shared'
+    cli.main(['sweep', '--mode', first, '--out', str(out)])
+    original = (out / f'run_{first}.resolved.yml').read_bytes()
+    cli.main(['sweep', '--mode', second, '--out', str(out)])
+
+    assert (out / f'run_{first}.resolved.yml').read_bytes() == original
+    for mode in (first, second):
+        snapshot = cli.load_config(out / f'run_{mode}.resolved.yml').sweep
+        assert snapshot.mode == mode
+        assert snapshot.out == out
+
+
+def test_both_snapshot_survives_later_single_mode_runs(recorded, tmp_path):
+    out = tmp_path / 'shared'
+    cli.main(['sweep', '--out', str(out)])
+    combined = (out / 'run_both.resolved.yml').read_bytes()
+    wet = (out / 'run_wet.resolved.yml').read_bytes()
+    cli.main(['sweep', '--mode', 'dry', '--alt', '2500', '--out', str(out)])
+
+    assert (out / 'run_both.resolved.yml').read_bytes() == combined
+    assert (out / 'run_wet.resolved.yml').read_bytes() == wet
+    assert cli.load_config(out / 'run_dry.resolved.yml').sweep.alt == [2500.]
+    assert cli.load_config(out / 'run_wet.resolved.yml').sweep.mode == 'wet'
+    assert cli.load_config(out / 'run_both.resolved.yml').sweep.mode == 'both'
+
+
+def test_yaml_errors_identify_each_nested_field_without_pydantic_internals(recorded, tmp_path, capsys):
+    path = write_run(tmp_path / 'bad.yml', mach=[1.2],
+                     throttle={'dry': [2500, 3100, 100], 'wet': [0]})
+    with pytest.raises(SystemExit) as exc:
+        cli.main([str(path)])
+    assert exc.value.code == 2
+    error = capsys.readouterr().err
+    assert 'sweep.mach: Mach values must be at least 0 and below 1 (got [1.2])' in error
+    assert 'sweep.throttle.dry: throttle values must be in descending traversal order' in error
+    assert 'sweep.throttle.wet: throttle temperatures must be positive degR (got [0])' in error
+    for internal in ('input_type=', 'type=value_error', 'errors.pydantic.dev', 'Traceback'):
+        assert internal not in error
+    assert recorded == []
+    assert not (tmp_path / 'results').exists()
+
+
+@pytest.mark.parametrize('suffix', ['', '/child'])
+def test_output_file_or_file_ancestor_fails_before_sweep(recorded, tmp_path, capsys, suffix):
+    out = tmp_path / 'file'
+    out.write_text('preserve me')
+    fails(capsys, ['sweep', '--out', str(out) + suffix], 'cannot write sweep configuration')
+    assert out.read_text() == 'preserve me'
+    assert recorded == []
+
+
+def test_printed_example_validates_and_runs_through_the_cli(recorded, tmp_path, capsys):
+    cli.main(['--example-yaml'])
+    template = capsys.readouterr().out
+    path = tmp_path / 'example.yml'
+    path.write_text(template)
+    assert cli.main([str(path)]) == 0
+    assert recorded[0][0] == ('both',)
+    assert (tmp_path / 'deck' / 'example' / 'run_both.resolved.yml').is_file()
+
+
+@pytest.mark.slow
+def test_real_single_mode_runs_preserve_other_decks_and_snapshots(tmp_path, capsys):
+    path = write_run(tmp_path / 'run.yml', mach=0, alt=0, dts=0,
+                     throttle={'dry': 3100, 'wet': 3607.68}, out=str(tmp_path / 'decks'))
+    assert cli.main([str(path)]) == 0
+    out = tmp_path / 'decks'
+    combined = (out / 'cycle_deck_full_envelope.csv').read_bytes()
+    combined_config = (out / 'run_both.resolved.yml').read_bytes()
+    wet = (out / 'cycle_deck_wet.csv').read_bytes()
+    wet_config = (out / 'run_wet.resolved.yml').read_bytes()
+    cli.main(['sweep', '--mode', 'dry', '--mach', '0', '--alt', '0', '--dts', '0',
+              '--throttle', '2900', '--out', str(out)])
+    assert (out / 'cycle_deck_wet.csv').read_bytes() == wet
+    assert (out / 'run_wet.resolved.yml').read_bytes() == wet_config
+    assert (out / 'cycle_deck_full_envelope.csv').read_bytes() == combined
+    assert (out / 'run_both.resolved.yml').read_bytes() == combined_config
+    dry = (out / 'cycle_deck_dry.csv').read_bytes()
+    dry_config = (out / 'run_dry.resolved.yml').read_bytes()
+    cli.main(['sweep', '--mode', 'wet', '--mach', '0', '--alt', '0', '--dts', '0',
+              '--throttle', '3407.68', '--out', str(out)])
+    assert (out / 'cycle_deck_dry.csv').read_bytes() == dry
+    assert (out / 'run_dry.resolved.yml').read_bytes() == dry_config
+    assert (out / 'run_both.resolved.yml').read_bytes() == combined_config

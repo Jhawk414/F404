@@ -18,6 +18,8 @@ __pycache__/
 # Sweep runs drop them in the working directory.
 /cycle_deck_*.csv
 src/**/cycle_deck_*.csv
+# Resolved run snapshots include machine-specific absolute output paths.
+run*.resolved.yml
 
 # Test artifacts
 .pytest_cache/

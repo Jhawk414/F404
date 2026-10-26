@@ -2,8 +2,9 @@
 
 Architectural changes first discussed after closing out
 `feature/alt-mach-sweep`. This is a historical roadmap: items 1, 2 and 6 are
-done, 3, 8 and 9 are filed as #17, #16 and #35, and the single-engine work in
-item 4 landed as #2 (ADR-0001). Each section carries a status note where it has one.
+done; 7–8 are implemented by PR #45 (#16); 3 is partially implemented (#17);
+and 9 remains open (#35). The single-engine work in item 4 landed as #2
+(ADR-0001). Each section carries a status note where it has one.
 Open work is tracked in GitHub issues; the AGENTS/ handoffs record what
 shipped.
 
@@ -85,15 +86,17 @@ should include, per module, as applicable:
   have caught that regression immediately instead of requiring several
   rounds of debugging.
 
-## 3. Pydantic models for validated inputs (larger refactor, not urgent)
+## 3. Pydantic models for validated inputs (partially implemented)
 
-> **Status: filed** as [#17](https://github.com/Jhawk414/F404/issues/17), with
-> all three candidates below carried over. The preconditions this section set
+> **Status: partially implemented** in [PR #45](https://github.com/Jhawk414/F404/pull/45):
+> sweep-run settings use a shared Pydantic `SweepConfig` for YAML and CLI flags.
+> [#17](https://github.com/Jhawk414/F404/issues/17) remains open for the three
+> candidates below. The preconditions this section set
 > — a stable `src/` layout and settled module boundaries — are now met (#4,
 > #5). PR #15 added the three most urgent design-target checks by hand in
 > `problems._validate_design_targets()`; #17 absorbs and replaces them.
 
-Candidates for `pydantic` models once the src/ layout exists:
+Remaining candidates for `pydantic` models:
 - Design-point input sets (`fn_target`, `Tt4`, `Tt7`, PR/eff guesses) —
   currently passed as loose `float` args and `prob.set_val()` calls with
   no validation that e.g. a PR is > 1 or an efficiency is in (0, 1).
@@ -107,9 +110,8 @@ Candidates for `pydantic` models once the src/ layout exists:
   least a single source of truth) would remove the drift risk noted in
   that file's docstring.
 
-This is explicitly lower priority than items 1-2 and 4-5 — worth doing
-once the module boundaries from the `src/` restructure are stable, not
-before.
+Continue after the PLA decision/axis work and before the coupled idle/nozzle
+calibration work; the latest HANDOFF records the current sequence.
 
 ## 4. Branch hygiene
 
@@ -241,76 +243,26 @@ larger sweep is run instead of silently going stale in the README.
 
 ## 7. YAML-driven run configuration
 
-Today, running this repo means editing Python: constants baked into
-`sweep_full_envelope.py` (`wet_powers`, altitude/dTs lists, `DSN_Tt7`,
-etc.) or calling `run_design_od.py` / `test_modes.py` directly. There's no
-declarative way to say "run this specific configuration" without touching
-code.
+Implemented in [PR #45](https://github.com/Jhawk414/F404/pull/45), closing
+[#16](https://github.com/Jhawk414/F404/issues/16) with the CLI work below.
+`f404 run.yml` accepts required sweep settings under `sweep:` and validates
+them through Pydantic v2. The committed `run.yml` reproduces the default grid;
+`f404 --example-yaml` prints a runnable commented example. Every sweep saves
+per-mode resolved snapshots beside its decks. See the [CLI guide](../guide/cli.md).
 
-Proposed: a config file (`run.yml`) describing one of four run modes:
-
-```yaml
-mode: sweep            # design | sweep | transient (future)
-engine_mode: wet        # dry | wet | both
-design:
-  fn_target: 17700      # lbf
-  Tt7: 3800              # degR, wet only
-sweep:
-  altitudes: [0, 2500, 5000]        # ft
-  dTs: [-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50]  # degR
-  powers: [3800, 3600, 3400, 3200]  # Tt7 (wet) or Tt4 (dry) degR
-  bridge_threshold: 200              # degR, existing SweepRunner param
-output:
-  deck_dir: deck/steady-state
-  write_log: true                    # see item 5's solver-log proposal
-```
-
-A CLI command should be able to generate a starter template for the user
-rather than requiring them to hand-write the schema from scratch, e.g.
-`f404cli init-config --out run.yml` (see item 8) emitting a fully-commented
-default file.
-
-This is a natural pairing with item 3's pydantic models — the YAML schema
-above should map 1:1 to a `RunConfig` pydantic model (`RunConfig(**yaml.safe_
-load(...))`), so a typo or out-of-range value fails fast at load time with
-a clear message instead of surfacing as a Newton convergence failure deep
-in a sweep. Sequence this alongside/after item 3 and after item 1's `src/`
-layout exists.
+Design inputs, PLA, transient settings, and solver-log configuration remain
+future work; unknown keys are rejected rather than silently ignored. Continue
+the broader Pydantic refactor under item 3 / #17 as those inputs are exposed.
 
 ## 8. CLI entry point + service layer
 
-> **Status: filed** as [#16](https://github.com/Jhawk414/F404/issues/16),
-> which also absorbs the `min,max,step` range flags from
-> [#13](https://github.com/Jhawk414/F404/issues/13). Note that
-> `run_design_od.py` and `test_modes.py` were deleted in PR #15;
-> `sweep_full_envelope.py` is the only remaining entry point.
+Implemented: `f404 design`, `f404 sweep`, and `f404 compare`, plus a sole YAML
+filename for configured sweeps. `python -m f404` uses the same entry point.
+The driver is importable and tested; no separate scripts or `init-config`
+subcommand are needed. `--example-yaml` supplies the runnable example.
 
-There is currently no CLI. `sweep_full_envelope.py`, `run_design_od.py`,
-and `test_modes.py` are standalone scripts meant to be run directly — none
-of them expose a stable, documented function signature for another piece
-of code (a notebook, a future web API, a test suite) to call into. Two
-related gaps to close, roughly in this order:
-
-1. **Service layer** — extract the logic currently buried in each script's
-   `if __name__ == '__main__':` block into real functions with typed
-   signatures and return values, e.g. `run_design_point(mode, fn_target,
-   ...) -> DesignResult` and `run_sweep(config: RunConfig) -> pd.DataFrame`
-   (consuming item 7's `RunConfig`). Scripts become thin callers of these
-   functions instead of owning the logic themselves.
-2. **CLI** — a `cli.py` (`src/f404/cli.py` once item 1 lands)
-   wrapping the service layer with subcommands:
-   - `design` — run a single DESIGN point
-   - `sweep` — run a full/partial envelope sweep
-   - `init-config` — emit a template `run.yml` (item 7)
-   - `run --config run.yml` — execute whatever `run.yml` describes
-   Plus a sibling `cli_test.py` with smoke tests per subcommand (e.g.
-   `design` reproduces a known Fn within tolerance; `init-config`'s output
-   round-trips through the `RunConfig` pydantic model without error).
-
-Sequence after item 1 (so the CLI and service layer live in `src/
-f404/` from the start, not at the root needing another move) and
-after/alongside item 7 (so `run`/`init-config` have a config schema to
-target).
+The next command axis is PLA (#30). Keep future CLI options and YAML fields
+on the same validation path rather than adding parallel configuration logic.
 
 ## 9. Combustion efficiency in the burners
 
