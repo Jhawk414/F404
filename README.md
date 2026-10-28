@@ -307,8 +307,11 @@ and design decisions are recorded in [`docs/adr/`](docs/adr/). What has shipped
 is in the git history and the merged pull requests.
 
 Next up: [#30](https://github.com/Jhawk414/F404/issues/30) (define PLA), then
-continue [#17](https://github.com/Jhawk414/F404/issues/17) beyond sweep-run
-configuration into design inputs, sweep points, and shared bounds.
+a public Python API with design inputs as data
+([#47](https://github.com/Jhawk414/F404/issues/47), from
+[#17](https://github.com/Jhawk414/F404/issues/17)) and the `f404.studio`
+study tool ([#46](https://github.com/Jhawk414/F404/issues/46)) ahead of
+calibration.
 
 ## Acknowledgments
 
