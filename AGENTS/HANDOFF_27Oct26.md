@@ -1,4 +1,4 @@
-# F404 handoff — 25 Oct 2026
+# F404 handoff — 27 Oct 2026
 
 Current state and next work only. Earlier session history is in
 `git log --follow -- AGENTS/`; architecture decisions are in `docs/adr/`.
@@ -54,21 +54,26 @@ axis order/10,000-point limit, and snapshot rules live in the
   **Proof of function / behavior** section. Review regressions reject ambiguous
   lists before starting a run and preserve snapshots across successive modes.
 
-Still deferred under #17: design/component inputs, individual sweep points,
-shared solver bounds, and better DESIGN feasibility diagnostics. Existing
-`problems._validate_design_targets()` stays until that design-input slice.
+Still deferred under #17: design/component inputs (now planned as the base of
+#47), individual sweep points, shared solver bounds, and better DESIGN
+feasibility diagnostics. Existing `problems._validate_design_targets()` stays
+until that design-input slice.
 Deck writing and comparison retain plain validation rather than Pydantic.
 
 ## Next work
 
-**#30 → PLA axis → remainder of #17 → #8 + #25 + #35, measuring #3 → #10.**
+**#30 ADR → #47 (with #17 design inputs) → #46 phases 1–3 alongside the PLA
+axis → rest of #17 → #48 → #8 + #25 + #35, measuring #3 → #10.**
 [#38](https://github.com/Jhawk414/F404/issues/38) is independent.
 
 | Issue | Remaining scope |
 |---|---|
 | [#30](https://github.com/Jhawk414/F404/issues/30) | Decide what PLA commands, record an ADR and provisional schedule; add the PLA axis afterward |
-| [#17](https://github.com/Jhawk414/F404/issues/17) | Extend input validation beyond sweep-run settings; consolidate bounds |
-| [#8](https://github.com/Jhawk414/F404/issues/8) + [#25](https://github.com/Jhawk414/F404/issues/25) | Dry A8 scheduling and idle/part-power calibration, together |
+| [#47](https://github.com/Jhawk414/F404/issues/47) | Public Python API: `DesignInputs` (#17 candidate 1), `design`/`run_point`/`sweep`; CLI routes through it with byte-identical decks |
+| [#46](https://github.com/Jhawk414/F404/issues/46) | `f404.studio`: design sweeps, design→OD bridging, analytic sensitivities; uses Tt4/Tt7 `throttle`, so it doesn't wait for the PLA axis |
+| [#17](https://github.com/Jhawk414/F404/issues/17) | After #47: sweep-point models and shared solver bounds |
+| [#48](https://github.com/Jhawk414/F404/issues/48) | Gradient-assisted least-squares calibration to a targets file; studio sub-issue, tested without moving goldens |
+| [#8](https://github.com/Jhawk414/F404/issues/8) + [#25](https://github.com/Jhawk414/F404/issues/25) | Dry A8 scheduling and idle/part-power calibration, together, run with #48 |
 | [#35](https://github.com/Jhawk414/F404/issues/35) | Combustion efficiency in both burners; recalibrate max AB afterward |
 | [#3](https://github.com/Jhawk414/F404/issues/3) | Cold/high-Mach convergence; measure alongside calibration |
 | [#38](https://github.com/Jhawk414/F404/issues/38) | Supersonic inlet recovery and OD airflow ceiling |
