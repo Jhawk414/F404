@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "GE F404 engine performance model using pyCycle"
+authors:
+  - family-names: "Medlin"
+    given-names: "Ryan"
+    orcid: "https://orcid.org/0009-0002-7901-1601"
+doi: 10.5281/zenodo.24072855
+repository-code: "https://github.com/Jhawk414/F404"
+license: Apache-2.0
+references:
+  - type: article
+    authors:
+      - family-names: "Hendricks"
+        given-names: "E. S."
+      - family-names: "Gray"
+        given-names: "J. S."
+    title: "pyCycle: A Tool for Efficient Optimization of Gas Turbine Engine Cycles"
+    journal: "Aerospace"
+    volume: 6
+    year: 2019
+    doi: 10.3390/aerospace6080087
