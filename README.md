@@ -1,6 +1,7 @@
 [![Status: In Development](https://img.shields.io/badge/status-in%20development-orange.svg)](https://github.com/Jhawk414/F404#current-status)
 [![Last Commit](https://img.shields.io/github/last-commit/Jhawk414/F404?logo=github)](https://github.com/Jhawk414/F404/commits/main)
 [![Open Issues](https://img.shields.io/github/issues/Jhawk414/F404?logo=github)](https://github.com/Jhawk414/F404/issues)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
 
 # F404
 
@@ -71,7 +72,7 @@ F404/
 │   ├── references/             # general aerothermal methods (e.g. Kumar 1980): index, pdf/, md/
 │   └── f404_cycle.{typ,svg}    # cycle diagram and its source
 ├── AGENTS/                     # session handoff notes
-├── meta/                       # vendored-library provenance (LICENSE.txt)
+├── LICENSE.txt                 # Apache License 2.0
 ├── pycycle/, example_cycles/   # vendored upstream pyCycle
 └── setup.py, pyproject.toml     # shared packaging and F404 test configuration
 ```
@@ -329,4 +330,4 @@ If you use pyCycle itself, please cite:
 
 ## License
 
-Apache License 2.0. See [`meta/LICENSE.txt`](meta/LICENSE.txt).
+Apache License 2.0. See [`LICENSE.txt`](LICENSE.txt).
