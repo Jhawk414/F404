@@ -9,9 +9,21 @@ pytest re-applies its own configuration around each test, so module-level
 warnings.filterwarnings() calls in a conftest are overridden and silently do
 nothing.
 """
+import os
+import tempfile
+
 import pytest
 
 from f404.problems import build_problem
+
+
+def pytest_configure(config):
+    """Send OpenMDAO's ``<script>_out/`` folders to a temp dir, not the cwd.
+
+    Tests that call ``om.Problem()`` directly bypass build_problem()'s
+    ``reports=False``. An explicit OPENMDAO_WORKDIR is respected.
+    """
+    os.environ.setdefault('OPENMDAO_WORKDIR', tempfile.mkdtemp(prefix='f404_om_'))
 
 
 @pytest.fixture(scope='session')
