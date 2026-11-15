@@ -151,7 +151,7 @@ def _check_max_Tt7_is_wet(prob, od, max_Tt7):
 
 
 def build_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, max_Tt7=MAX_Tt7,
-                  verbose=True):
+                  verbose=True, on_mil=None):
     """Build and solve the single-engine MPCycle problem.
 
     Parameters
@@ -168,6 +168,9 @@ def build_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, max_Tt7=MAX_Tt7,
         dry solve (``MaxTt7TooLowError``, a ``ValueError``).
     verbose : bool
         Print Newton iterations and the DESIGN/OD result tables.
+    on_mil : callable, optional
+        Called as ``on_mil(prob, od_pt)`` once OD has converged at SLS mil,
+        before going wet, to read that point before max AB overwrites it.
 
     Returns
     -------
@@ -196,6 +199,8 @@ def build_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, max_Tt7=MAX_Tt7,
     if verbose:
         page_viewer(prob, 'DESIGN', afterburn=False)
         page_viewer(prob, od)
+    if on_mil is not None:
+        on_mil(prob, od)
 
     _check_max_Tt7_is_wet(prob, od, max_Tt7)
 

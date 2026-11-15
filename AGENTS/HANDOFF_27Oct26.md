@@ -31,7 +31,24 @@ Architecture records:
 - [ADR-0003](../docs/adr/0003-fail-fast-sweep.md): 20-iteration sweep cap and
   rollback of unsuccessful bridges. Model/cold-solve default remains 50.
 
-## Latest work: YAML config and thin Pydantic validation
+## Latest work: `f404 verify` install check
+
+[#53](https://github.com/Jhawk414/F404/issues/53) adds `f404 verify [--json]`
+([ADR-0004](../docs/adr/0004-verify-install-check.md)): DESIGN, SLS dry mil
+and SLS max AB through `build_problem()`, 21 checks against
+`src/f404/verify_reference.json` at relative 1e-6, about 3 s. The fast PR job
+runs it.
+
+- Use it as #47's quick regression check: the public API must reproduce
+  these values unchanged. Dry mil is read through `build_problem(on_mil=...)`
+  on the existing solve path; re-solving it from max AB lands 2e-6 away.
+- A PR that deliberately moves these results regenerates the reference from
+  `f404 verify --json` and says why. `--extended` and a release fingerprint
+  are deferred (ADR-0004, "To revisit").
+- [#54](https://github.com/Jhawk414/F404/issues/54): every `f404` command
+  leaves an OpenMDAO `f404_out/` folder in the working directory.
+
+## Earlier work: YAML config and thin Pydantic validation
 
 [PR #45](https://github.com/Jhawk414/F404/pull/45) closes
 [#16](https://github.com/Jhawk414/F404/issues/16) and starts the thin sweep-run

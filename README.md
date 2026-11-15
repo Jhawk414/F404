@@ -60,6 +60,7 @@ F404/
 │   ├── config.py               # YAML loading, Pydantic sweep validation, shared range parsing
 │   ├── cli.py                  # f404 command: YAML runs, design, sweep, compare
 │   ├── compare_decks.py        # column-by-column deck comparison behind f404 compare
+│   ├── verify.py               # install check behind f404 verify; verify_reference.json holds its expected values
 │   └── printer.py              # console tables for DESIGN/OD results
 ├── run.yml                     # reproducible default sweep configuration
 ├── tests/                      # pytest suite, one <module>_test.py per module (#5)
@@ -162,6 +163,18 @@ pip install -e .[all]
 Requires Python 3.9+ and OpenMDAO 3.10.0+. Sweep configuration uses
 Pydantic v2 and PyYAML, installed with the package.
 
+### Verify your install
+
+```bash
+f404 verify            # ~3 s; add --json for machine-readable output
+```
+
+Solves DESIGN, SLS dry mil and SLS max AB, and checks Fn, TSFC, BPR, airflow,
+A8, T4 and T7 against shipped reference values to a relative tolerance of
+1e-6. It prints PASS or FAIL per check with the library versions, and exits 1
+on any failure. See the [CLI guide](docs/guide/cli.md#f404-verify) and
+[ADR-0004](docs/adr/0004-verify-install-check.md).
+
 ## Usage
 
 `pip install -e .[all]` installs an `f404` command (re-run it in an existing
@@ -250,13 +263,13 @@ Tests marked `slow` build and solve a full `om.Problem`; the rest either use
 pure functions or build a model without solving it. `pytest` needs no prior
 install — `pythonpath` in `pyproject.toml` puts `src/` on the path.
 
-CI ([#31](https://github.com/Jhawk414/F404/issues/31)): a PR runs only the fast
-tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
+CI ([#31](https://github.com/Jhawk414/F404/issues/31)): a PR runs `f404 verify`
+and the fast tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suite on Ubuntu
 (3.9, 3.12) and macOS (3.12) runs on every push to `main`, on manual dispatch,
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-325 tests (281 fast), 97% coverage. The driver and
+331 tests (286 fast), 97% coverage. The driver and
 CLI are importable and covered; remaining gaps are mainly uncommon input/IO
 errors, solver-failure paths, and the one-line `__main__` shims.
 

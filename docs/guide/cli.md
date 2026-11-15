@@ -13,6 +13,7 @@ f404 sweep --mach 0             # static only (flown at Mach 0.001)
 f404 sweep --alt 0 --dts -20,20,10   # one altitude, a dTs range
 f404 design                     # solve and print DESIGN, and OD at mil and max AB
 f404 compare old.csv new.csv    # % change of every deck column, new vs old
+f404 verify                     # check the install reproduces the reference (~3 s)
 f404 --help                     # and `f404 sweep --help`, `f404 design --help`
                                 # (rich panels; plain argparse text for usage errors)
 ```
@@ -222,3 +223,29 @@ f404 compare old.csv new.csv --cols Fn,TSFC,BPR --changed-only
   "no change".
 - **Proof for a model change.** Sweep before and after, then compare. Decks
   are read back at round-trip precision, so a 0 means bit-identical.
+
+## `f404 verify`
+
+Checks that an install reproduces the model, in about 3 s. It solves DESIGN,
+then OD at sea-level static dry mil and max AB, and compares Fn, TSFC, BPR, W,
+A8, T4 and T7 at each point with `src/f404/verify_reference.json` (shipped
+with the package) to a relative tolerance of 1e-6. Output: the Python,
+OpenMDAO, NumPy, SciPy and platform versions, one row per check (value,
+expected, relative difference, PASS or FAIL) and a summary line.
+
+```bash
+f404 verify
+f404 verify --json
+```
+
+- `--json`: print `{passed, rel_tol, versions, checks}` instead, each check
+  being `{point, quantity, value, expected, rel_diff, ok}`.
+- **Exit codes.** 0 when every check passes; 1 when any fails or the solve
+  does not converge.
+- **Tolerance.** 1e-6 is ±0.011 lbf on 11,000 lbf. Library versions move the
+  results by about 1e-14, so a failure means the model or its inputs changed.
+  The reasoning and measurements are in
+  [ADR-0004](https://github.com/Jhawk414/F404/blob/main/docs/adr/0004-verify-install-check.md).
+- **Updating the reference.** Only when a change to the model is meant to
+  move these numbers: copy the `value` fields of `f404 verify --json` into
+  `verify_reference.json`, in the same PR, and say there why they moved.
