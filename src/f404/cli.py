@@ -1,5 +1,6 @@
 """CLI entry point for YAML runs, sweeps, design solves, and deck comparisons."""
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ from f404.config import (
     EXAMPLE_YAML, RangeError, SweepConfig, alt_axis, dts_axis, load_config,
     mach_axis, throttle_axis,
 )
+from f404 import verify
 from f404.problems import build_problem
 
 
@@ -191,6 +193,19 @@ def build_parser():
         help="omit columns that match exactly (columns with blank or "
              "non-finite values are always shown, and exit 1)")
     compare.set_defaults(handler=_run_compare_command)
+
+    check = sub.add_parser(
+        'verify',
+        help="check this install reproduces the reference results (~3 s)",
+        description="Solve DESIGN, and OD at sea-level static dry mil and "
+                    "max AB, and compare Fn, TSFC, BPR, W, A8, T4 and T7 with "
+                    "the packaged reference values to a relative tolerance. "
+                    "Exits 1 if any check fails or the solve does not converge.",
+    )
+    check.add_argument(
+        '--json', action='store_true',
+        help="print the results as JSON instead of a table")
+    check.set_defaults(handler=_run_verify_command)
     return parser
 
 
@@ -265,6 +280,24 @@ def _run_design_command(args, parser):
               file=sys.stderr)
         return 1
     return 0
+
+
+def _run_verify_command(args, parser):
+    reference, env = verify.load_reference(), verify.versions()
+    sfe.configure_runtime()
+    try:
+        measured = verify.measure()
+    except om.AnalysisError as exc:
+        print(f"f404 verify: the solve did not converge: {exc}", file=sys.stderr)
+        return 1
+    checks = verify.compare(measured, reference)
+    passed = all(c['ok'] for c in checks)
+    if args.json:
+        print(json.dumps({'passed': passed, 'rel_tol': reference['rel_tol'],
+                          'versions': env, 'checks': checks}, indent=2))
+    else:
+        print(verify.format_report(checks, reference['rel_tol'], env))
+    return 0 if passed else 1
 
 
 def _run_compare_command(args, parser):
