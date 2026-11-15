@@ -353,7 +353,7 @@ def test_top_level_help_lists_commands_in_a_rounded_panel(capsys):
 
     assert 'GE F404 mixed-flow twin-spool turbofan cycle model.' in out
     assert '╭─ Commands' in out and '╰' in out
-    assert 'sweep' in out and 'design' in out
+    assert all(c in out for c in ('sweep', 'design', 'compare', 'verify'))
 
 
 def test_sweep_help_documents_every_flag_with_its_default(capsys):
