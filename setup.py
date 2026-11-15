@@ -54,7 +54,7 @@ setup(name='om-pycycle',
           'pycycle.tests',
       ],
       install_requires=[
-        'openmdao>=3.10.0',
+        'openmdao>=3.17.0',
         # numpy arrives transitively via openmdao, but f404 imports it
         # directly, so it is declared rather than relied on.
         'numpy',
