@@ -48,6 +48,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[all]
 
+      - name: Verify the install
+        run: |
+          f404 verify
+
       - name: Run fast tests
         run: |
           pytest tests -m "not slow" -v
