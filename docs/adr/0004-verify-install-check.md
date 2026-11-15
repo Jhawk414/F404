@@ -1,6 +1,6 @@
 # ADR-0004: `f404 verify`, a tolerance-based install check
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-11-15
 **Deciders:** @Jhawk414
 **Issue:** [#53](https://github.com/Jhawk414/F404/issues/53). Also serves
@@ -173,6 +173,22 @@ The `on_mil` callback adds one argument to `build_problem()`. Re-solving
 afterwards would need no model change, but the reference would then depend on
 the warm-start path, which #47 is free to change.
 
+## Result
+
+The reference values come from `f404 verify` itself on the reference
+environment (Python 3.9.6, OpenMDAO 3.39.0, NumPy 2.0.2, SciPy 1.13.1, macOS
+arm64). Largest relative difference from them across the 21 checks:
+
+| Environment | Largest | Where |
+|---|---|---|
+| Python 3.12.14, OpenMDAO 3.45.2, NumPy 2.5.5, SciPy 1.18.1, macOS arm64 (spike) | 4.5e-14 | dry mil BPR |
+| Python 3.12.16, OpenMDAO 3.45.2, NumPy 2.5.5, SciPy 1.18.1, Linux x86_64 (PR CI) | 2.8e-14 | dry mil BPR |
+
+Linux x86_64, with its own BLAS/LAPACK, is as close as a library upgrade on
+one machine: the Newton iterations follow the same path, so no quantity needs
+a looser tolerance. 1e-6 leaves a margin of more than 1e7. The full CI matrix
+(Ubuntu 3.9 and 3.12, macOS 3.12) runs the same check as a `slow` test.
+
 ## Consequences
 
 - Anyone can check an install in about 3 s, and bug reports carry versions.
@@ -191,10 +207,10 @@ the warm-start path, which #47 is free to change.
 
 ## Action items
 
-1. [ ] `on_mil` callback in `build_problem()`
-2. [ ] `src/f404/verify.py`, `verify_reference.json`, `package_data`
-3. [ ] `f404 verify [--json]`, listed in `f404 --help`
-4. [ ] Tests: perturbed reference fails with exit 1; slow end-to-end run
-5. [ ] `f404 verify` in the fast CI job
-6. [ ] README "Verify your install", CLI guide
-7. [ ] Record the CI matrix differences here and mark Accepted
+1. [x] `on_mil` callback in `build_problem()`
+2. [x] `src/f404/verify.py`, `verify_reference.json`, `package_data`
+3. [x] `f404 verify [--json]`, listed in `f404 --help`
+4. [x] Tests: perturbed reference fails with exit 1; slow end-to-end run
+5. [x] `f404 verify` in the fast CI job
+6. [x] README "Verify your install", CLI guide
+7. [x] Record the CI matrix differences here and mark Accepted
