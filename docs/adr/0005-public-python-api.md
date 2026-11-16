@@ -242,5 +242,5 @@ pyCycle and of the decks.
 3. [x] `sweep()`, `run_point()`, `SweepRunner(start=, verbose=)`; CLI routed through them
 4. [x] `f404/__init__.py` exports; YAML `design:` block and snapshots
 5. [x] #17 narrowed; [#57](https://github.com/Jhawk414/F404/issues/57) filed
-6. [ ] Byte-identical deck proof (`f404 sweep --mode dry/wet`, `f404 run.yml`) in the PR
+6. [x] Deck proof in the PR: `--mode dry/wet` byte-identical to the committed decks; `f404 run.yml` byte-identical to `main`'s `run.yml` (its wet deck differs from the committed one on `main` too, #59)
 7. [x] `docs/guide/python.md`, CLI guide, README, handoff
