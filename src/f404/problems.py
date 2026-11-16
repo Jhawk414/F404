@@ -128,8 +128,8 @@ class Engine:
 
     ``prob`` is the solved Problem; its OD point is ``prob.model.od_pt``.
     ``anchor`` is the OD output vector at SLS max AB, the state ``run_point()``
-    and ``sweep()`` restore before every call so results don't depend on
-    earlier calls. Treat an Engine as immutable: a design change goes through
+    and ``sweep()`` restore before every call, so earlier calls don't steer
+    them (solver-internal state can still carry over at ~1e-5; #59). Treat an Engine as immutable: a design change goes through
     ``design()``, since setting a design value on ``prob`` would leave
     ``inputs`` and ``anchor`` stale.
     """

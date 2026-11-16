@@ -88,8 +88,8 @@ def sweep(engine, *, mode, mach=DEFAULT_MACHS, alt=DEFAULT_ALTS, dts=DEFAULT_DTS
     Parameters
     ----------
     engine : Engine
-        From ``design()``. Restored to its SLS max-AB anchor first, so the
-        result doesn't depend on earlier calls. Afterwards ``engine.prob`` is
+        From ``design()``. Restored to its SLS max-AB anchor first, so earlier
+        calls don't steer the result (up to solver-internal state, #59). Afterwards ``engine.prob`` is
         solved at the last point only if that point converged.
     mode : {'dry', 'wet'}
     mach, alt, dts, throttle : sequence of float or range string

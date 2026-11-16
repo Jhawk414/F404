@@ -75,7 +75,7 @@ usage: [`docs/guide/python.md`](../docs/guide/python.md).
 
 ## Next work
 
-**#30 ADR → #46 phases 1–3 alongside the PLA axis → #57 → #48 → #8 + #25 +
+**#30 ADR → #59 → #46 phases 1–3 alongside the PLA axis → #57 → #48 → #8 + #25 +
 #35, measuring #3 → #10.** [#38](https://github.com/Jhawk414/F404/issues/38)
 builds on #57's single bounds table and is otherwise independent.
 
@@ -83,6 +83,7 @@ builds on #57's single bounds table and is otherwise independent.
 |---|---|
 | [#30](https://github.com/Jhawk414/F404/issues/30) | Decide what PLA commands, record ADR-0006 and a provisional schedule; add the PLA axis afterward as a `run_point()`/`sweep()` keyword. Schedule parameters go in a sibling model to `DesignInputs` (ADR-0005) |
 | [#46](https://github.com/Jhawk414/F404/issues/46) | `f404.studio` on the public API: design sweeps, design→OD bridging, analytic sensitivities; uses Tt4/Tt7 `throttle`, so it doesn't wait for the PLA axis. Needs a column-prefix convention (`fan_PR` is both an input and a deck column) and may add `design(warm_start=)` (ADR-0005) |
+| [#59](https://github.com/Jhawk414/F404/issues/59) | Find the solver-internal state that survives `restore_anchor()` and reset it, so `--mode both` equals the single-mode decks; needed before #46's worker-parity criterion |
 | [#57](https://github.com/Jhawk414/F404/issues/57) | Single-source balance bounds (drop `_OD_BOUNDS` and its drift test), DESIGN bound check and an exported error for infeasible sizing |
 | [#48](https://github.com/Jhawk414/F404/issues/48) | Gradient-assisted least-squares calibration to a targets file; studio sub-issue, tested without moving goldens |
 | [#8](https://github.com/Jhawk414/F404/issues/8) + [#25](https://github.com/Jhawk414/F404/issues/25) | Dry A8 scheduling and idle/part-power calibration, together, run with #48 |
@@ -162,6 +163,12 @@ PDF searches when available.
   0 ft, dTs 0, the mode's top power), so a first point away from home is
   bridged; the default grids start at home and get no bridge. Traversal order
   still matters inside a sweep.
+- A wet sweep after a dry sweep in one process (`--mode both`, `run.yml`)
+  differs from `--mode wet` by up to 7e-5, with one extra converged point:
+  solver-internal state survives the anchor restore
+  ([#59](https://github.com/Jhawk414/F404/issues/59)). The committed wet deck
+  is the single-mode one. Prove wet decks with `--mode wet`, and fix #59
+  before #46 relies on worker parity.
 - Treat an `Engine` as immutable: change the design through `design()`.
   Setting a design value on `engine.prob` leaves `inputs` and `anchor` stale.
 - `run_point()` reaches a point by a different path than the deck or

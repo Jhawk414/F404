@@ -80,7 +80,10 @@ Solves one OD condition and returns its deck row as a dict.
 - `alt` ft, `mach` below 1 (0 is flown at 0.001), `dts` R off ISA.
 
 Every call restores the anchor and bridges from SLS to the point, as a sweep
-reaches its first point, so the result doesn't depend on earlier calls. A
+reaches its first point, so earlier calls don't steer the result. (Solver
+state outside the model's vectors can still carry over, moving results by
+about 1e-5 after long call histories;
+[#59](https://github.com/Jhawk414/F404/issues/59).) A
 point that fails is returned, not raised: `converged` is False, the outputs
 are NaN, and `failure` says why. When the point converged, `eng.prob` is left
 solved there, so you can read any other variable or call
@@ -110,7 +113,7 @@ point with failed points included, in the same columns as the committed decks.
 The sweep visits points in snake order (throttle, then Mach, altitude and
 dts), warm-starting each from the last and bridging large jumps, as the CLI
 does. It starts from the anchor, so two calls with the same arguments give the
-same deck.
+same deck, up to the solver state noted under `run_point()` (#59).
 
 ## Performance and parallel use
 

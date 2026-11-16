@@ -126,7 +126,7 @@ post-solve check.
 | Option | Assessment |
 |---|---|
 | Warm-start from wherever the Problem was left | Rejected: results depend on call history, so parallel studies can't match serial ones |
-| **Restore the anchor, bridge from the anchor condition (chosen)** | Deterministic; one extra bridge per call |
+| **Restore the anchor, bridge from the anchor condition (chosen)** | Removes the state-vector history; one extra bridge per call. Solver-internal state still carries over (#59) |
 | Re-run `design()` per point | Rejected: about 2.5 s more per point, for the same anchor |
 
 Bridge path, settled by a throwaway spike (below):
@@ -182,8 +182,13 @@ the model isn't calibrated that high, and no method converged reliably there.
 
 The API is deliberately small: one model, one dataclass, three functions.
 Restoring the anchor costs one bridge per call. In exchange, a run's result
-depends only on its arguments, which is the property parallel studies and
-calibration need. Leaving the Problem at the solved point, rather than
+no longer depends on the state vectors earlier calls left, which parallel
+studies and calibration need. It is not yet bit-for-bit history-free: state
+inside the solvers survives the restore, so a wet sweep after a dry sweep in
+one process differs from a wet-only sweep by up to 7e-5 relative on the
+default grid, and one marginal point flips to converged
+([#59](https://github.com/Jhawk414/F404/issues/59)). This predates the API:
+`main`'s `run_sweeps` behaves identically. Leaving the Problem at the solved point, rather than
 restoring it on exit, keeps `compute_totals` available. The cost is a contract
 users must respect: `engine.prob` reflects the last call, and an Engine's
 inputs must not be changed in place.
