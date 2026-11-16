@@ -1,12 +1,70 @@
-"""Validated YAML configuration for a full-envelope sweep."""
+"""Validated user input: design-point inputs and the YAML run configuration."""
 import math
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, field_validator
 
 from f404.sweep_utils import STATIC_MN
+
+# ── Design-point targets ──────────────────────────────────────────────────────
+MIL_Tt4    = 3100.   # degR — core burner exit at mil power (throttle wall)
+DRY_DSN_FN = 11000.  # lbf  — SLS mil power (no afterburner); sizes the engine
+MAX_Tt7    = 3607.68 # degR — afterburner exit at max AB. With the augmentor
+                     # loss (mp_cycle.py; 6.6% at this point) the default
+                     # engine makes 17,700 lbf here (problems.MAX_AB_FN). The
+                     # cycle's augmentation ratio exceeds the targets'
+                     # (ADR-0001), so this sits below the F404's ~3800 R.
+                     # Combustion efficiency (#35) will move it again. See
+                     # docs/adr/0002-single-od-topology.md.
+
+
+class StrictModel(BaseModel):
+    """Base for every user-input model: no unknown keys, no type coercion,
+    no NaN or inf, and immutable once validated. An instance is revalidated
+    wherever it is validated again, since ``model_copy(update=...)`` skips
+    validation."""
+    model_config = ConfigDict(extra='forbid', strict=True, frozen=True,
+                              allow_inf_nan=False, revalidate_instances='always')
+
+
+PressureRatio = Annotated[float, Field(gt=1)]
+Efficiency = Annotated[float, Field(gt=0, le=1)]
+LossFraction = Annotated[float, Field(ge=0, lt=1)]
+
+
+class DesignInputs(StrictModel):
+    """Everything that sizes the engine at sea-level-static dry mil.
+
+    The defaults are the calibrated F404 engine. Each field name is its model
+    path with ``.`` and ``:`` replaced by ``_``; ``problems.DESIGN_INPUT_PATHS``
+    maps it back (docs/adr/0005-public-python-api.md).
+    """
+    fn_target: PositiveFloat = DRY_DSN_FN   # lbf, SLS dry mil thrust; sets W
+    mil_Tt4: PositiveFloat = MIL_Tt4        # degR, core burner exit at mil
+    max_Tt7: PositiveFloat = MAX_Tt7        # degR, afterburner exit at max AB.
+    # Its default is calibrated to 17,700 lbf for the default sizing only.
+
+    fan_PR: PressureRatio = 4.1
+    fan_eff: Efficiency = 0.8948
+    hpc_PR: PressureRatio = 6.5
+    hpc_eff: Efficiency = 0.8707
+    hpt_eff: Efficiency = 0.8888
+    lpt_eff: Efficiency = 0.8996
+    LP_Nmech: PositiveFloat = 10000.        # rpm, design spool speeds; they
+    HP_Nmech: PositiveFloat = 14000.        # set the map speed scalars
+
+    ram_recovery: Efficiency = 0.9990       # inlet Pt recovery
+    inlet_duct_dPqP: LossFraction = 0.0107
+    splitter_core_duct_dPqP: LossFraction = 0.0048
+    hpt_duct_dPqP: LossFraction = 0.0051
+    lpt_duct_dPqP: LossFraction = 0.0107
+    bypass_duct_dPqP: LossFraction = 0.015
+    mixer_duct_dPqP: LossFraction = 0.0107
+
+    hpc_cool1_frac_W: LossFraction = 0.050708  # HPC bleed to the LPT, of HPC inflow
+    bld3_cool3_frac_W: LossFraction = 0.11     # HPC exit bleed to the HPT
 
 
 class RangeError(ValueError):
@@ -173,8 +231,7 @@ def axis(value, name):
     return values
 
 
-class ThrottleConfig(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
+class ThrottleConfig(StrictModel):
 
     dry: list[float]
     wet: list[float]
@@ -185,8 +242,7 @@ class ThrottleConfig(BaseModel):
         return axis(value, 'throttle')
 
 
-class SweepConfig(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
+class SweepConfig(StrictModel):
 
     mode: Literal['dry', 'wet', 'both']
     mach: list[float]
@@ -208,9 +264,8 @@ class SweepConfig(BaseModel):
         raise ValueError("out must be a non-empty path string or Path")
 
 
-class RunConfig(BaseModel):
-    model_config = ConfigDict(extra='forbid', strict=True)
-
+class RunConfig(StrictModel):
+    design: DesignInputs = DesignInputs()
     sweep: SweepConfig
 
 
@@ -255,7 +310,11 @@ def load_config(path) -> RunConfig:
 
 
 EXAMPLE_YAML = '''\
-# f404 sweep run: f404 <file>.yml. Every key is required.
+# f404 sweep run: f404 <file>.yml. Every sweep key is required.
+# design is optional; any key left out keeps the calibrated default engine.
+design:
+  fn_target: 11000          # lbf, SLS dry mil thrust that sizes the engine
+  hpc_PR: 6.5               # also: fan_PR, *_eff, *_dPqP, *_frac_W, ... (CLI guide)
 # Each axis (mach, alt, dts, throttle.dry, throttle.wet) takes any of:
 #   number          0             one held point
 #   quoted range    '0,0.4,0.2'   min,max,step, inclusive of max

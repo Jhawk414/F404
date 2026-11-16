@@ -6,11 +6,13 @@ different envelope than the one requested.
 """
 import importlib
 
+import openmdao.api as om
 import pandas as pd
 import pytest
 import yaml
 
 from f404 import cli, sweep_full_envelope as sfe
+from f404.problems import MaxTt7TooLowError
 from f404.config import (
     RangeError,
     alt_axis,
@@ -274,9 +276,9 @@ def test_a_command_is_required(capsys):
     # off-design max-AB temperature rather than a DESIGN one (#2).
     (['design', '--mode', 'dry'], 'unrecognized arguments'),
     (['design', '--dsn-tt7', '3800'], 'unrecognized arguments'),
-    (['design', '--fn-target', '-5'], 'fn_target must be a positive'),
-    (['design', '--mil-tt4', 'nan'], 'must be a finite number'),
-    (['design', '--max-tt7', '0'], 'max_Tt7 must be a positive'),
+    (['design', '--fn-target', '-5'], 'design.fn_target: Input should be greater than 0'),
+    (['design', '--mil-tt4', 'nan'], 'design.mil_Tt4: Input should be a finite number'),
+    (['design', '--max-tt7', '0'], 'design.max_Tt7: Input should be greater than 0'),
 ])
 def test_bad_design_arguments_fail_before_any_solve(capsys, argv, fragment):
     fails(capsys, argv, fragment)
@@ -480,6 +482,37 @@ def write_run(path, **changes):
     return path
 
 
+@pytest.mark.parametrize('error, code, fragment', [
+    (MaxTt7TooLowError('max_Tt7 must exceed Tt6'), 2, 'MaxTt7TooLowError: max_Tt7 must exceed'),
+    (om.AnalysisError('Newton failed'), 1, 'f404: the solve did not converge: Newton failed'),
+])
+def test_a_design_that_cannot_be_sized_ends_a_yaml_run_without_a_traceback(
+        recorded, monkeypatch, tmp_path, capsys, error, code, fragment):
+    def raise_error(*args, **kwargs):
+        raise error
+    monkeypatch.setattr(sfe, 'run_sweeps', raise_error)
+
+    argv = [str(write_run(tmp_path / 'run.yml'))]
+
+    if code == 2:
+        fails(capsys, argv, fragment)
+    else:
+        assert cli.main(argv) == 1
+        assert fragment in capsys.readouterr().err
+
+
+def test_yaml_design_block_sizes_the_engine_and_is_snapshotted(recorded, tmp_path):
+    path = write_run(tmp_path / 'run.yml', mode='dry')
+    raw = yaml.safe_load(path.read_text())
+    path.write_text(yaml.safe_dump({'design': {'hpc_PR': 7.0}, **raw}))
+
+    assert cli.main([str(path)]) == 0
+
+    inputs = recorded[0][1]['inputs']
+    assert (inputs.hpc_PR, inputs.fan_PR) == (7.0, cli.DesignInputs().fan_PR)
+    assert cli.load_config(tmp_path / 'results' / 'run_dry.resolved.yml').design == inputs
+
+
 def test_yaml_run_normalizes_axes_and_writes_reloadable_snapshot(recorded, tmp_path):
     path = write_run(tmp_path / 'input.yaml')
     assert cli.main([str(path)]) == 0
@@ -519,7 +552,8 @@ def test_flag_and_yaml_sweeps_use_the_same_normalized_settings(recorded, tmp_pat
     ('sweep: [', 'cannot read YAML config'),
     ('sweep:\n  mode: dry\n  mode: wet\n', 'duplicate key'),
     ('sweep: {}', 'Field required'),
-    ('design: {}', 'Extra inputs'),
+    ('design: {fan_eff: 1.05}', 'design.fan_eff: Input should be less than or equal to 1'),
+    ('design: {fan_pr: 4.3}', 'Extra inputs'),
     ('sweep: null', 'sweep'),
     ('', 'invalid run config'),
 ])

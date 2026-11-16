@@ -7,7 +7,9 @@ from pydantic import ValidationError
 
 from f404 import sweep_full_envelope as sfe
 from f404.config import (
+    DRY_DSN_FN,
     EXAMPLE_YAML,
+    DesignInputs,
     RangeError,
     RunConfig,
     SweepConfig,
@@ -20,6 +22,33 @@ from f404.config import (
     parse_range,
     throttle_axis,
 )
+
+
+# ── DesignInputs ──────────────────────────────────────────────────────────────
+# These must fail before the solve: a bad input otherwise surfaces as a Newton
+# divergence, or a converged but impossible engine (efficiency 1.05).
+
+@pytest.mark.parametrize('field, value', [
+    ('fn_target', 0.), ('fn_target', -11000.), ('mil_Tt4', 0.), ('max_Tt7', -3608.),
+    ('fn_target', math.nan), ('mil_Tt4', math.inf), ('max_Tt7', -math.inf),
+    ('fan_eff', 1.05), ('hpt_eff', 0.), ('hpc_PR', 1.0), ('ram_recovery', 1.01),
+    ('bypass_duct_dPqP', 1.0), ('hpc_cool1_frac_W', -0.01),
+    ('fan_PR', '4.1'),
+])
+def test_design_inputs_reject_an_invalid_value_and_name_the_field(field, value):
+    with pytest.raises(ValidationError, match=field):
+        DesignInputs(**{field: value})
+
+
+def test_design_inputs_reject_unknown_fields_and_stay_frozen():
+    with pytest.raises(ValidationError, match='fan_pr'):
+        DesignInputs(fan_pr=4.3)
+    with pytest.raises(ValidationError, match='frozen'):
+        DesignInputs().fan_PR = 4.3
+
+
+def test_design_inputs_accept_integers_for_floats():
+    assert DesignInputs(fn_target=11_000).fn_target == DRY_DSN_FN
 
 
 def raw_sweep(**changes):

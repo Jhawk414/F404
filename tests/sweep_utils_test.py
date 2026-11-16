@@ -10,7 +10,7 @@ to call converged.
 import openmdao.api as om
 import pytest
 
-from f404.problems import build_problem
+from f404.problems import design
 from f404.sweep_utils import (
     DECK_COLUMNS,
     FAILURE_COLUMN,
@@ -335,7 +335,8 @@ def test_a_bridge_that_does_not_converge_is_rolled_back():
     iterations, and raises only if ``err_on_non_converge`` is on, as Newton
     does. The real points solve normally.
     """
-    prob, mp = build_problem(verbose=False)
+    prob = design().prob
+    mp = prob.model
     prob.set_solver_print(level=-1)
     runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
     od_outputs = prob.model._get_subsystem(mp.od_pt)._outputs
@@ -414,7 +415,8 @@ def test_a_short_dry_sweep_converges_and_returns_a_deck_frame():
     this asserts the machinery works, not that the hard corners converge —
     those are #3.
     """
-    prob, mp = build_problem(verbose=False)
+    prob = design().prob
+    mp = prob.model
     prob.set_solver_print(level=-1)
     points = build_snake_sweep([0.], [0., 10., 20.], [3100.])
 
@@ -430,7 +432,7 @@ def test_a_short_dry_sweep_converges_and_returns_a_deck_frame():
     assert list(deck.columns) == (INPUT_COLUMNS + list(extract_od_results(prob, mp.od_pt))
                                   + [FAILURE_COLUMN])
     assert (deck['T4'] - 3100.).abs().max() <= _TARGET_TOL_DEGR
-    # build_problem() leaves OD at max AB; a dry sweep puts the AB out.
+    # design() leaves OD at max AB; a dry sweep puts the AB out.
     assert deck['Wf_ab'].abs().max() < 1e-9
     assert (deck['T7'] - deck['Tt6']).abs().max() < 1e-3   # Newton tolerance, R
     # A hotter day thins the air, so the sized engine swallows less of it.
@@ -450,7 +452,8 @@ def test_a_sweep_point_that_cannot_converge_is_recorded_as_failed():
     may exhaust Newton (AnalysisError) or collapse the Jacobian underneath it
     (RuntimeError from the linear solve).
     """
-    prob, mp = build_problem(verbose=False)
+    prob = design().prob
+    mp = prob.model
     prob.set_solver_print(level=-1)
     # 800 degR is below the compressor discharge temperature, so the burner
     # would have to remove heat — FAR_core pins at its 1e-4 floor.
@@ -474,7 +477,8 @@ def test_a_sweep_point_that_cannot_converge_is_recorded_as_failed():
 def test_a_failed_point_does_not_abandon_the_rest_of_the_sweep():
     # The failure is deliberately placed first, so the two points after it
     # only converge if the sweep survived it. Every attempted point has a row.
-    prob, mp = build_problem(verbose=False)
+    prob = design().prob
+    mp = prob.model
     prob.set_solver_print(level=-1)
     points = (build_snake_sweep([0.], [0.], [800.])
               + build_snake_sweep([0.], [0., 10.], [3100.]))
@@ -496,7 +500,8 @@ def test_an_unexpected_error_aborts_the_sweep_rather_than_failing_a_point():
     bounds table reaching the caller as "264 points failed" would hide the
     cause completely.
     """
-    prob, mp = build_problem(verbose=False)
+    prob = design().prob
+    mp = prob.model
     prob.set_solver_print(level=-1)
     runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
 
@@ -514,7 +519,8 @@ def test_a_drifted_bounds_table_aborts_the_sweep():
     # SweepConfigurationError is deliberately not a RuntimeError, so it
     # travels through _run_point's except clause instead of being recorded
     # as an ordinary failed point.
-    prob, mp = build_problem(verbose=False)
+    prob = design().prob
+    mp = prob.model
     prob.set_solver_print(level=-1)
     runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
 

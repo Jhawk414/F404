@@ -8,7 +8,8 @@ import platform
 import sys
 from importlib.resources import files
 
-from f404.problems import build_problem
+from f404.config import DesignInputs
+from f404.problems import _solve
 from f404.sweep_utils import DECK_COLUMNS, _scalar
 
 QUANTITIES = ('Fn', 'TSFC', 'BPR', 'W', 'A8', 'T4', 'T7')
@@ -23,10 +24,10 @@ def _read(prob, pt):
 def measure():
     """Solve the engine and return ``{point: {quantity: value}}``."""
     mil = {}
-    prob, mp = build_problem(
-        verbose=False, on_mil=lambda p, od: mil.update(_read(p, od)))
+    prob = _solve(DesignInputs(), verbose=False,
+                  on_mil=lambda p, od: mil.update(_read(p, od))).prob
     return {'DESIGN': _read(prob, 'DESIGN'), 'SLS dry mil': mil,
-            'SLS max AB': _read(prob, mp.od_pt)}
+            'SLS max AB': _read(prob, prob.model.od_pt)}
 
 
 def load_reference():

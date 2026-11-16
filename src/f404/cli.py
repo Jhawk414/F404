@@ -18,11 +18,11 @@ from rich.text import Text
 from f404 import sweep_full_envelope as sfe
 from f404.compare_decks import compare_decks, format_report, read_deck
 from f404.config import (
-    EXAMPLE_YAML, RangeError, SweepConfig, alt_axis, dts_axis, load_config,
-    mach_axis, throttle_axis,
+    EXAMPLE_YAML, DesignInputs, RangeError, SweepConfig, alt_axis, dts_axis,
+    load_config, mach_axis, throttle_axis,
 )
 from f404 import verify
-from f404.problems import build_problem
+from f404.problems import design
 
 
 # ── argparse wiring ───────────────────────────────────────────────────────────
@@ -242,25 +242,41 @@ def _validation_errors(exc, prefix=''):
     return '\n'.join(lines)
 
 
-def _run_sweep(config, parser):
+def _run_sweep(config, parser, inputs=DesignInputs()):
     try:
         config.out.mkdir(parents=True, exist_ok=True)
+        design_inputs = inputs.model_dump(mode='json')
         resolved = config.model_dump(mode='json')
         resolved['out'] = str(config.out.resolve())
         modes = ('dry', 'wet', 'both') if config.mode == 'both' else (config.mode,)
         for mode in modes:
             resolved['mode'] = mode
             (config.out / f'run_{mode}.resolved.yml').write_text(
-                yaml.safe_dump({'sweep': resolved}, sort_keys=False), encoding='utf-8')
+                yaml.safe_dump({'design': design_inputs, 'sweep': resolved}, sort_keys=False),
+                encoding='utf-8')
     except OSError as exc:
         parser.error(f"cannot write sweep configuration in {config.out}: {exc}")
 
     sfe.configure_runtime()
-    sfe.run_sweeps(
+    return _solve_or_exit(parser, 'f404', lambda: sfe.run_sweeps(
         config.mode, alts=config.alt, dTs_vals=config.dts,
         dry_powers=config.throttle.dry, wet_powers=config.throttle.wet,
-        machs=config.mach, out_dir=config.out,
-    )
+        machs=config.mach, out_dir=config.out, inputs=inputs,
+    ))
+
+
+def _solve_or_exit(parser, prog, solve):
+    """Run ``solve()``; return 0, or report a design the engine can't be sized
+    from: a usage error (exit 2) for a bad target, exit 1 if it didn't converge."""
+    try:
+        solve()
+    except ValueError as exc:
+        # A named subclass (e.g. MaxTt7TooLowError) says what was wrong.
+        name = type(exc).__name__
+        parser.error(str(exc) if name == 'ValueError' else f"{name}: {exc}")
+    except om.AnalysisError as exc:
+        print(f"{prog}: the solve did not converge: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -270,16 +286,10 @@ def _run_design_command(args, parser):
         ('max_Tt7', args.max_tt7)) if value is not None}
 
     try:
-        build_problem(**targets)
-    except ValueError as exc:
-        # A named subclass (e.g. MaxTt7TooLowError) says what was wrong.
-        name = type(exc).__name__
-        parser.error(str(exc) if name == 'ValueError' else f"{name}: {exc}")
-    except om.AnalysisError as exc:
-        print(f"f404 design: the solve did not converge: {exc}",
-              file=sys.stderr)
-        return 1
-    return 0
+        inputs = DesignInputs(**targets)
+    except ValidationError as exc:
+        parser.error(_validation_errors(exc, prefix='design'))
+    return _solve_or_exit(parser, 'f404 design', lambda: design(inputs, verbose=True))
 
 
 def _run_verify_command(args, parser):
@@ -353,7 +363,7 @@ def main(argv=None):
             parser.error(f"invalid run config {argv[0]}:\n{_validation_errors(exc)}")
         except ValueError as exc:
             parser.error(str(exc))
-        return _run_sweep(config.sweep, parser)
+        return _run_sweep(config.sweep, parser, config.design)
 
     args = parser.parse_args(_join_negative_ranges(argv))
     if args.example_yaml:

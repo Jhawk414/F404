@@ -51,7 +51,7 @@ _TARGET_TOL_DEGR = 5.0
 # OD Newton iteration cap for every sweep solve (fast, safe, bridge). In the
 # default sweep, converged attempts take at most 15 iterations and the rest
 # run to any cap, so a higher one only makes failures slower (ADR-0003, #40).
-# The model's own default (50) still applies to build_problem()'s cold solve.
+# The model's own default (50) still applies to design()'s cold solve.
 SWEEP_MAXITER = 20
 
 
@@ -256,13 +256,16 @@ class SweepRunner:
     mil_Tt4 : float
         Core burner exit temp (degR) held fixed during a wet sweep (mil power).
         Ignored in dry mode.
+    verbose : bool
+        Print a progress line per sweep and bridge point.
     """
 
-    def __init__(self, prob, od_pt, afterburn=True, mil_Tt4=3100.):
+    def __init__(self, prob, od_pt, afterburn=True, mil_Tt4=3100., verbose=True):
         self.prob = prob
         self.od_pt = od_pt
         self.afterburn = afterburn
         self.mil_Tt4 = mil_Tt4
+        self._print = print if verbose else (lambda *args, **kwargs: None)
         # Snapshot of the most recently converged OD state — used to restore a
         # clean warm-start before retrying a failed point with safe linesearch.
         self._last_good_state = None
@@ -441,7 +444,8 @@ class SweepRunner:
             return 'target'
         return None
 
-    def run_sweep(self, sweep_points, bridge_threshold=None, max_bridge_steps=5):
+    def run_sweep(self, sweep_points, bridge_threshold=None, max_bridge_steps=5,
+                  start=None):
         """
         Execute the sweep, collecting results for each real (non-bridge) point.
 
@@ -456,6 +460,10 @@ class SweepRunner:
             Defaults to {'alt': 5000, 'dTs': 30} if not provided.
         max_bridge_steps : int
             Number of intermediate bridge points when threshold is exceeded.
+        start : dict, optional
+            The condition the problem's current OD state was solved at, with
+            the same keys as a sweep point. The first point is then bridged
+            from it like any other; without it the first point is not.
 
         Returns
         -------
@@ -469,14 +477,14 @@ class SweepRunner:
 
         self._od_newton().options['maxiter'] = SWEEP_MAXITER
         results = []
-        prev_pt = None
+        prev_pt = start
         power_label = "Tt7" if self.afterburn else "Tt4"
         n_total = len(sweep_points)
 
         if self._last_good_state is None:
             # Anchor the fallback on the state we were handed. The problem
             # arrives with OD converged at design conditions (see
-            # problems.build_problem), which is a
+            # problems.design), which is a
             # perfectly good warm start. Without this, a failure before the
             # first success has nothing to restore from, so the model stays in
             # whatever state Newton abandoned and every later point
@@ -492,7 +500,7 @@ class SweepRunner:
                 if needs_bridge:
                     bridges = generate_bridge_points(prev_pt, pt_cond, max_bridge_steps)
                     for j, bp in enumerate(bridges, 1):
-                        print(f"  [BRIDGE {j}/{len(bridges)}] alt={bp['alt']:6.0f} ft  "
+                        self._print(f"  [BRIDGE {j}/{len(bridges)}] alt={bp['alt']:6.0f} ft  "
                               f"dTs={bp['dTs']:+5.1f} R  MN={bp['MN']:.3f}  "
                               f"{power_label}={bp['power']:6.1f} R")
                         self._set_od_conditions(bp)
@@ -504,7 +512,7 @@ class SweepRunner:
 
             # Run the actual sweep point — fast linesearch first, fall back to
             # safe (Armijo backtracking) only if the fast attempt diverges.
-            print(f"  [SWEEP  {i+1:3d}/{n_total}] alt={pt_cond['alt']:6.0f} ft  "
+            self._print(f"  [SWEEP  {i+1:3d}/{n_total}] alt={pt_cond['alt']:6.0f} ft  "
                   f"dTs={pt_cond['dTs']:+5.1f} R  MN={pt_cond['MN']:.3f}  "
                   f"{power_label}={pt_cond['power']:6.1f} R", end="", flush=True)
             tt4, tt7 = self._set_od_conditions(pt_cond)
@@ -533,14 +541,14 @@ class SweepRunner:
                 row.update(extract_od_results(self.prob, self.od_pt))
                 self._last_good_state = self._snapshot_state()
                 tag = "" if mode_used == 'fast' else " (safe)"
-                print(f"  → converged{tag}")
+                self._print(f"  → converged{tag}")
             else:
                 # Both attempts failed — restore last-good state so the next
                 # sweep point doesn't warm-start from corrupted state and
                 # cascade more false convergences.
                 if self._last_good_state is not None:
                     self._restore_state(self._last_good_state)
-                print(f"  → FAILED ({failure})")
+                self._print(f"  → FAILED ({failure})")
                 log.warning("Point did not converge: MN=%.3f alt=%.0f dTs=%.1f power=%.0f",
                             pt_cond['MN'], pt_cond['alt'], pt_cond['dTs'], pt_cond['power'])
 

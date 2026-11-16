@@ -1,5 +1,6 @@
 import pycycle.api as pyc
 
+from f404.config import DesignInputs
 from f404.engine_model import MixedFlowTurbofan
 
 # Augmentor pressure loss, dPqP = q * (AB_CD + AB_ETA * (Tt7/Tt6 - 1)), with q
@@ -11,6 +12,8 @@ from f404.engine_model import MixedFlowTurbofan
 AB_K_M = 0.5
 AB_CD = 0.65
 AB_ETA = 1.0
+
+_D = DesignInputs()
 
 
 class MPMixedFlowTurbofan(pyc.MPCycle):
@@ -49,29 +52,32 @@ class MPMixedFlowTurbofan(pyc.MPCycle):
         self.set_input_defaults('DESIGN.bypass_duct.MN', 0.4463)
         self.set_input_defaults('DESIGN.mixer_duct.MN', 0.4463)
         self.set_input_defaults('DESIGN.afterburner.MN', 0.1025)
-        self.set_input_defaults('DESIGN.LP_Nmech', 10000, units='rpm')
-        self.set_input_defaults('DESIGN.HP_Nmech', 14000, units='rpm')
+        self.set_input_defaults('DESIGN.LP_Nmech', _D.LP_Nmech, units='rpm')
+        self.set_input_defaults('DESIGN.HP_Nmech', _D.HP_Nmech, units='rpm')
 
-        # Cycle parameters shared across all points
+        # Cycle parameters shared across all points. Values that are
+        # DesignInputs fields come from its defaults; design() sets them.
+        # Not a DesignInputs field: the shaft balances read pwr_in/pwr_out, which
+        # exclude it, so HPX has no effect on the cycle until #60 is fixed.
         self.pyc_add_cycle_param('hp_shaft.HPX', 250, units='hp')
-        self.pyc_add_cycle_param('inlet.ram_recovery', 0.9990)
-        self.pyc_add_cycle_param('inlet_duct.dPqP', 0.0107)
-        self.pyc_add_cycle_param('splitter_core_duct.dPqP', 0.0048)
+        self.pyc_add_cycle_param('inlet.ram_recovery', _D.ram_recovery)
+        self.pyc_add_cycle_param('inlet_duct.dPqP', _D.inlet_duct_dPqP)
+        self.pyc_add_cycle_param('splitter_core_duct.dPqP', _D.splitter_core_duct_dPqP)
         # self.pyc_add_cycle_param('lpc_duct.dPqP', 0.0101)
         #self.pyc_add_cycle_param('burner.dPqP', 0.0540)
-        self.pyc_add_cycle_param('hpt_duct.dPqP', 0.0051)
-        self.pyc_add_cycle_param('lpt_duct.dPqP', 0.0107)
-        self.pyc_add_cycle_param('bypass_duct.dPqP', 0.015) #0.0107
-        self.pyc_add_cycle_param('mixer_duct.dPqP', 0.0107)
+        self.pyc_add_cycle_param('hpt_duct.dPqP', _D.hpt_duct_dPqP)
+        self.pyc_add_cycle_param('lpt_duct.dPqP', _D.lpt_duct_dPqP)
+        self.pyc_add_cycle_param('bypass_duct.dPqP', _D.bypass_duct_dPqP)
+        self.pyc_add_cycle_param('mixer_duct.dPqP', _D.mixer_duct_dPqP)
         self.pyc_add_cycle_param('aug_ctrl.k_M', AB_K_M)
         self.pyc_add_cycle_param('aug_ctrl.CD', AB_CD)
         self.pyc_add_cycle_param('aug_ctrl.eta', AB_ETA)
         #self.pyc_add_cycle_param('mixed_nozz.Cfg', 0.9933)
-        self.pyc_add_cycle_param('hpc.cool1:frac_W', 0.050708) #0.050708
+        self.pyc_add_cycle_param('hpc.cool1:frac_W', _D.hpc_cool1_frac_W)
         self.pyc_add_cycle_param('hpc.cool1:frac_P', 0.5)
         self.pyc_add_cycle_param('hpc.cool1:frac_work', 0.5)
 
-        self.pyc_add_cycle_param('bld3.cool3:frac_W', 0.11) #0.067214
+        self.pyc_add_cycle_param('bld3.cool3:frac_W', _D.bld3_cool3_frac_W)
         self.pyc_add_cycle_param('hpt.cool3:frac_P', 1.0)
         self.pyc_add_cycle_param('lpt.cool1:frac_P', 1.0)
 

@@ -1,23 +1,28 @@
 """Tests for problem construction: fail-fast validation and golden baselines.
 
-The validation tests are instant — they never build a model. The rest assert
-against a converged baseline, so that the solver work queued behind this suite
+Input validation lives in ``DesignInputs`` (config_test.py). Most tests here
+assert against a converged baseline, so that the solver work queued behind this suite
 (#3, #8) has something to regress against.
 
 Golden values are held to a 1e-4 relative tolerance: tight enough that any
 real change to the cycle trips them, loose enough to survive last-digit
 differences in BLAS/LAPACK across platforms.
 """
+import openmdao.api as om
 import pytest
 
+from f404.mp_cycle import MPMixedFlowTurbofan
 from f404.problems import (
     DRY_DSN_FN,
     DSN_MN,
     MAX_AB_FN,
     MAX_Tt7,
     MIL_Tt4,
+    DESIGN_INPUT_PATHS,
+    DesignInputs,
     MaxTt7TooLowError,
-    build_problem,
+    _apply_design_inputs,
+    design,
 )
 from f404.sweep_utils import STATIC_MN, _scalar
 
@@ -64,42 +69,15 @@ def assert_matches_baseline(prob, point, baseline):
         )
 
 
-# ── Fail-fast validation ──────────────────────────────────────────────────────
-# These must raise before the solve, not several minutes into a diverging
-# Newton — that is the whole point of validating at all.
-
-@pytest.mark.parametrize('fn_target', [0., -1., -11000.])
-def test_non_positive_thrust_target_is_rejected(fn_target):
-    with pytest.raises(ValueError, match='fn_target'):
-        build_problem(fn_target=fn_target)
-
-
-@pytest.mark.parametrize('target', ['fn_target', 'mil_Tt4', 'max_Tt7'])
-@pytest.mark.parametrize('bad', [float('nan'), float('inf'), -float('inf')])
-def test_non_finite_targets_are_rejected(target, bad):
-    # A NaN passes through prob.set_val() and into the residual without
-    # complaint, so it surfaces only as an unexplained divergence.
-    with pytest.raises(ValueError, match='finite'):
-        build_problem(**{target: bad})
-
-
-def test_non_positive_burner_temperature_is_rejected():
-    with pytest.raises(ValueError, match='mil_Tt4'):
-        build_problem(mil_Tt4=0.)
-
-
-@pytest.mark.parametrize('max_Tt7', [0., -3608.])
-def test_non_positive_augmentor_target_is_rejected(max_Tt7):
-    with pytest.raises(ValueError, match='max_Tt7'):
-        build_problem(max_Tt7=max_Tt7)
-
+# ── Max-AB target ─────────────────────────────────────────────────────────────
 
 @pytest.mark.slow
 def test_augmentor_target_below_core_temperature_still_burns_fuel():
     # The augmentor heats mixed flow at ~1500 R, downstream of the turbines,
     # so T7 below Tt4 is a valid min-AB setting, not negative fuel flow. The
     # default wet grid bottoms out at 3008 R, below MIL_Tt4.
-    prob, mp = build_problem(max_Tt7=MIL_Tt4 - 92., verbose=False)
+    engine = design(DesignInputs(max_Tt7=MIL_Tt4 - 92.))
+    prob, mp = engine.prob, engine.prob.model
 
     assert _scalar(prob.get_val(f"{mp.od_pt}.balance.FAR_ab")) > 1e-3
 
@@ -108,20 +86,10 @@ def test_augmentor_target_below_core_temperature_still_burns_fuel():
 @pytest.mark.parametrize('max_Tt7', [1000., 1500.])
 def test_max_ab_target_at_or_below_the_augmentor_inlet_is_rejected(max_Tt7):
     # The OD point reads any Tt7 command at or below Tt6 (~1502 R at SLS mil)
-    # as dry. build_problem() promises max AB, so it must raise rather than
+    # as dry. design() promises max AB, so it must raise rather than
     # hand back a dry engine with no error.
     with pytest.raises(MaxTt7TooLowError, match=r'max_Tt7 must exceed .* Tt6 = 150\d\.\d R'):
-        build_problem(max_Tt7=max_Tt7, verbose=False)
-
-
-def test_validation_errors_name_the_offending_value_and_the_expected_range():
-    with pytest.raises(ValueError) as excinfo:
-        build_problem(fn_target=-5.)
-
-    message = str(excinfo.value)
-    assert '-5.0' in message           # what was passed
-    assert 'lbf' in message            # the units it was read as
-    assert str(int(DRY_DSN_FN)) in message  # what a sane value looks like
+        design(DesignInputs(max_Tt7=max_Tt7))
 
 
 def test_design_is_sized_at_the_sweeps_static_mach():
@@ -299,11 +267,59 @@ def test_afterburner_roughly_doubles_specific_fuel_consumption(problem, dry_mil)
 
 # ── Off-nominal sizing ────────────────────────────────────────────────────────
 
+def test_every_design_input_reaches_the_model():
+    # Each field must land on its model path, not stop at the config object
+    # (#47). max_Tt7 is the OD max-AB command, set by design() after the dry solve.
+    assert set(DESIGN_INPUT_PATHS) == set(DesignInputs.model_fields) - {'max_Tt7'}
+    defaults = DesignInputs()
+    inputs = DesignInputs(**{f: getattr(defaults, f) * 0.99 for f in DESIGN_INPUT_PATHS})
+    prob = om.Problem(reports=False)
+    prob.model = MPMixedFlowTurbofan()
+    prob.setup()
+    _apply_design_inputs(prob, inputs)
+    prob.final_setup()
+
+    for field, (path, units) in DESIGN_INPUT_PATHS.items():
+        assert _scalar(prob.get_val(path, units=units)) == getattr(inputs, field), field
+
+
+@pytest.mark.slow
+def test_every_design_input_moves_the_solved_engine(problem):
+    # Landing on its path isn't enough: hp_shaft.HPX did, and the shaft
+    # balances never read it (#60). One linear solve gives every field's
+    # total derivative on outputs that DESIGN and OD sizing set.
+    prob, _ = problem
+    of = ['DESIGN.perf.TSFC', 'DESIGN.balance.W', 'DESIGN.balance.BPR',
+          'OD.perf.Fn', 'OD.balance.LP_Nmech', 'OD.balance.HP_Nmech']
+    totals = prob.compute_totals(of=of, wrt=[p for p, _ in DESIGN_INPUT_PATHS.values()])
+
+    for field, (path, _) in DESIGN_INPUT_PATHS.items():
+        assert any(abs(totals[o, path]).max() > 1e-6 for o in of), field
+
+
+@pytest.mark.parametrize('inputs', [
+    {'fan_eff': 1.05},
+    DesignInputs().model_copy(update={'fan_eff': 1.05}),   # copy skips validation
+])
+def test_design_validates_its_inputs_before_building_anything(inputs):
+    with pytest.raises(ValueError, match='fan_eff'):
+        design(inputs)
+
+
+@pytest.mark.slow
+def test_non_default_component_inputs_size_a_different_engine():
+    prob = design(DesignInputs(hpc_PR=7.0, hpc_cool1_frac_W=0.04)).prob
+
+    assert _scalar(prob.get_val('DESIGN.hpc.PR')) == 7.0
+    assert _scalar(prob.get_val('DESIGN.perf.TSFC')) != pytest.approx(
+        DRY_DESIGN['perf.TSFC'], rel=1e-3)
+
+
 @pytest.mark.slow
 def test_a_lower_thrust_target_sizes_a_smaller_engine():
     # Confirms fn_target is actually wired to the sizing balance rather than
     # only being validated — the defaults alone can't show that.
-    prob, _ = build_problem(fn_target=DRY_DSN_FN * 0.8, verbose=False)
+    prob = design(DesignInputs(fn_target=DRY_DSN_FN * 0.8)).prob
 
     assert _scalar(prob.get_val('DESIGN.perf.Fn', units='lbf')) == pytest.approx(
         DRY_DSN_FN * 0.8, rel=1e-6)
@@ -318,10 +334,10 @@ def test_a_lower_thrust_target_sizes_a_smaller_engine():
 
 @pytest.mark.slow
 def test_verbose_build_prints_every_result_page(capsys):
-    # verbose=True is the default and what `f404 design` relies on. Every other
-    # test passes verbose=False, so without this the print path — which asks
-    # the DESIGN afterburner (a Duct) for a burner table — went unexercised.
-    build_problem()
+    # verbose=True is what `f404 design` relies on. Every other test runs
+    # quiet, so without this the print path — which asks the DESIGN
+    # afterburner (a Duct) for a burner table — went unexercised.
+    design(verbose=True)
 
     out = capsys.readouterr().out
     assert all(s in out for s in ('DESIGN', 'OD at SLS mil', 'OD at SLS max AB'))
