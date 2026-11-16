@@ -6,11 +6,13 @@ different envelope than the one requested.
 """
 import importlib
 
+import openmdao.api as om
 import pandas as pd
 import pytest
 import yaml
 
 from f404 import cli, sweep_full_envelope as sfe
+from f404.problems import MaxTt7TooLowError
 from f404.config import (
     RangeError,
     alt_axis,
@@ -478,6 +480,25 @@ def write_run(path, **changes):
     sweep.update(changes)
     path.write_text(yaml.safe_dump({'sweep': sweep}), encoding='utf-8')
     return path
+
+
+@pytest.mark.parametrize('error, code, fragment', [
+    (MaxTt7TooLowError('max_Tt7 must exceed Tt6'), 2, 'MaxTt7TooLowError: max_Tt7 must exceed'),
+    (om.AnalysisError('Newton failed'), 1, 'f404: the solve did not converge: Newton failed'),
+])
+def test_a_design_that_cannot_be_sized_ends_a_yaml_run_without_a_traceback(
+        recorded, monkeypatch, tmp_path, capsys, error, code, fragment):
+    def raise_error(*args, **kwargs):
+        raise error
+    monkeypatch.setattr(sfe, 'run_sweeps', raise_error)
+
+    argv = [str(write_run(tmp_path / 'run.yml'))]
+
+    if code == 2:
+        fails(capsys, argv, fragment)
+    else:
+        assert cli.main(argv) == 1
+        assert fragment in capsys.readouterr().err
 
 
 def test_yaml_design_block_sizes_the_engine_and_is_snapshotted(recorded, tmp_path):

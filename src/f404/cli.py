@@ -258,11 +258,25 @@ def _run_sweep(config, parser, inputs=DesignInputs()):
         parser.error(f"cannot write sweep configuration in {config.out}: {exc}")
 
     sfe.configure_runtime()
-    sfe.run_sweeps(
+    return _solve_or_exit(parser, 'f404', lambda: sfe.run_sweeps(
         config.mode, alts=config.alt, dTs_vals=config.dts,
         dry_powers=config.throttle.dry, wet_powers=config.throttle.wet,
         machs=config.mach, out_dir=config.out, inputs=inputs,
-    )
+    ))
+
+
+def _solve_or_exit(parser, prog, solve):
+    """Run ``solve()``; return 0, or report a design the engine can't be sized
+    from: a usage error (exit 2) for a bad target, exit 1 if it didn't converge."""
+    try:
+        solve()
+    except ValueError as exc:
+        # A named subclass (e.g. MaxTt7TooLowError) says what was wrong.
+        name = type(exc).__name__
+        parser.error(str(exc) if name == 'ValueError' else f"{name}: {exc}")
+    except om.AnalysisError as exc:
+        print(f"{prog}: the solve did not converge: {exc}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -275,17 +289,7 @@ def _run_design_command(args, parser):
         inputs = DesignInputs(**targets)
     except ValidationError as exc:
         parser.error(_validation_errors(exc, prefix='design'))
-    try:
-        design(inputs, verbose=True)
-    except ValueError as exc:
-        # A named subclass (e.g. MaxTt7TooLowError) says what was wrong.
-        name = type(exc).__name__
-        parser.error(str(exc) if name == 'ValueError' else f"{name}: {exc}")
-    except om.AnalysisError as exc:
-        print(f"f404 design: the solve did not converge: {exc}",
-              file=sys.stderr)
-        return 1
-    return 0
+    return _solve_or_exit(parser, 'f404 design', lambda: design(inputs, verbose=True))
 
 
 def _run_verify_command(args, parser):
