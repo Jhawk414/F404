@@ -283,6 +283,11 @@ def test_every_design_input_reaches_the_model():
         assert _scalar(prob.get_val(path, units=units)) == getattr(inputs, field), field
 
 
+def test_design_validates_a_mapping_before_building_anything():
+    with pytest.raises(ValueError, match='fan_eff'):
+        design({'fan_eff': 1.05})
+
+
 @pytest.mark.slow
 def test_non_default_component_inputs_size_a_different_engine():
     prob = design(DesignInputs(hpc_PR=7.0, hpc_cool1_frac_W=0.04)).prob

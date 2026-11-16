@@ -222,6 +222,11 @@ pyCycle and of the decks.
 - **Studio columns**: `fan_PR`, `hpc_PR`, `fan_eff`, `hpc_eff`, `LP_Nmech`
   and `HP_Nmech` are both `DesignInputs` fields and OD deck columns; the
   studio's tidy frame needs a prefix convention (#46).
+- **Tolerance against `f404 verify`**: `run_point()` lands within the
+  solver-path floor (about 3e-6) of the deck and of `verify`'s fixed solve
+  path, above `verify`'s 1e-6 tolerance (ADR-0004). An `--extended` verify
+  that reads OD points through `run_point()` must take its reference from
+  `run_point()` itself, which is deterministic, not from the decks.
 - **`max_Tt7`'s default** is calibrated to 17,700 lbf for the default sizing
   only. A re-sized engine's max AB is not calibrated.
 

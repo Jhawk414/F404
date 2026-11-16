@@ -89,7 +89,8 @@ def sweep(engine, *, mode, mach=DEFAULT_MACHS, alt=DEFAULT_ALTS, dts=DEFAULT_DTS
     ----------
     engine : Engine
         From ``design()``. Restored to its SLS max-AB anchor first, so the
-        result doesn't depend on earlier calls; left at the last point solved.
+        result doesn't depend on earlier calls. Afterwards ``engine.prob`` is
+        solved at the last point only if that point converged.
     mode : {'dry', 'wet'}
     mach, alt, dts, throttle : sequence of float or range string
         The axes, validated as for the CLI and YAML (``config.axis``):

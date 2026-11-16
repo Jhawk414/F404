@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import numpy as np
 import openmdao.api as om
 
-from f404.config import DRY_DSN_FN, MAX_Tt7, MIL_Tt4, DesignInputs  # noqa: F401 (re-exported)
+from f404.config import DRY_DSN_FN, MAX_Tt7, MIL_Tt4, DesignInputs  # noqa: F401 (targets re-exported)
 from f404.mp_cycle import MPMixedFlowTurbofan
 from f404.printer import page_viewer
 from f404.sweep_utils import STATIC_MN, _scalar
@@ -152,8 +152,9 @@ def design(inputs=DesignInputs(), *, verbose=False):
 
     Parameters
     ----------
-    inputs : DesignInputs
-        Validated design inputs; the defaults are the calibrated F404.
+    inputs : DesignInputs or mapping
+        Design inputs; a mapping is validated as ``DesignInputs`` first.
+        The defaults are the calibrated F404.
     verbose : bool
         Print Newton iterations and the DESIGN/OD result tables.
 
@@ -164,13 +165,15 @@ def design(inputs=DesignInputs(), *, verbose=False):
 
     Raises
     ------
+    pydantic.ValidationError
+        ``inputs`` is a mapping with an invalid or unknown field.
     MaxTt7TooLowError
         ``inputs.max_Tt7`` is at or below the SLS-mil augmentor inlet
         temperature (~1500 R), checked after the dry solve.
     openmdao.api.AnalysisError
         DESIGN or OD did not converge.
     """
-    return _solve(inputs, verbose)
+    return _solve(DesignInputs.model_validate(inputs), verbose)
 
 
 def _solve(inputs, verbose, on_mil=None):
