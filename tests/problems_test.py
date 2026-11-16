@@ -283,6 +283,20 @@ def test_every_design_input_reaches_the_model():
         assert _scalar(prob.get_val(path, units=units)) == getattr(inputs, field), field
 
 
+@pytest.mark.slow
+def test_every_design_input_moves_the_solved_engine(problem):
+    # Landing on its path isn't enough: hp_shaft.HPX did, and the shaft
+    # balances never read it (#60). One linear solve gives every field's
+    # total derivative on outputs that DESIGN and OD sizing set.
+    prob, _ = problem
+    of = ['DESIGN.perf.TSFC', 'DESIGN.balance.W', 'DESIGN.balance.BPR',
+          'OD.perf.Fn', 'OD.balance.LP_Nmech', 'OD.balance.HP_Nmech']
+    totals = prob.compute_totals(of=of, wrt=[p for p, _ in DESIGN_INPUT_PATHS.values()])
+
+    for field, (path, _) in DESIGN_INPUT_PATHS.items():
+        assert any(abs(totals[o, path]).max() > 1e-6 for o in of), field
+
+
 def test_design_validates_a_mapping_before_building_anything():
     with pytest.raises(ValueError, match='fan_eff'):
         design({'fan_eff': 1.05})

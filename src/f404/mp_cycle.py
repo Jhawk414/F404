@@ -57,7 +57,9 @@ class MPMixedFlowTurbofan(pyc.MPCycle):
 
         # Cycle parameters shared across all points. Values that are
         # DesignInputs fields come from its defaults; design() sets them.
-        self.pyc_add_cycle_param('hp_shaft.HPX', _D.HPX, units='hp')
+        # Not a DesignInputs field: the shaft balances read pwr_in/pwr_out, which
+        # exclude it, so HPX has no effect on the cycle until #60 is fixed.
+        self.pyc_add_cycle_param('hp_shaft.HPX', 250, units='hp')
         self.pyc_add_cycle_param('inlet.ram_recovery', _D.ram_recovery)
         self.pyc_add_cycle_param('inlet_duct.dPqP', _D.inlet_duct_dPqP)
         self.pyc_add_cycle_param('splitter_core_duct.dPqP', _D.splitter_core_duct_dPqP)

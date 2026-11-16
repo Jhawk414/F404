@@ -32,7 +32,7 @@ from f404.config import (
     ('fn_target', 0.), ('fn_target', -11000.), ('mil_Tt4', 0.), ('max_Tt7', -3608.),
     ('fn_target', math.nan), ('mil_Tt4', math.inf), ('max_Tt7', -math.inf),
     ('fan_eff', 1.05), ('hpt_eff', 0.), ('hpc_PR', 1.0), ('ram_recovery', 1.01),
-    ('bypass_duct_dPqP', 1.0), ('hpc_cool1_frac_W', -0.01), ('HPX', -1.),
+    ('bypass_duct_dPqP', 1.0), ('hpc_cool1_frac_W', -0.01),
     ('fan_PR', '4.1'),
 ])
 def test_design_inputs_reject_an_invalid_value_and_name_the_field(field, value):

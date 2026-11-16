@@ -55,7 +55,6 @@ DESIGN_INPUT_PATHS = {
     'mixer_duct_dPqP':         ('mixer_duct.dPqP', None),
     'hpc_cool1_frac_W':        ('hpc.cool1:frac_W', None),
     'bld3_cool3_frac_W':       ('bld3.cool3:frac_W', None),
-    'HPX':                     ('hp_shaft.HPX', 'hp'),
 }
 
 

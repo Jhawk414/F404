@@ -88,11 +88,12 @@ deck = sweep(eng, mode='wet', mach=[0.001, 0.4], alt=0, dts=0)                  
 | Inlet | `ram_recovery` | (0, 1] |
 | Duct losses | `inlet_duct_dPqP`, `splitter_core_duct_dPqP`, `hpt_duct_dPqP`, `lpt_duct_dPqP`, `bypass_duct_dPqP`, `mixer_duct_dPqP` | [0, 1) |
 | Cooling bleeds | `hpc_cool1_frac_W`, `bld3_cool3_frac_W` | [0, 1) |
-| Power extraction | `HPX` (hp) | ≥ 0 |
 
 Left out for now: Newton initial guesses (solver state, not inputs), the
 augmentor-loss constants (a correlation, ADR-0002), station design Mach
-numbers, and bleed `frac_P`/`frac_work`. A field with a default is
+numbers, bleed `frac_P`/`frac_work`, and HP power extraction (`hp_shaft.HPX`),
+which the shaft balances ignore until
+[#60](https://github.com/Jhawk414/F404/issues/60) is fixed. A field with a default is
 non-breaking to add, so each waits for a consumer.
 
 There is no `max_Tt7 > mil_Tt4` validator. The augmentor heats mixed flow at

@@ -34,7 +34,6 @@ you want to change.
 | `inlet_duct_dPqP`, `splitter_core_duct_dPqP`, `hpt_duct_dPqP`, `lpt_duct_dPqP`, `bypass_duct_dPqP`, `mixer_duct_dPqP` | 0.0107, 0.0048, 0.0051, 0.0107, 0.015, 0.0107 | Duct total-pressure loss fractions |
 | `hpc_cool1_frac_W` | 0.050708 | HPC bleed to the LPT, fraction of HPC flow |
 | `bld3_cool3_frac_W` | 0.11 | HPC exit bleed to the HPT, fraction of HPC flow |
-| `HPX` | 250 | HP shaft power extraction, hp |
 
 Validation happens when the model is built, before any solve. Pressure
 ratios must exceed 1, efficiencies and `ram_recovery` lie in (0, 1], loss and

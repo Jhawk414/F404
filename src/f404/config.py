@@ -63,7 +63,6 @@ class DesignInputs(StrictModel):
 
     hpc_cool1_frac_W: LossFraction = 0.050708  # HPC bleed to the LPT, of HPC inflow
     bld3_cool3_frac_W: LossFraction = 0.11     # HPC exit bleed to the HPT
-    HPX: Annotated[float, Field(ge=0)] = 250.  # hp, HP shaft power extraction
 
 
 class RangeError(ValueError):
