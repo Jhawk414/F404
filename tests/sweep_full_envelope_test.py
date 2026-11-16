@@ -1,9 +1,11 @@
-"""Tests for the cycle-deck writer.
+"""Tests for the OD drivers (sweep, run_point, run_sweeps) and the deck writer.
 
 `write_deck_csv` is the single exit point for every deck (dry, wet,
 combined). It writes full float64 precision so that deck-to-deck comparisons
 (spike studies, PR proof) measure the model, not the rounding.
 """
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
@@ -15,8 +17,9 @@ from f404.sweep_full_envelope import (
     DEFAULT_DTS,
     DEFAULT_MACHS,
     DEFAULT_WET_POWERS,
-    run_mode_sweep,
+    run_point,
     run_sweeps,
+    sweep,
     write_deck_csv,
 )
 
@@ -73,7 +76,8 @@ def test_default_grid_is_the_committed_envelope():
 
 @pytest.mark.parametrize('call', [
     lambda: run_sweeps('hot'),
-    lambda: run_mode_sweep('both', [0.], [0.], [3100.], [0.001]),
+    lambda: sweep(None, mode='both'),
+    lambda: run_point(None, mode='both', alt=0, mach=0, dts=0, throttle=3100),
 ])
 def test_unknown_mode_is_rejected_before_any_work(call):
     with pytest.raises(ValueError, match="mode must be"):
@@ -82,8 +86,9 @@ def test_unknown_mode_is_rejected_before_any_work(call):
 
 @pytest.mark.slow
 @pytest.mark.parametrize('mode, power', [('dry', 3100.), ('wet', 3608.)])
-def test_run_mode_sweep_writes_a_deck_for_the_requested_grid(tmp_path, mode, power):
-    df = run_mode_sweep(mode, [0.], [0.], [power], [0.5], out_dir=tmp_path)
+def test_sweep_writes_a_deck_for_the_requested_grid(engine, tmp_path, mode, power):
+    df = sweep(engine, mode=mode, mach=[0.5], alt=[0.], dts=[0.], throttle=[power],
+               out_dir=tmp_path)
 
     deck = pd.read_csv(tmp_path / f'cycle_deck_{mode}.csv')
     assert len(df) == len(deck) == 1
@@ -93,36 +98,70 @@ def test_run_mode_sweep_writes_a_deck_for_the_requested_grid(tmp_path, mode, pow
 
 
 @pytest.mark.slow
-def test_wet_sweep_holds_the_mil_temperature_the_engine_was_built_with(tmp_path):
+def test_a_sweep_holds_the_temperatures_the_engine_was_built_with(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     # An engine built with custom targets and handed in via engine= must keep
     # its own mil Tt4 in the wet sweep, not the module default (3100 R).
     engine = design(DesignInputs(mil_Tt4=3000.))
 
-    df = run_mode_sweep('wet', [0.], [0.], [3608.], [0.001], out_dir=tmp_path,
-                        engine=engine)
+    wet = sweep(engine, mode='wet', mach=0, alt=0, dts=0, throttle=3608.)
+    # The default dry throttle runs down from this engine's mil, not 3100 R.
+    dry = sweep(engine, mode='dry', mach=0, alt=0, dts=0)
 
-    assert df['T4'].iloc[0] == pytest.approx(3000., abs=0.01)
+    assert wet['T4'].iloc[0] == pytest.approx(3000., abs=0.01)
+    assert list(dry['T4_cmd']) == [3000., 2800., 2600., 2400.]
+    assert list(tmp_path.iterdir()) == []   # no out_dir, nothing written
+
+
+DECK = Path(__file__).parents[1] / 'deck' / 'cycle_deck_dry.csv'
+
+
+@pytest.mark.slow
+def test_run_point_reproduces_a_deck_row_whatever_ran_before(engine):
+    # A cold, fast, part-power corner the deck reaches through ~600 converged
+    # neighbours; run_point reaches it from the SLS anchor alone.
+    deck = pd.read_csv(DECK).set_index(['alt', 'MN', 'dTs', 'T4_cmd'])
+    expected = deck.loc[(5000., 0.8, -30., 2700.)]
+    point = dict(mode='dry', alt=5000, mach=0.8, dts=-30, throttle=2700)
+
+    first = run_point(engine, **point)
+    run_point(engine, mode='wet', alt=2500, mach=0.4, dts=20, throttle=3207.68)
+    again = run_point(engine, **point)
+
+    assert first == again
+    assert first['converged']
+    for column in ('Fn', 'TSFC', 'W', 'BPR'):
+        assert first[column] == pytest.approx(expected[column], rel=1e-5)
+
+
+@pytest.mark.slow
+def test_run_point_returns_a_failed_point_as_a_row(engine):
+    # 800 R is below compressor delivery: no solution exists.
+    row = run_point(engine, mode='dry', alt=0, mach=0, dts=0, throttle=800)
+
+    assert (row['converged'], row['MN']) == (False, 0.001)
+    assert row['failure'] and pd.isna(row['Fn'])
 
 
 @pytest.mark.slow
 def test_both_modes_sweep_one_problem_and_survive_a_failed_point(tmp_path):
     # --mode both sizes once and sweeps dry then wet on the same problem. The
-    # dry grid opens with an unreachable point (800 R is below compressor
+    # dry grid ends on an unreachable point (800 R is below compressor
     # delivery), so the wet sweep only produces a row if the failure didn't
     # leave the shared OD point broken: each mode restarts from the SLS state.
     results = run_sweeps('both', alts=[0.], dTs_vals=[0.],
-                         dry_powers=[800., 3100.], wet_powers=[3608.],
+                         dry_powers=[3100., 800.], wet_powers=[3608.],
                          machs=[0.001], out_dir=tmp_path)
 
     # Converged plus failed rows are the whole attempted grid (#27).
-    assert list(results['dry']['converged']) == [False, True]
+    assert list(results['dry']['converged']) == [True, False]
     assert list(results['wet']['T7'].round()) == [3608.]
-    assert results['dry']['W'].iloc[1] == pytest.approx(
+    assert results['dry']['W'].iloc[0] == pytest.approx(
         results['wet']['W'].iloc[0], rel=1e-3)
     combined = pd.read_csv(tmp_path / 'cycle_deck_full_envelope.csv')
     assert list(combined['mode']) == ['dry', 'dry', 'wet']
     # On disk a failed row keeps its inputs, reads back NaN outputs and says why.
-    failed = pd.read_csv(tmp_path / 'cycle_deck_dry.csv').iloc[0]
+    failed = pd.read_csv(tmp_path / 'cycle_deck_dry.csv').iloc[1]
     assert (failed['converged'], failed['T4_cmd']) == (False, 800.)
     assert failed[['Fn', 'W', 'T4', 'V9']].isna().all()
     assert failed['failure'] in ('AnalysisError', 'RuntimeError', 'target') \

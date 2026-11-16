@@ -1,17 +1,17 @@
 """
-Full-envelope cycle deck builder for the F404 mixed-flow turbofan.
+Off-design runs of a sized engine: one point, one mode, or the full deck.
 
-Sizes one engine (DESIGN at SLS dry mil) and sweeps it in two modes on the
-one off-design point of the same om.Problem.
+The engine is sized once (DESIGN at SLS dry mil, ``problems.design()``) and
+every OD run below starts from its SLS max-AB anchor on the one OD point.
 
-Dry sweep
----------
-  - afterburner dry (Tt7 command 0); 'power' in sweep points = Tt4 target (degR)
+Dry mode
+--------
+  - afterburner dry (Tt7 command 0); ``throttle`` is the Tt4 target (degR)
 
-Wet sweep
----------
-  - FAR_ab balance drives T7 to target; 'power' in sweep points = Tt7 (degR)
-  - Tt4 is fixed at mil power (mil_Tt4) for the entire wet sweep
+Wet mode
+--------
+  - FAR_ab balance drives T7 to target; ``throttle`` is Tt7 (degR)
+  - Tt4 is held at the engine's mil_Tt4
   - A8 is set by the nozzle schedule (gas generator held where dry put it)
   - Thrust is an output, not a target
 
@@ -28,8 +28,9 @@ from pathlib import Path
 import pandas as pd
 from openmdao.utils.om_warnings import SolverWarning
 
-from f404.problems import MAX_Tt7, design
-from f404.sweep_utils import build_snake_sweep, STATIC_MN, SweepRunner, _scalar
+from f404.config import DesignInputs, axis
+from f404.problems import MAX_Tt7, MIL_Tt4, design
+from f404.sweep_utils import build_snake_sweep, STATIC_MN, SweepRunner
 
 # ── Default sweep grid (shared by both modes) ────────────────────────────────
 # Static to high subsonic; the inlet's fixed ram recovery is subsonic only.
@@ -42,10 +43,16 @@ DEFAULT_ALTS = [0., 2500., 5000.]              # ft — 3 pts
 DEFAULT_DTS = [0., 10., 20., 30., 40., 50.,
                -10., -20., -30., -40., -50.]   # 11 pts, hot-first
 
-# Dry: sweep Tt4 from mil (3100) down to part-power (2500)
-DEFAULT_DRY_POWERS = [3100., 2900., 2700., 2500.]   # Tt4, degR
-# Wet: sweep T7 from the calibrated max AB down to min AB, 200 R steps
-DEFAULT_WET_POWERS = [MAX_Tt7 - 200. * k for k in range(4)]   # Tt7, degR
+
+
+def default_throttle(top):
+    """Four levels down from ``top`` (mil Tt4 or max-AB Tt7), 200 R apart."""
+    return [top - 200. * k for k in range(4)]
+
+
+# The default engine's grids: Tt4 3100 -> 2500 R, Tt7 3607.68 -> 3007.68 R.
+DEFAULT_DRY_POWERS = default_throttle(MIL_Tt4)   # Tt4, degR
+DEFAULT_WET_POWERS = default_throttle(MAX_Tt7)   # Tt7, degR
 
 # MN 0.25 bridges only the jump back to static at each new power level.
 BRIDGE_THRESHOLD = {'alt': 2000, 'dTs': 30, 'power': 100, 'MN': 0.25}
@@ -74,57 +81,93 @@ def configure_runtime():
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 
-def run_mode_sweep(mode, alts, dTs_vals, powers, machs, out_dir='.', engine=None):
-    """Sweep one mode of the sized engine and write its deck.
+def sweep(engine, *, mode, mach=DEFAULT_MACHS, alt=DEFAULT_ALTS, dts=DEFAULT_DTS,
+          throttle=None, out_dir=None, verbose=False):
+    """Sweep one mode of a sized engine and return its deck.
 
     Parameters
     ----------
+    engine : Engine
+        From ``design()``. Restored to its SLS max-AB anchor first, so the
+        result doesn't depend on earlier calls; left at the last point solved.
     mode : {'dry', 'wet'}
-    alts, dTs_vals, powers : sequence of float
-        The sweep axes, already in traversal order. ``powers`` is Tt4 (degR)
-        in dry mode and Tt7 (degR) in wet mode.
-    machs : sequence of float
-        Flight Mach numbers, ascending.
-    out_dir : path-like
-        Directory the ``cycle_deck_<mode>.csv`` is written to.
-    engine : Engine, optional
-        An engine from ``design()`` to sweep; the default engine if omitted.
+    mach, alt, dts, throttle : sequence of float or range string
+        The axes, validated as for the CLI and YAML (``config.axis``):
+        Mach ascending, alt ascending, dts hot then cold, throttle descending.
+        ``throttle`` is Tt4 dry and Tt7 wet, degR; by default four levels
+        200 R apart down from the engine's ``mil_Tt4`` or ``max_Tt7``.
+    out_dir : path-like, optional
+        Write ``cycle_deck_<mode>.csv`` here; nothing is written if None.
+    verbose : bool
+        Print a line per point.
 
     Returns
     -------
     pandas.DataFrame
-        One row per attempted point; ``converged`` marks the ones that solved.
+        One row per point, failed ones included: ``INPUT_COLUMNS``, then
+        ``DECK_COLUMNS`` (blank where the point failed), then ``failure``.
     """
+    return _sweep(engine, mode, mach, alt, dts, throttle, out_dir, verbose,
+                  MAX_BRIDGE_STEPS)
+
+
+def _sweep(engine, mode, mach, alt, dts, throttle, out_dir, verbose, bridge_steps):
     if mode not in ('dry', 'wet'):
         raise ValueError(f"mode must be 'dry' or 'wet', got {mode!r}")
-    prob = (engine if engine is not None else design(verbose=True)).prob
-    mp = prob.model
+    inputs = engine.inputs
+    top = inputs.mil_Tt4 if mode == 'dry' else inputs.max_Tt7
+    points = build_snake_sweep(
+        axis(alt, 'alt'), axis(dts, 'dts'),
+        axis(default_throttle(top) if throttle is None else throttle, 'throttle'),
+        axis(mach, 'mach'))
+    if verbose:
+        print(f"\n{mode.capitalize()} sweep matrix: {len(points)} points")
+
+    engine.restore_anchor()
+    prob = engine.prob
     prob.set_solver_print(level=-1)
-    # Wet holds Tt4 at the mil value this engine was built with, which may
-    # not be problems.MIL_Tt4 if the caller passed custom targets.
-    mil_Tt4 = _scalar(prob.get_val('DESIGN.balance.rhs:FAR_core', units='degR'))
-
-    sweep_pts = build_snake_sweep(alts, dTs_vals, powers, machs)
-    print(f"\n{mode.capitalize()} sweep matrix: {len(sweep_pts)} points")
-
-    runner = SweepRunner(prob, od_pt=mp.od_pt, afterburn=(mode == 'wet'), mil_Tt4=mil_Tt4)
-    df = runner.run_sweep(
-        sweep_pts,
-        bridge_threshold=BRIDGE_THRESHOLD,
-        max_bridge_steps=MAX_BRIDGE_STEPS,
-    )
-    write_deck_csv(df, Path(out_dir) / f'cycle_deck_{mode}.csv')
+    runner = SweepRunner(prob, od_pt=prob.model.od_pt, afterburn=(mode == 'wet'),
+                         mil_Tt4=inputs.mil_Tt4, verbose=verbose)
+    # The anchor's condition, at this mode's top power. The default grids
+    # start here, so their first point needs no bridge.
+    home = {'MN': STATIC_MN, 'alt': 0., 'dTs': 0., 'power': top}
+    df = runner.run_sweep(points, bridge_threshold=BRIDGE_THRESHOLD,
+                          max_bridge_steps=bridge_steps, start=home)
+    if out_dir is not None:
+        write_deck_csv(df, Path(out_dir) / f'cycle_deck_{mode}.csv')
     return df
+
+
+def run_point(engine, *, mode, alt, mach, dts, throttle, verbose=False):
+    """Solve one OD condition of a sized engine and return its deck row.
+
+    The point is reached from the engine's SLS max-AB anchor through bridge
+    points, as a sweep reaches its first point, so the result doesn't depend
+    on earlier calls. Arguments are as for ``sweep()``, one value each;
+    ``mach`` 0 is flown at 0.001.
+
+    Returns
+    -------
+    dict
+        ``INPUT_COLUMNS`` + ``DECK_COLUMNS`` + ``failure``. A point that
+        fails is returned with ``converged`` False and NaN outputs, not
+        raised. When it converged, ``engine.prob`` is left solved at it,
+        so it can be read or differentiated; when it failed, it is not.
+    """
+    df = _sweep(engine, mode, [mach], [alt], [dts], [throttle], None, verbose,
+                MAX_BRIDGE_STEPS)
+    return df.to_dict('records')[0]
 
 
 def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
                dry_powers=DEFAULT_DRY_POWERS, wet_powers=DEFAULT_WET_POWERS,
-               machs=DEFAULT_MACHS, out_dir='.'):
-    """Run the dry sweep, the wet sweep, or both, and write the decks.
+               machs=DEFAULT_MACHS, out_dir='.', inputs=DesignInputs()):
+    """Size the engine from ``inputs``, run the dry sweep, the wet sweep, or
+    both, and write the decks: the driver behind ``f404 sweep`` and YAML runs.
 
     ``mode`` is 'dry', 'wet' or 'both'; 'both' also writes the combined
-    ``cycle_deck_full_envelope.csv``. The engine is sized once and both modes
-    sweep it. Returns ``{mode: DataFrame}`` for the modes that ran.
+    ``cycle_deck_full_envelope.csv``. Returns ``{mode: DataFrame}`` for the
+    modes that ran.
     """
     if mode not in ('dry', 'wet', 'both'):
         raise ValueError(f"mode must be 'dry', 'wet' or 'both', got {mode!r}")
@@ -133,15 +176,12 @@ def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
     out_dir.mkdir(parents=True, exist_ok=True)
 
     st_total = time.time()
-    engine = design(verbose=True)
+    engine = design(inputs, verbose=True)
     results = {}
     for m, powers in (('dry', dry_powers), ('wet', wet_powers)):
         if mode in (m, 'both'):
-            # Both modes run on the one OD point, so each starts from the SLS
-            # max-AB anchor, not from where the previous sweep ended.
-            engine.restore_anchor()
-            results[m] = run_mode_sweep(
-                m, alts, dTs_vals, powers, machs, out_dir, engine)
+            results[m] = sweep(engine, mode=m, mach=machs, alt=alts, dts=dTs_vals,
+                               throttle=powers, out_dir=out_dir, verbose=True)
 
     if mode == 'both':
         df_all = pd.concat([results['dry'], results['wet']], ignore_index=True)

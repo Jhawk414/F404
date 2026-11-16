@@ -34,6 +34,12 @@ def problem():
 
 
 @pytest.fixture(scope='session')
+def engine():
+    """A default Engine for OD calls; each restores its anchor, so share it."""
+    return design()
+
+
+@pytest.fixture(scope='session')
 def dry_mil():
     """The same engine with OD re-solved dry, at SLS mil. Read-only."""
     prob = design().prob
