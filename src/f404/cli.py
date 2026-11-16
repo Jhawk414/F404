@@ -18,11 +18,11 @@ from rich.text import Text
 from f404 import sweep_full_envelope as sfe
 from f404.compare_decks import compare_decks, format_report, read_deck
 from f404.config import (
-    EXAMPLE_YAML, RangeError, SweepConfig, alt_axis, dts_axis, load_config,
-    mach_axis, throttle_axis,
+    EXAMPLE_YAML, DesignInputs, RangeError, SweepConfig, alt_axis, dts_axis,
+    load_config, mach_axis, throttle_axis,
 )
 from f404 import verify
-from f404.problems import build_problem
+from f404.problems import design
 
 
 # ── argparse wiring ───────────────────────────────────────────────────────────
@@ -270,7 +270,11 @@ def _run_design_command(args, parser):
         ('max_Tt7', args.max_tt7)) if value is not None}
 
     try:
-        build_problem(**targets)
+        inputs = DesignInputs(**targets)
+    except ValidationError as exc:
+        parser.error(_validation_errors(exc, prefix='design'))
+    try:
+        design(inputs, verbose=True)
     except ValueError as exc:
         # A named subclass (e.g. MaxTt7TooLowError) says what was wrong.
         name = type(exc).__name__

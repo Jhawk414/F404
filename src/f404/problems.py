@@ -1,30 +1,24 @@
-"""Construction of the converged F404 ``om.Problem``.
+"""Sizing the F404: ``design()`` turns ``DesignInputs`` into a solved ``Engine``.
 
-``build_problem()`` wires an ``MPMixedFlowTurbofan`` into a Problem, applies
-the design-point targets and the initial guesses that get Newton into the
-right basin, and solves the DESIGN point (which sizes the engine at dry mil)
-plus the one OD point at sea-level static, first at mil power and then at max
-afterburner. One engine and one OD topology serve both modes — see
-``docs/adr/0001-single-engine-sizing.md`` and ``0002-single-od-topology.md``.
+``design()`` wires an ``MPMixedFlowTurbofan`` into a Problem, applies the
+design inputs and the initial guesses that get Newton into the right basin,
+and solves the DESIGN point (which sizes the engine at dry mil) plus the one
+OD point at sea-level static, first at mil power and then at max afterburner.
+One engine and one OD topology serve both modes — see
+``docs/adr/0001-single-engine-sizing.md`` and ``0002-single-od-topology.md``;
+the public API is ``docs/adr/0005-public-python-api.md``.
 """
-import math
+from dataclasses import dataclass
 
+import numpy as np
 import openmdao.api as om
 
+from f404.config import DRY_DSN_FN, MAX_Tt7, MIL_Tt4, DesignInputs  # noqa: F401 (re-exported)
 from f404.mp_cycle import MPMixedFlowTurbofan
 from f404.printer import page_viewer
 from f404.sweep_utils import STATIC_MN, _scalar
 
-# ── Design-point targets ──────────────────────────────────────────────────────
-MIL_Tt4    = 3100.   # degR — core burner exit at mil power (throttle wall)
-DRY_DSN_FN = 11000.  # lbf  — SLS mil power (no afterburner); sizes the engine
-MAX_AB_FN  = 17700.  # lbf  — SLS max afterburner; an output the next line calibrates to
-MAX_Tt7    = 3607.68 # degR — afterburner exit at max AB. With the augmentor
-                     # loss (mp_cycle.py; 6.6% at this point) the dry-sized
-                     # engine makes MAX_AB_FN here. The cycle's augmentation
-                     # ratio exceeds the targets' (ADR-0001), so this sits below
-                     # the F404's ~3800 R. Combustion efficiency (#35) will move
-                     # it again. See docs/adr/0002-single-od-topology.md.
+MAX_AB_FN = 17700.  # lbf — SLS max AB of the default engine; MAX_Tt7 is calibrated to it
 
 # ── Design-point conditions and component performance ─────────────────────────
 DSN_ALT = 0.0   # ft  — sea level static
@@ -39,60 +33,38 @@ class MaxTt7TooLowError(ValueError):
     """
 
 
-def _validate_design_targets(fn_target, mil_Tt4, max_Tt7):
-    """Reject design targets that can't produce a meaningful sizing.
-
-    These three checks cover the mistakes that otherwise surface only as an
-    opaque Newton failure — or worse, as a silently bound-clipped "solution"
-    that sizes a nonsense engine and corrupts every OD point downstream.
-    """
-    for name, value in (('fn_target', fn_target), ('mil_Tt4', mil_Tt4),
-                        ('max_Tt7', max_Tt7)):
-        if not math.isfinite(value):
-            raise ValueError(
-                f"{name} must be a finite number, got {value!r}. A NaN or inf "
-                f"target propagates through prob.set_val() into the Newton "
-                f"residual without raising, so it has to be caught here."
-            )
-
-    if fn_target <= 0:
-        raise ValueError(
-            f"fn_target must be a positive thrust in lbf, got {fn_target}. "
-            f"The DESIGN W balance solves inlet mass flow against this target; "
-            f"a non-positive target drives W to its 25 lbm/s lower bound and "
-            f"sizes an engine that no off-design point can be trusted from. "
-            f"The default is DRY_DSN_FN ({DRY_DSN_FN:.0f}), SLS mil power."
-        )
-
-    if mil_Tt4 <= 0:
-        raise ValueError(
-            f"mil_Tt4 must be a positive burner exit temperature in degR, got "
-            f"{mil_Tt4}. The FAR_core balance drives burner exit temperature to "
-            f"this target."
-        )
-
-    if max_Tt7 <= 0:
-        raise ValueError(
-            f"max_Tt7 must be a positive afterburner exit temperature in degR, "
-            f"got {max_Tt7}. It has to exceed the augmentor inlet (mixer exit) "
-            f"temperature, ~1500 R at SLS mil; that depends on the cycle, so "
-            f"build_problem() checks it after the dry solve."
-        )
+# DesignInputs field -> (model path, units). max_Tt7 is absent: it is the OD
+# afterburner command at the max-AB anchor, not a DESIGN input.
+DESIGN_INPUT_PATHS = {
+    'fn_target':  ('DESIGN.balance.rhs:W', 'lbf'),
+    'mil_Tt4':    ('DESIGN.balance.rhs:FAR_core', 'degR'),
+    'fan_PR':     ('DESIGN.fan.PR', None),
+    'fan_eff':    ('DESIGN.fan.eff', None),
+    'hpc_PR':     ('DESIGN.hpc.PR', None),
+    'hpc_eff':    ('DESIGN.hpc.eff', None),
+    'hpt_eff':    ('DESIGN.hpt.eff', None),
+    'lpt_eff':    ('DESIGN.lpt.eff', None),
+    'LP_Nmech':   ('DESIGN.LP_Nmech', 'rpm'),
+    'HP_Nmech':   ('DESIGN.HP_Nmech', 'rpm'),
+    'ram_recovery':            ('inlet.ram_recovery', None),
+    'inlet_duct_dPqP':         ('inlet_duct.dPqP', None),
+    'splitter_core_duct_dPqP': ('splitter_core_duct.dPqP', None),
+    'hpt_duct_dPqP':           ('hpt_duct.dPqP', None),
+    'lpt_duct_dPqP':           ('lpt_duct.dPqP', None),
+    'bypass_duct_dPqP':        ('bypass_duct.dPqP', None),
+    'mixer_duct_dPqP':         ('mixer_duct.dPqP', None),
+    'hpc_cool1_frac_W':        ('hpc.cool1:frac_W', None),
+    'bld3_cool3_frac_W':       ('bld3.cool3:frac_W', None),
+    'HPX':                     ('hp_shaft.HPX', 'hp'),
+}
 
 
-def _apply_design_inputs(prob, fn_target, mil_Tt4):
-    """Set DESIGN-point targets, component performance, and initial guesses."""
+def _apply_design_inputs(prob, inputs):
+    """Set the DESIGN flight condition, every design input, and initial guesses."""
     prob.set_val('DESIGN.fc.alt', DSN_ALT, units='ft')
     prob.set_val('DESIGN.fc.MN', DSN_MN)
-    prob.set_val('DESIGN.balance.rhs:W', fn_target, units='lbf')
-    prob.set_val('DESIGN.balance.rhs:FAR_core', mil_Tt4, units='degR')
-
-    prob.set_val('DESIGN.fan.PR', 4.1)
-    prob.set_val('DESIGN.fan.eff', 0.8948)
-    prob.set_val('DESIGN.hpc.PR', 6.5)
-    prob.set_val('DESIGN.hpc.eff', 0.8707)
-    prob.set_val('DESIGN.hpt.eff', 0.8888)
-    prob.set_val('DESIGN.lpt.eff', 0.8996)
+    for field, (path, units) in DESIGN_INPUT_PATHS.items():
+        prob.set_val(path, getattr(inputs, field), units=units)
 
     prob['DESIGN.fc.balance.Pt']    = 5.3
     prob['DESIGN.fc.balance.Tt']    = 450.
@@ -150,43 +122,67 @@ def _check_max_Tt7_is_wet(prob, od, max_Tt7):
         )
 
 
-def build_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, max_Tt7=MAX_Tt7,
-                  verbose=True, on_mil=None):
-    """Build and solve the single-engine MPCycle problem.
+@dataclass(frozen=True, eq=False)
+class Engine:
+    """A sized engine, as ``design()`` returns it.
+
+    ``prob`` is the solved Problem; its OD point is ``prob.model.od_pt``.
+    ``anchor`` is the OD output vector at SLS max AB, the state ``run_point()``
+    and ``sweep()`` restore before every call so results don't depend on
+    earlier calls. Treat an Engine as immutable: a design change goes through
+    ``design()``, since setting a design value on ``prob`` would leave
+    ``inputs`` and ``anchor`` stale.
+    """
+    prob: om.Problem
+    inputs: DesignInputs
+    anchor: np.ndarray
+
+    def restore_anchor(self):
+        """Put the OD state back to SLS max AB, where ``design()`` left it."""
+        _od_outputs(self.prob)[:] = self.anchor
+
+
+def _od_outputs(prob):
+    """The OD point's full output vector: every implicit Newton state, as a view."""
+    return prob.model._get_subsystem(prob.model.od_pt)._outputs.asarray()
+
+
+def design(inputs=DesignInputs(), *, verbose=False):
+    """Size the engine and solve OD at SLS dry mil, then SLS max AB.
 
     Parameters
     ----------
-    fn_target : float
-        SLS dry mil thrust, lbf. Sizes the engine — see
-        ``_validate_design_targets``.
-    mil_Tt4 : float
-        Core burner exit temperature at mil power, degR. Wet points hold it.
-    max_Tt7 : float
-        Afterburner exit temperature at max AB, degR — the ``OD`` target
-        at the SLS point solved here. It must exceed the SLS-mil augmentor
-        inlet temperature (~1500 R), or ``ValueError`` is raised after the
-        dry solve (``MaxTt7TooLowError``, a ``ValueError``).
+    inputs : DesignInputs
+        Validated design inputs; the defaults are the calibrated F404.
     verbose : bool
         Print Newton iterations and the DESIGN/OD result tables.
-    on_mil : callable, optional
-        Called as ``on_mil(prob, od_pt)`` once OD has converged at SLS mil,
-        before going wet, to read that point before max AB overwrites it.
 
     Returns
     -------
-    (openmdao.api.Problem, MPMixedFlowTurbofan)
-        The solved problem, left at SLS max AB, and its model, whose ``od_pt``
-        attribute names the off-design point.
-    """
-    _validate_design_targets(fn_target, mil_Tt4, max_Tt7)
+    Engine
+        Left at SLS max AB.
 
+    Raises
+    ------
+    MaxTt7TooLowError
+        ``inputs.max_Tt7`` is at or below the SLS-mil augmentor inlet
+        temperature (~1500 R), checked after the dry solve.
+    openmdao.api.AnalysisError
+        DESIGN or OD did not converge.
+    """
+    return _solve(inputs, verbose)
+
+
+def _solve(inputs, verbose, on_mil=None):
+    """``design()``, plus ``on_mil(prob, od_pt)`` called once OD has converged
+    at SLS mil, to read that point before max AB overwrites it (``verify``)."""
     prob = om.Problem(reports=False)
     prob.model = mp = MPMixedFlowTurbofan()
     prob.setup()
 
     od = mp.od_pt
-    _apply_design_inputs(prob, fn_target, mil_Tt4)
-    _apply_od_inputs(prob, od, mil_Tt4)
+    _apply_design_inputs(prob, inputs)
+    _apply_od_inputs(prob, od, inputs.mil_Tt4)
     prob.set_val(od + '.aug_ctrl.Tt7_cmd', 0., units='degR')   # dry
 
     prob.set_solver_print(level=-1)
@@ -202,10 +198,10 @@ def build_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, max_Tt7=MAX_Tt7,
     if on_mil is not None:
         on_mil(prob, od)
 
-    _check_max_Tt7_is_wet(prob, od, max_Tt7)
+    _check_max_Tt7_is_wet(prob, od, inputs.max_Tt7)
 
     # Go wet, warm-started from dry mil.
-    prob.set_val(od + '.aug_ctrl.Tt7_cmd', max_Tt7, units='degR')
+    prob.set_val(od + '.aug_ctrl.Tt7_cmd', inputs.max_Tt7, units='degR')
     if verbose:
         print("=" * 60)
         print("Running OD at SLS max AB...")
@@ -213,4 +209,4 @@ def build_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, max_Tt7=MAX_Tt7,
     prob.run_model()
     if verbose:
         page_viewer(prob, od)
-    return prob, mp
+    return Engine(prob, inputs, _od_outputs(prob).copy())

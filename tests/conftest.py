@@ -14,13 +14,13 @@ import tempfile
 
 import pytest
 
-from f404.problems import build_problem
+from f404.problems import design
 
 
 def pytest_configure(config):
     """Send OpenMDAO's ``<script>_out/`` folders to a temp dir, not the cwd.
 
-    Tests that call ``om.Problem()`` directly bypass build_problem()'s
+    Tests that call ``om.Problem()`` directly bypass design()'s
     ``reports=False``. An explicit OPENMDAO_WORKDIR is respected.
     """
     os.environ.setdefault('OPENMDAO_WORKDIR', tempfile.mkdtemp(prefix='f404_om_'))
@@ -29,13 +29,15 @@ def pytest_configure(config):
 @pytest.fixture(scope='session')
 def problem():
     """Converged single-engine problem, OD at SLS max AB. Read-only."""
-    return build_problem(verbose=False)
+    prob = design().prob
+    return prob, prob.model
 
 
 @pytest.fixture(scope='session')
 def dry_mil():
     """The same engine with OD re-solved dry, at SLS mil. Read-only."""
-    prob, mp = build_problem(verbose=False)
+    prob = design().prob
+    mp = prob.model
     prob.set_val(f'{mp.od_pt}.aug_ctrl.Tt7_cmd', 0., units='degR')
     prob.run_model()
     return prob, mp

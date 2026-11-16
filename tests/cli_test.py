@@ -274,9 +274,9 @@ def test_a_command_is_required(capsys):
     # off-design max-AB temperature rather than a DESIGN one (#2).
     (['design', '--mode', 'dry'], 'unrecognized arguments'),
     (['design', '--dsn-tt7', '3800'], 'unrecognized arguments'),
-    (['design', '--fn-target', '-5'], 'fn_target must be a positive'),
-    (['design', '--mil-tt4', 'nan'], 'must be a finite number'),
-    (['design', '--max-tt7', '0'], 'max_Tt7 must be a positive'),
+    (['design', '--fn-target', '-5'], 'design.fn_target: Input should be greater than 0'),
+    (['design', '--mil-tt4', 'nan'], 'design.mil_Tt4: Input should be a finite number'),
+    (['design', '--max-tt7', '0'], 'design.max_Tt7: Input should be greater than 0'),
 ])
 def test_bad_design_arguments_fail_before_any_solve(capsys, argv, fragment):
     fails(capsys, argv, fragment)

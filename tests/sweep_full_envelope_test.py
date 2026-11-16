@@ -7,7 +7,8 @@ combined). It writes full float64 precision so that deck-to-deck comparisons
 import pandas as pd
 import pytest
 
-from f404.problems import build_problem
+from f404.config import DesignInputs
+from f404.problems import design
 from f404.sweep_full_envelope import (
     DEFAULT_ALTS,
     DEFAULT_DRY_POWERS,
@@ -93,12 +94,12 @@ def test_run_mode_sweep_writes_a_deck_for_the_requested_grid(tmp_path, mode, pow
 
 @pytest.mark.slow
 def test_wet_sweep_holds_the_mil_temperature_the_engine_was_built_with(tmp_path):
-    # A problem built with custom targets and handed in via built= must keep
+    # An engine built with custom targets and handed in via engine= must keep
     # its own mil Tt4 in the wet sweep, not the module default (3100 R).
-    built = build_problem(mil_Tt4=3000., verbose=False)
+    engine = design(DesignInputs(mil_Tt4=3000.))
 
     df = run_mode_sweep('wet', [0.], [0.], [3608.], [0.001], out_dir=tmp_path,
-                           built=built)
+                        engine=engine)
 
     assert df['T4'].iloc[0] == pytest.approx(3000., abs=0.01)
 

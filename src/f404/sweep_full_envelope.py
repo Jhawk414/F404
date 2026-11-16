@@ -28,7 +28,7 @@ from pathlib import Path
 import pandas as pd
 from openmdao.utils.om_warnings import SolverWarning
 
-from f404.problems import build_problem, MAX_Tt7
+from f404.problems import MAX_Tt7, design
 from f404.sweep_utils import build_snake_sweep, STATIC_MN, SweepRunner, _scalar
 
 # ── Default sweep grid (shared by both modes) ────────────────────────────────
@@ -74,7 +74,7 @@ def configure_runtime():
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 
-def run_mode_sweep(mode, alts, dTs_vals, powers, machs, out_dir='.', built=None):
+def run_mode_sweep(mode, alts, dTs_vals, powers, machs, out_dir='.', engine=None):
     """Sweep one mode of the sized engine and write its deck.
 
     Parameters
@@ -87,8 +87,8 @@ def run_mode_sweep(mode, alts, dTs_vals, powers, machs, out_dir='.', built=None)
         Flight Mach numbers, ascending.
     out_dir : path-like
         Directory the ``cycle_deck_<mode>.csv`` is written to.
-    built : (Problem, MPMixedFlowTurbofan), optional
-        A problem from ``build_problem()`` to sweep; built here if omitted.
+    engine : Engine, optional
+        An engine from ``design()`` to sweep; the default engine if omitted.
 
     Returns
     -------
@@ -97,7 +97,8 @@ def run_mode_sweep(mode, alts, dTs_vals, powers, machs, out_dir='.', built=None)
     """
     if mode not in ('dry', 'wet'):
         raise ValueError(f"mode must be 'dry' or 'wet', got {mode!r}")
-    prob, mp = built if built is not None else build_problem()
+    prob = (engine if engine is not None else design(verbose=True)).prob
+    mp = prob.model
     prob.set_solver_print(level=-1)
     # Wet holds Tt4 at the mil value this engine was built with, which may
     # not be problems.MIL_Tt4 if the caller passed custom targets.
@@ -132,18 +133,15 @@ def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
     out_dir.mkdir(parents=True, exist_ok=True)
 
     st_total = time.time()
-    built = build_problem()
-    prob, mp = built
-    # Both modes run on the one OD point, so each starts from the SLS max-AB
-    # solution build_problem() left, not from where the previous sweep ended.
-    od_states = prob.model._get_subsystem(mp.od_pt)._outputs.asarray()
-    anchor = od_states.copy()
+    engine = design(verbose=True)
     results = {}
     for m, powers in (('dry', dry_powers), ('wet', wet_powers)):
         if mode in (m, 'both'):
-            od_states[:] = anchor
+            # Both modes run on the one OD point, so each starts from the SLS
+            # max-AB anchor, not from where the previous sweep ended.
+            engine.restore_anchor()
             results[m] = run_mode_sweep(
-                m, alts, dTs_vals, powers, machs, out_dir, built)
+                m, alts, dTs_vals, powers, machs, out_dir, engine)
 
     if mode == 'both':
         df_all = pd.concat([results['dry'], results['wet']], ignore_index=True)
