@@ -161,13 +161,14 @@ def run_point(engine, *, mode, alt, mach, dts, throttle, verbose=False):
 
 
 def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
-               dry_powers=DEFAULT_DRY_POWERS, wet_powers=DEFAULT_WET_POWERS,
+               dry_powers=None, wet_powers=None,
                machs=DEFAULT_MACHS, out_dir='.', inputs=DesignInputs()):
     """Size the engine from ``inputs``, run the dry sweep, the wet sweep, or
     both, and write the decks: the driver behind ``f404 sweep`` and YAML runs.
 
     ``mode`` is 'dry', 'wet' or 'both'; 'both' also writes the combined
-    ``cycle_deck_full_envelope.csv``. Returns ``{mode: DataFrame}`` for the
+    ``cycle_deck_full_envelope.csv``. Throttles left as None run down from
+    the sized engine's ``mil_Tt4`` and ``max_Tt7``, as in ``sweep()``. Returns ``{mode: DataFrame}`` for the
     modes that ran.
     """
     if mode not in ('dry', 'wet', 'both'):
