@@ -22,9 +22,11 @@ MAX_Tt7    = 3607.68 # degR — afterburner exit at max AB. With the augmentor
 
 class StrictModel(BaseModel):
     """Base for every user-input model: no unknown keys, no type coercion,
-    no NaN or inf, and immutable once validated."""
+    no NaN or inf, and immutable once validated. An instance is revalidated
+    wherever it is validated again, since ``model_copy(update=...)`` skips
+    validation."""
     model_config = ConfigDict(extra='forbid', strict=True, frozen=True,
-                              allow_inf_nan=False)
+                              allow_inf_nan=False, revalidate_instances='always')
 
 
 PressureRatio = Annotated[float, Field(gt=1)]

@@ -297,9 +297,13 @@ def test_every_design_input_moves_the_solved_engine(problem):
         assert any(abs(totals[o, path]).max() > 1e-6 for o in of), field
 
 
-def test_design_validates_a_mapping_before_building_anything():
+@pytest.mark.parametrize('inputs', [
+    {'fan_eff': 1.05},
+    DesignInputs().model_copy(update={'fan_eff': 1.05}),   # copy skips validation
+])
+def test_design_validates_its_inputs_before_building_anything(inputs):
     with pytest.raises(ValueError, match='fan_eff'):
-        design({'fan_eff': 1.05})
+        design(inputs)
 
 
 @pytest.mark.slow
