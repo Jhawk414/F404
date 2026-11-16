@@ -264,6 +264,7 @@ class SweepConfig(StrictModel):
 
 
 class RunConfig(StrictModel):
+    design: DesignInputs = DesignInputs()
     sweep: SweepConfig
 
 
@@ -308,7 +309,11 @@ def load_config(path) -> RunConfig:
 
 
 EXAMPLE_YAML = '''\
-# f404 sweep run: f404 <file>.yml. Every key is required.
+# f404 sweep run: f404 <file>.yml. Every sweep key is required.
+# design is optional; any key left out keeps the calibrated default engine.
+design:
+  fn_target: 11000          # lbf, SLS dry mil thrust that sizes the engine
+  hpc_PR: 6.5               # also: fan_PR, *_eff, *_dPqP, *_frac_W, ... (CLI guide)
 # Each axis (mach, alt, dts, throttle.dry, throttle.wet) takes any of:
 #   number          0             one held point
 #   quoted range    '0,0.4,0.2'   min,max,step, inclusive of max

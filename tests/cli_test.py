@@ -480,6 +480,18 @@ def write_run(path, **changes):
     return path
 
 
+def test_yaml_design_block_sizes_the_engine_and_is_snapshotted(recorded, tmp_path):
+    path = write_run(tmp_path / 'run.yml', mode='dry')
+    raw = yaml.safe_load(path.read_text())
+    path.write_text(yaml.safe_dump({'design': {'hpc_PR': 7.0}, **raw}))
+
+    assert cli.main([str(path)]) == 0
+
+    inputs = recorded[0][1]['inputs']
+    assert (inputs.hpc_PR, inputs.fan_PR) == (7.0, cli.DesignInputs().fan_PR)
+    assert cli.load_config(tmp_path / 'results' / 'run_dry.resolved.yml').design == inputs
+
+
 def test_yaml_run_normalizes_axes_and_writes_reloadable_snapshot(recorded, tmp_path):
     path = write_run(tmp_path / 'input.yaml')
     assert cli.main([str(path)]) == 0
@@ -519,7 +531,8 @@ def test_flag_and_yaml_sweeps_use_the_same_normalized_settings(recorded, tmp_pat
     ('sweep: [', 'cannot read YAML config'),
     ('sweep:\n  mode: dry\n  mode: wet\n', 'duplicate key'),
     ('sweep: {}', 'Field required'),
-    ('design: {}', 'Extra inputs'),
+    ('design: {fan_eff: 1.05}', 'design.fan_eff: Input should be less than or equal to 1'),
+    ('design: {fan_pr: 4.3}', 'Extra inputs'),
     ('sweep: null', 'sweep'),
     ('', 'invalid run config'),
 ])

@@ -242,16 +242,18 @@ def _validation_errors(exc, prefix=''):
     return '\n'.join(lines)
 
 
-def _run_sweep(config, parser):
+def _run_sweep(config, parser, inputs=DesignInputs()):
     try:
         config.out.mkdir(parents=True, exist_ok=True)
+        design_inputs = inputs.model_dump(mode='json')
         resolved = config.model_dump(mode='json')
         resolved['out'] = str(config.out.resolve())
         modes = ('dry', 'wet', 'both') if config.mode == 'both' else (config.mode,)
         for mode in modes:
             resolved['mode'] = mode
             (config.out / f'run_{mode}.resolved.yml').write_text(
-                yaml.safe_dump({'sweep': resolved}, sort_keys=False), encoding='utf-8')
+                yaml.safe_dump({'design': design_inputs, 'sweep': resolved}, sort_keys=False),
+                encoding='utf-8')
     except OSError as exc:
         parser.error(f"cannot write sweep configuration in {config.out}: {exc}")
 
@@ -259,7 +261,7 @@ def _run_sweep(config, parser):
     sfe.run_sweeps(
         config.mode, alts=config.alt, dTs_vals=config.dts,
         dry_powers=config.throttle.dry, wet_powers=config.throttle.wet,
-        machs=config.mach, out_dir=config.out,
+        machs=config.mach, out_dir=config.out, inputs=inputs,
     )
     return 0
 
@@ -357,7 +359,7 @@ def main(argv=None):
             parser.error(f"invalid run config {argv[0]}:\n{_validation_errors(exc)}")
         except ValueError as exc:
             parser.error(str(exc))
-        return _run_sweep(config.sweep, parser)
+        return _run_sweep(config.sweep, parser, config.design)
 
     args = parser.parse_args(_join_negative_ranges(argv))
     if args.example_yaml:
