@@ -1,4 +1,4 @@
-# F404 handoff — 27 Oct 2026
+# F404 handoff — 15 Nov 2026
 
 Current state and next work only. Earlier session history is in
 `git log --follow -- AGENTS/`; architecture decisions are in `docs/adr/`.
@@ -17,7 +17,7 @@ Current state and next work only. Earlier session history is in
   The README holds the per-Mach counts; decks are committed under `deck/`.
 - Current local reference environment: Python 3.9.6, OpenMDAO 3.39.0,
   NumPy 2.0.2. CI also tests newer OpenMDAO releases; results can differ.
-- The full local suite passes **325 tests (281 fast), 97% coverage**. It covers
+- The full local suite passes **340 tests (292 fast), 97% coverage**. It covers
   sizing goldens, convergence regressions, CLI behavior, and validation. Fast PR CI excludes tests marked `slow`; the full
   matrix runs on `main`, manual dispatch, or the user-applied `full-ci` label.
   **Agents must not add `full-ci`.**
@@ -30,65 +30,60 @@ Architecture records:
   explicit wet A8 law.
 - [ADR-0003](../docs/adr/0003-fail-fast-sweep.md): 20-iteration sweep cap and
   rollback of unsuccessful bridges. Model/cold-solve default remains 50.
+- [ADR-0004](../docs/adr/0004-verify-install-check.md): `f404 verify`, 1e-6
+  relative tolerance on a fixed solve path.
+- [ADR-0005](../docs/adr/0005-public-python-api.md): the public Python API.
 
-## Latest work: `f404 verify` install check
+## Latest work: public Python API (#47, #17)
 
-[#53](https://github.com/Jhawk414/F404/issues/53) adds `f404 verify [--json]`
-([ADR-0004](../docs/adr/0004-verify-install-check.md)): DESIGN, SLS dry mil
-and SLS max AB through `build_problem()`, 21 checks against
-`src/f404/verify_reference.json` at relative 1e-6, about 3 s. The fast PR job
-runs it.
+[PR #58](https://github.com/Jhawk414/F404/pull/58) closes
+[#47](https://github.com/Jhawk414/F404/issues/47) and
+[#17](https://github.com/Jhawk414/F404/issues/17) (narrowed to Pydantic at
+user-input boundaries). Design: [ADR-0005](../docs/adr/0005-public-python-api.md);
+usage: [`docs/guide/python.md`](../docs/guide/python.md).
 
-- Use it as #47's quick regression check: the public API must reproduce
-  these values unchanged. Dry mil is read through `build_problem(on_mil=...)`
-  on the existing solve path; re-solving it from max AB lands 2e-6 away.
-- A PR that deliberately moves these results regenerates the reference from
-  `f404 verify --json` and says why. `--extended` and a release fingerprint
-  are deferred (ADR-0004, "To revisit").
-- [#54](https://github.com/Jhawk414/F404/issues/54): every `f404` command
-  leaves an OpenMDAO `f404_out/` folder in the working directory.
+- `from f404 import DesignInputs, Engine, design, run_point, sweep`.
+  `DesignInputs` (`config.py`) is a frozen, strict model of every sizing
+  input, with field names following model paths, and is the only home of
+  the defaults (`mp_cycle.py` reads them). `problems.DESIGN_INPUT_PATHS` maps
+  each field to its path, for `compute_totals(wrt=...)` and the studio.
+- `design()` replaced `build_problem()` and returns `Engine(prob, inputs,
+  anchor)`. `run_point()`/`sweep()` restore the SLS max-AB anchor before every
+  call, then bridge from home with the existing 5-step bridge
+  (`SweepRunner.run_sweep(start=...)`). A spike found it reaches all 81
+  in-envelope deck points tried, within about 3.6e-6 of the deck.
+- The CLI routes through these. `run.yml` may carry an optional `design:`
+  block; resolved snapshots now record the full design inputs.
+- `_validate_design_targets()` is gone: `DesignInputs` owns validation. Bounds
+  and DESIGN feasibility diagnostics moved to
+  [#57](https://github.com/Jhawk414/F404/issues/57).
+- Decks, goldens and `f404 verify` are unchanged (verify: max relative
+  difference 0.0; deck SHA-256 proof in the PR).
 
-## Earlier work: YAML config and thin Pydantic validation
+## Earlier work: `f404 verify` and YAML runs
 
-[PR #45](https://github.com/Jhawk414/F404/pull/45) closes
-[#16](https://github.com/Jhawk414/F404/issues/16) and starts the thin sweep-run
-slice of [#17](https://github.com/Jhawk414/F404/issues/17). `f404 run.yml` runs
-the committed full grid; `--example-yaml` replaces the proposed `init-config`
-and prints a runnable example with inline descriptions. The complete schema,
-axis order/10,000-point limit, and snapshot rules live in the
-[CLI guide](../docs/guide/cli.md#yaml-run-configuration).
-
-- `RunConfig`/`SweepConfig` and nested `ThrottleConfig` share axis validation
-  with CLI flags. Range strings expand into traversal order; explicit lists
-  must already be in that order or fail before output/solver work.
-- Dry, wet, and combined decks have corresponding `run_dry.resolved.yml`,
-  `run_wet.resolved.yml`, and `run_both.resolved.yml` snapshots. Single-mode
-  runs preserve the other mode and combined snapshots.
-- Physics, default grids, and solver settings are unchanged. CLI behavior does
-  change: help now eagerly imports OpenMDAO, and every sweep writes snapshots
-  before solving, exiting 2 if output setup or snapshot writing fails.
-- Full-deck SHA-256 proof and current validation results are in the PR's
-  **Proof of function / behavior** section. Review regressions reject ambiguous
-  lists before starting a run and preserve snapshots across successive modes.
-
-Still deferred under #17: design/component inputs (now planned as the base of
-#47), individual sweep points, shared solver bounds, and better DESIGN
-feasibility diagnostics. Existing `problems._validate_design_targets()` stays
-until that design-input slice.
-Deck writing and comparison retain plain validation rather than Pydantic.
+- `f404 verify [--json]` ([#53](https://github.com/Jhawk414/F404/issues/53),
+  [ADR-0004](../docs/adr/0004-verify-install-check.md)) solves DESIGN, SLS dry
+  mil and SLS max AB and makes 21 checks against `verify_reference.json` at
+  relative 1e-6, in about 3 s; the fast PR job runs it. It reads dry mil
+  through `problems._solve(on_mil=...)`. A PR that deliberately moves results
+  regenerates the reference from `f404 verify --json` and says why.
+- `f404 run.yml` and `--example-yaml` ([PR #45](https://github.com/Jhawk414/F404/pull/45))
+  validate sweep axes with the same rules as CLI flags; the schema, axis order
+  and snapshot rules are in the [CLI guide](../docs/guide/cli.md#yaml-run-configuration).
+  Deck writing and comparison keep plain validation rather than Pydantic.
 
 ## Next work
 
-**#30 ADR → #47 (with #17 design inputs) → #46 phases 1–3 alongside the PLA
-axis → rest of #17 → #48 → #8 + #25 + #35, measuring #3 → #10.**
-[#38](https://github.com/Jhawk414/F404/issues/38) is independent.
+**#30 ADR → #46 phases 1–3 alongside the PLA axis → #57 → #48 → #8 + #25 +
+#35, measuring #3 → #10.** [#38](https://github.com/Jhawk414/F404/issues/38)
+builds on #57's single bounds table and is otherwise independent.
 
 | Issue | Remaining scope |
 |---|---|
-| [#30](https://github.com/Jhawk414/F404/issues/30) | Decide what PLA commands, record an ADR and provisional schedule; add the PLA axis afterward |
-| [#47](https://github.com/Jhawk414/F404/issues/47) | Public Python API: `DesignInputs` (#17 candidate 1), `design`/`run_point`/`sweep`; CLI routes through it with byte-identical decks |
-| [#46](https://github.com/Jhawk414/F404/issues/46) | `f404.studio`: design sweeps, design→OD bridging, analytic sensitivities; uses Tt4/Tt7 `throttle`, so it doesn't wait for the PLA axis |
-| [#17](https://github.com/Jhawk414/F404/issues/17) | After #47: sweep-point models and shared solver bounds |
+| [#30](https://github.com/Jhawk414/F404/issues/30) | Decide what PLA commands, record ADR-0006 and a provisional schedule; add the PLA axis afterward as a `run_point()`/`sweep()` keyword. Schedule parameters go in a sibling model to `DesignInputs` (ADR-0005) |
+| [#46](https://github.com/Jhawk414/F404/issues/46) | `f404.studio` on the public API: design sweeps, design→OD bridging, analytic sensitivities; uses Tt4/Tt7 `throttle`, so it doesn't wait for the PLA axis. Needs a column-prefix convention (`fan_PR` is both an input and a deck column) and may add `design(warm_start=)` (ADR-0005) |
+| [#57](https://github.com/Jhawk414/F404/issues/57) | Single-source balance bounds (drop `_OD_BOUNDS` and its drift test), DESIGN bound check and an exported error for infeasible sizing |
 | [#48](https://github.com/Jhawk414/F404/issues/48) | Gradient-assisted least-squares calibration to a targets file; studio sub-issue, tested without moving goldens |
 | [#8](https://github.com/Jhawk414/F404/issues/8) + [#25](https://github.com/Jhawk414/F404/issues/25) | Dry A8 scheduling and idle/part-power calibration, together, run with #48 |
 | [#35](https://github.com/Jhawk414/F404/issues/35) | Combustion efficiency in both burners; recalibrate max AB afterward |
@@ -149,8 +144,8 @@ PDF searches when available.
   convergence counts; use current code and decks.
 - Re-run `pip install -e ".[all]"` after pulling package/dependency changes.
   A stale non-editable pyCycle install once shadowed the checkout.
-- Test fixtures often use `verbose=False`; exercise printing paths when
-  changing them. `printer.py` passes `file` because pyCycle helpers bind
+- `design()` and `sweep()` are quiet by default; the CLI passes
+  `verbose=True`. Exercise printing paths when changing them. `printer.py` passes `file` because pyCycle helpers bind
   stdout at import, otherwise defeating `capsys`.
 - Keep the machine awake with `caffeinate -i` for sweeps. Each mode takes
   roughly 30–35 minutes in the reference environment; run modes in separate
@@ -159,11 +154,20 @@ PDF searches when available.
 
 **Model and solver**
 
-- One `OD` point: `mp.od_pt`. Removed names include `OD_dry`, `OD_wet`,
-  `od_pts`, `frozen_pts`, `a8_ctrl`, and `_OD_WET_BOUNDS`.
+- One `OD` point: `engine.prob.model.od_pt`. Removed names include `OD_dry`,
+  `OD_wet`, `od_pts`, `frozen_pts`, `a8_ctrl`, `_OD_WET_BOUNDS`,
+  `build_problem` and `run_mode_sweep`.
 - `SweepRunner` seeds its last-good state from the problem it receives
-  (normally SLS max AB). A remote first point can fail where the same point
-  midway through the default traversal converges. Traversal order matters.
+  (normally SLS max AB). `sweep()` and `run_point()` pass `start=` (static,
+  0 ft, dTs 0, the mode's top power), so a first point away from home is
+  bridged; the default grids start at home and get no bridge. Traversal order
+  still matters inside a sweep.
+- Treat an `Engine` as immutable: change the design through `design()`.
+  Setting a design value on `engine.prob` leaves `inputs` and `anchor` stale.
+- `run_point()` reaches a point by a different path than the deck or
+  `f404 verify`, so it agrees with them only to the solver-path floor
+  (about 3e-6, above verify's 1e-6). Compare it to the deck at about 1e-5, and
+  take any `run_point()`-based reference from `run_point()` itself.
 - Sweeps leave OD Newton capped at 20. Before raising that cap after a model
   change, re-measure iteration histories and consider ADR-0003's stall
   detection alternative. Known failed bridges roll back to the last good state.

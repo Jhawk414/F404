@@ -54,10 +54,10 @@ F404/
 ├── src/f404/                   # F404 application code
 │   ├── engine_model.py         # MixedFlowTurbofan cycle (fan, HPC, burner, HPT/LPT, mixer, afterburner, nozzle), AugmentorControl, NozzleSchedule (A8)
 │   ├── mp_cycle.py             # MPMixedFlowTurbofan: one DESIGN (dry mil) feeding one OD point for dry and wet; augmentor-loss constants
-│   ├── problems.py             # build_problem(): design targets, max-AB calibration, initial guesses, input validation
+│   ├── problems.py             # design() -> Engine: applies DesignInputs, initial guesses, sizes the engine and solves SLS mil / max AB
 │   ├── sweep_utils.py          # snake sweep grid, bridge warm-starting, SweepRunner (fail-fast Newton cap, ADR-0003), result extraction
-│   ├── sweep_full_envelope.py  # default grid, run_sweeps() for dry, wet or both, cycle-deck CSV writer
-│   ├── config.py               # YAML loading, Pydantic sweep validation, shared range parsing
+│   ├── sweep_full_envelope.py  # sweep() and run_point() for OD runs, default grid, run_sweeps() CLI driver, cycle-deck CSV writer
+│   ├── config.py               # Pydantic input models (DesignInputs, RunConfig), YAML loading, range parsing
 │   ├── cli.py                  # f404 command: YAML runs, design, sweep, compare
 │   ├── compare_decks.py        # column-by-column deck comparison behind f404 compare
 │   ├── verify.py               # install check behind f404 verify; verify_reference.json holds its expected values
@@ -101,18 +101,20 @@ Key cycle components and mechanical couplings:
 
 ## Software architecture and data flow
 
-Current data flow from CLI invocation to output CSV.
+Current data flow from a CLI or Python call to output CSV. The `f404`
+package exports `DesignInputs`, `design`, `run_point` and `sweep`; the CLI
+is a thin layer over them ([ADR-0005](docs/adr/0005-public-python-api.md)).
 
 ```mermaid
 flowchart TD
     subgraph Drivers["Entry point (src/f404/)"]
         CLI["cli.py  (f404)<br/>run.yml · sweep · design · compare<br/>--mode · --mach · --alt · --dts · --throttle · --out"]
-        CFG["config.py<br/>SweepConfig · RunConfig<br/>YAML and flag sweep validation"]
-        A["sweep_full_envelope.py<br/>run_sweeps · write_deck_csv"]
+        CFG["config.py<br/>DesignInputs · SweepConfig · RunConfig<br/>YAML, flag and Python input validation"]
+        A["sweep_full_envelope.py<br/>sweep · run_point · run_sweeps · write_deck_csv"]
     end
 
     subgraph Model["Cycle model"]
-        B["problems.py<br/>build_problem<br/>targets, calibration, guesses, validation"]
+        B["problems.py<br/>design → Engine<br/>design inputs, guesses, SLS mil / max AB"]
         C["mp_cycle.py<br/>MPMixedFlowTurbofan(pyc.MPCycle)<br/>wires DESIGN + OD"]
         D["engine_model.py<br/>MixedFlowTurbofan(pyc.Cycle)<br/>single-point thermodynamic cycle"]
     end
@@ -160,7 +162,7 @@ cd F404
 pip install -e .[all]
 ```
 
-Requires Python 3.9+ and OpenMDAO 3.17.0+. Sweep configuration uses
+Requires Python 3.9+ and OpenMDAO 3.17.0+. Input validation uses
 Pydantic v2 and PyYAML, installed with the package.
 
 ### Verify your install
@@ -195,7 +197,20 @@ f404 --example-yaml > custom.yml
 ```
 
 See the [CLI guide](docs/guide/cli.md#yaml-run-configuration) for required keys,
-axis forms/order, and the per-mode resolved snapshots written beside the decks.
+axis forms/order, the optional `design:` block that re-sizes the engine, and
+the per-mode resolved snapshots written beside the decks.
+
+### Python
+
+The same engine from Python; see the [Python guide](docs/guide/python.md).
+
+```python
+from f404 import DesignInputs, design, run_point, sweep
+
+eng = design(DesignInputs(hpc_PR=7.0))
+row = run_point(eng, mode='dry', alt=5000, mach=0.8, dts=-30, throttle=2700)
+df = sweep(eng, mode='wet', mach=[0.001, 0.4], alt=0, dts=0)
+```
 
 ### `f404 design`
 
@@ -269,7 +284,7 @@ and the fast tests (`-m "not slow"`, Ubuntu 3.12, about a minute). The full suit
 and on a PR carrying the `full-ci` label. Apply that label when the PR is about
 to merge: the golden baselines and convergence regressions are all `slow`.
 
-331 tests (286 fast), 97% coverage. The driver and
+340 tests (292 fast), 97% coverage. The driver and
 CLI are importable and covered; remaining gaps are mainly uncommon input/IO
 errors, solver-failure paths, and the one-line `__main__` shims.
 
@@ -320,12 +335,10 @@ The recommended order for taking it on is in the latest `AGENTS/HANDOFF_*.md`,
 and design decisions are recorded in [`docs/adr/`](docs/adr/). What has shipped
 is in the git history and the merged pull requests.
 
-Next up: [#30](https://github.com/Jhawk414/F404/issues/30) (define PLA), then
-a public Python API with design inputs as data
-([#47](https://github.com/Jhawk414/F404/issues/47), from
-[#17](https://github.com/Jhawk414/F404/issues/17)) and the `f404.studio`
-study tool ([#46](https://github.com/Jhawk414/F404/issues/46)) ahead of
-calibration.
+Next up: [#30](https://github.com/Jhawk414/F404/issues/30) (define PLA) and
+the `f404.studio` study tool ([#46](https://github.com/Jhawk414/F404/issues/46))
+on the public Python API, ahead of calibration
+([#48](https://github.com/Jhawk414/F404/issues/48)).
 
 ## Acknowledgments
 
