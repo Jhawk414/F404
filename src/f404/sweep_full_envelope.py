@@ -92,7 +92,7 @@ def sweep(engine, *, mode, mach=DEFAULT_MACHS, alt=DEFAULT_ALTS, dts=DEFAULT_DTS
         calls don't steer the result (up to solver-internal state, #59). Afterwards ``engine.prob`` is
         solved at the last point only if that point converged.
     mode : {'dry', 'wet'}
-    mach, alt, dts, throttle : sequence of float or range string
+    mach, alt, dts, throttle : list of float, float, or range string
         The axes, validated as for the CLI and YAML (``config.axis``):
         Mach ascending, alt ascending, dts hot then cold, throttle descending.
         ``throttle`` is Tt4 dry and Tt7 wet, degR; by default four levels

@@ -215,6 +215,10 @@ pyCycle and of the decks.
 
 ### Recorded for later
 
+- **Snapshot migration**: resolved snapshots store `design:` by field name.
+  Renaming a field, or moving `max_Tt7` into #30's schedule model, needs a
+  migration for old snapshots, or they fail validation as unknown keys.
+
 - **Schedule parameters** (dry A8 #8, PLA #30) change OD behaviour, not the
   sizing, and #48 will calibrate them. They go in a sibling model passed to
   `design()` (e.g. `design(inputs, schedules=...)`), not into `DesignInputs`,

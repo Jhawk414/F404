@@ -34,7 +34,9 @@ class MaxTt7TooLowError(ValueError):
 
 
 # DesignInputs field -> (model path, units). max_Tt7 is absent: it is the OD
-# afterburner command at the max-AB anchor, not a DESIGN input.
+# afterburner command at the max-AB anchor, not a DESIGN input. mil_Tt4 maps
+# to its DESIGN target only; wet OD points also hold OD.balance.rhs:FAR_core
+# at mil_Tt4, so a wet-point total with respect to mil_Tt4 needs both paths.
 DESIGN_INPUT_PATHS = {
     'fn_target':  ('DESIGN.balance.rhs:W', 'lbf'),
     'mil_Tt4':    ('DESIGN.balance.rhs:FAR_core', 'degR'),
@@ -137,7 +139,12 @@ class Engine:
     anchor: np.ndarray
 
     def restore_anchor(self):
-        """Put the OD state back to SLS max AB, where ``design()`` left it."""
+        """Put the OD output vector back to SLS max AB, where ``design()`` left it.
+
+        Only the OD outputs: OD inputs are re-set per point, and state inside
+        the solvers carries over (#59). After any ``run_point()`` or
+        ``sweep()``, OD Newton's ``maxiter`` stays at ``SWEEP_MAXITER`` (20).
+        """
         _od_outputs(self.prob)[:] = self.anchor
 
 

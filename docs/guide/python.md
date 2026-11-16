@@ -49,7 +49,9 @@ engine's max AB is uncalibrated.
 
 Each field name is its model path with `.` and `:` replaced by `_`.
 `f404.problems.DESIGN_INPUT_PATHS` maps each field to its path and units, for
-`prob.get_val()` or `compute_totals()`.
+`prob.get_val()` or `compute_totals()`. `mil_Tt4` maps to its DESIGN target
+only. Wet OD points also hold `OD.balance.rhs:FAR_core` at `mil_Tt4`, so a
+wet-point total with respect to `mil_Tt4` is the sum over both paths.
 
 ## `design(inputs=DesignInputs(), *, verbose=False)`
 
@@ -59,7 +61,9 @@ an `Engine`:
 - `eng.prob`: the solved `openmdao.api.Problem`; the OD point is
   `eng.prob.model.od_pt` (`'OD'`).
 - `eng.inputs`: the `DesignInputs` it was sized from.
-- `eng.anchor`: the OD state at SLS max AB that every OD call starts from.
+- `eng.anchor`: the OD output vector at SLS max AB that every OD call
+  starts from (`eng.restore_anchor()` puts it back). After an OD call the OD
+  Newton solver keeps the sweeps' 20-iteration cap; `design()` uses 50.
 
 `verbose=True` prints Newton iterations and the result tables, as
 `f404 design` does. A solve that doesn't converge raises
