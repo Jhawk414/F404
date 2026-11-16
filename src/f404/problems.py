@@ -180,7 +180,7 @@ def build_problem(fn_target=DRY_DSN_FN, mil_Tt4=MIL_Tt4, max_Tt7=MAX_Tt7,
     """
     _validate_design_targets(fn_target, mil_Tt4, max_Tt7)
 
-    prob = om.Problem()
+    prob = om.Problem(reports=False)
     prob.model = mp = MPMixedFlowTurbofan()
     prob.setup()
 

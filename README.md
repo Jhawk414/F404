@@ -160,7 +160,7 @@ cd F404
 pip install -e .[all]
 ```
 
-Requires Python 3.9+ and OpenMDAO 3.10.0+. Sweep configuration uses
+Requires Python 3.9+ and OpenMDAO 3.17.0+. Sweep configuration uses
 Pydantic v2 and PyYAML, installed with the package.
 
 ### Verify your install
