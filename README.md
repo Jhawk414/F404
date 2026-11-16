@@ -209,7 +209,7 @@ from f404 import DesignInputs, design, run_point, sweep
 
 eng = design(DesignInputs(hpc_PR=7.0))
 row = run_point(eng, mode='dry', alt=5000, mach=0.8, dts=-30, throttle=2700)
-df = sweep(eng, mode='wet', mach=[0.001, 0.4], alt=0, dts=0)
+deck = sweep(eng, mode='wet', mach=[0.001, 0.4], alt=0, dts=0)
 ```
 
 ### `f404 design`

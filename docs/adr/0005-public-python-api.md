@@ -45,7 +45,7 @@ from f404 import DesignInputs, Engine, design, run_point, sweep
 
 eng = design(DesignInputs(fn_target=11_000, hpc_PR=7.0))   # Engine, at SLS max AB
 row = run_point(eng, mode='dry', alt=5000, mach=0.8, dts=-30, throttle=2700)  # dict
-df = sweep(eng, mode='wet', mach=[0.001, 0.4], alt=0, dts=0)                  # DataFrame
+deck = sweep(eng, mode='wet', mach=[0.001, 0.4], alt=0, dts=0)                  # DataFrame
 ```
 
 1. **`DesignInputs`** (`config.py`): a flat, frozen Pydantic model. It is
