@@ -128,11 +128,13 @@ class Engine:
     """A sized engine, as ``design()`` returns it.
 
     ``prob`` is the solved Problem; its OD point is ``prob.model.od_pt``.
-    ``anchor`` is the OD output vector at SLS max AB, the state ``run_point()``
-    and ``sweep()`` restore before every call, so earlier calls don't steer
-    them (solver-internal state can still carry over at ~1e-5; #59). Treat an Engine as immutable: a design change goes through
-    ``design()``, since setting a design value on ``prob`` would leave
-    ``inputs`` and ``anchor`` stale.
+    ``anchor`` is the OD output vector at SLS max AB. ``run_point()`` and
+    ``sweep()`` restore it before every call, so earlier calls don't steer
+    them, though solver-internal state can carry over at about 1e-5 (#59).
+
+    Treat an Engine as immutable: change the design through ``design()``.
+    Setting a design value on ``prob`` would leave ``inputs`` and ``anchor``
+    stale.
     """
     prob: om.Problem
     inputs: DesignInputs
@@ -146,6 +148,12 @@ class Engine:
         ``sweep()``, OD Newton's ``maxiter`` stays at ``SWEEP_MAXITER`` (20).
         """
         _od_outputs(self.prob)[:] = self.anchor
+
+    def home(self, mode):
+        """The anchor's flight condition, as a sweep point at ``mode``'s top
+        power: ``mil_Tt4`` dry, ``max_Tt7`` wet."""
+        power = self.inputs.mil_Tt4 if mode == 'dry' else self.inputs.max_Tt7
+        return {'MN': DSN_MN, 'alt': DSN_ALT, 'dTs': 0., 'power': power}
 
 
 def _od_outputs(prob):

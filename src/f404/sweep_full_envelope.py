@@ -108,18 +108,15 @@ def sweep(engine, *, mode, mach=DEFAULT_MACHS, alt=DEFAULT_ALTS, dts=DEFAULT_DTS
         One row per point, failed ones included: ``INPUT_COLUMNS``, then
         ``DECK_COLUMNS`` (blank where the point failed), then ``failure``.
     """
-    return _sweep(engine, mode, mach, alt, dts, throttle, out_dir, verbose,
-                  MAX_BRIDGE_STEPS)
-
-
-def _sweep(engine, mode, mach, alt, dts, throttle, out_dir, verbose, bridge_steps):
     if mode not in ('dry', 'wet'):
         raise ValueError(f"mode must be 'dry' or 'wet', got {mode!r}")
-    inputs = engine.inputs
-    top = inputs.mil_Tt4 if mode == 'dry' else inputs.max_Tt7
+    # The anchor's condition at this mode's top power. The default grids
+    # start here, so their first point needs no bridge.
+    home = engine.home(mode)
     points = build_snake_sweep(
         axis(alt, 'alt'), axis(dts, 'dts'),
-        axis(default_throttle(top) if throttle is None else throttle, 'throttle'),
+        axis(default_throttle(home['power']) if throttle is None else throttle,
+             'throttle'),
         axis(mach, 'mach'))
     if verbose:
         print(f"\n{mode.capitalize()} sweep matrix: {len(points)} points")
@@ -128,12 +125,9 @@ def _sweep(engine, mode, mach, alt, dts, throttle, out_dir, verbose, bridge_step
     prob = engine.prob
     prob.set_solver_print(level=-1)
     runner = SweepRunner(prob, od_pt=prob.model.od_pt, afterburn=(mode == 'wet'),
-                         mil_Tt4=inputs.mil_Tt4, verbose=verbose)
-    # The anchor's condition, at this mode's top power. The default grids
-    # start here, so their first point needs no bridge.
-    home = {'MN': STATIC_MN, 'alt': 0., 'dTs': 0., 'power': top}
+                         mil_Tt4=engine.inputs.mil_Tt4, verbose=verbose)
     df = runner.run_sweep(points, bridge_threshold=BRIDGE_THRESHOLD,
-                          max_bridge_steps=bridge_steps, start=home)
+                          max_bridge_steps=MAX_BRIDGE_STEPS, start=home)
     if out_dir is not None:
         write_deck_csv(df, Path(out_dir) / f'cycle_deck_{mode}.csv')
     return df
@@ -155,8 +149,8 @@ def run_point(engine, *, mode, alt, mach, dts, throttle, verbose=False):
         raised. When it converged, ``engine.prob`` is left solved at it,
         so it can be read or differentiated; when it failed, it is not.
     """
-    df = _sweep(engine, mode, [mach], [alt], [dts], [throttle], None, verbose,
-                MAX_BRIDGE_STEPS)
+    df = sweep(engine, mode=mode, mach=[mach], alt=[alt], dts=[dts],
+               throttle=[throttle], verbose=verbose)
     return df.to_dict('records')[0]
 
 
