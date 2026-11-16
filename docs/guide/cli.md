@@ -38,8 +38,25 @@ sweep:
 ```
 
 Every key shown is required, including both `throttle` keys even when running
-one mode. Unknown keys at any level and duplicate YAML keys are errors. Only
-`sweep:` is supported today; design inputs and PLA will be added separately.
+one mode. Unknown keys at any level and duplicate YAML keys are errors.
+
+An optional `design:` block re-sizes the engine before the sweep. Its keys are
+the [`DesignInputs`](python.md#designinputs) fields, and any left out keep the
+calibrated defaults:
+
+```yaml
+design:
+  hpc_PR: 7.0
+  hpc_cool1_frac_W: 0.04
+sweep:
+  ...
+```
+
+The default grids start at the default engine's `mil_Tt4` (3100 R) and
+`max_Tt7` (3607.68 R); set `throttle` to match a re-sized engine's
+temperatures. A throttle list that starts elsewhere is reached through bridge
+points from the sea-level-static start, so it runs, but probably isn't the
+grid you meant.
 
 | Key | Accepted input | Meaning |
 |---|---|---|
@@ -80,8 +97,8 @@ filesystem error context. For example:
 sweep.throttle.dry: throttle values must be in descending traversal order. For a range, quote min,max,step. (got [2500, 3100, 100])
 ```
 
-Every YAML or flag sweep saves resolved axes and an absolute output path in a
-snapshot matching each deck:
+Every YAML or flag sweep saves its full design inputs, resolved axes and an
+absolute output path in a snapshot matching each deck:
 
 | Deck | Snapshot |
 |---|---|
@@ -183,9 +200,13 @@ there is no `--mode`. Three flags override the targets:
 - `--mil-tt4`: core burner exit temperature.
 - `--max-tt7`: max-AB afterburner exit temperature.
 
-A non-converging solve exits 1 with the solver's message. A `--max-tt7` at or
-below the SLS-mil augmentor inlet temperature (~1502 R) would leave the
-afterburner dry, so it exits 2 with `MaxTt7TooLowError`.
+Each value must be a positive, finite number; otherwise the command exits 2
+before solving, naming the field (`design.fn_target: Input should be greater
+than 0 (got -5.0)`). A non-converging solve exits 1 with the solver's message.
+A `--max-tt7` at or below the SLS-mil augmentor inlet temperature (~1502 R)
+would leave the afterburner dry, so it exits 2 with `MaxTt7TooLowError`.
+Component inputs are set through a YAML `design:` block or from
+[Python](python.md).
 
 `python -m f404.sweep_full_envelope [--mode ...]` still works and is
 the same as `f404 sweep`.
