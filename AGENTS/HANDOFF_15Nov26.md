@@ -14,10 +14,10 @@ Current state and next work only. Earlier session history is in
   holding the gas generator near its dry state. Dry PLA/A8 scheduling is open.
 - Default grids: 6 Mach levels, 3 altitudes, 11 temperature offsets, 4 power
   levels: **792 points per mode**. Dry **643/792**, wet **663/792** converge.
-  The README holds the per-Mach counts; decks are committed under `deck/`.
+  [`docs/status.md`](../docs/status.md) holds the per-Mach counts; decks are committed under `deck/`.
 - Current local reference environment: Python 3.9.6, OpenMDAO 3.39.0,
   NumPy 2.0.2. CI also tests newer OpenMDAO releases; results can differ.
-- The full local suite passes **340 tests (292 fast), 97% coverage**. It covers
+- The full local suite passes **343 tests (294 fast)**. It covers
   sizing goldens, convergence regressions, CLI behavior, and validation. Fast PR CI excludes tests marked `slow`; the full
   matrix runs on `main`, manual dispatch, or the user-applied `full-ci` label.
   **Agents must not add `full-ci`.**
@@ -192,7 +192,7 @@ PDF searches when available.
 
 **CLI, decks, and tests**
 
-- Detailed usage belongs in `docs/guide/cli.md`; README keeps short examples.
+- Detailed usage belongs in `docs/guide/cli.md`; the README keeps a short quickstart.
   The guide mirrors read-only to the GitHub wiki; edit the repo copy.
 - Negative-start ranges are joined to their flags before argparse, including
   abbreviations. Add any new range flag to `_RANGE_FLAGS` in `cli.py`.
