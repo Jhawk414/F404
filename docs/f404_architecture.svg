@@ -1,0 +1,113 @@
+<svg viewBox="0 0 960 680" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="f404-arch-title f404-arch-desc">
+<title id="f404-arch-title">F404 architecture and public API</title>
+<desc id="f404-arch-desc">Architecture diagram: the CLI and Python callers enter through config, problems and sweep modules, which drive one OpenMDAO cycle model and write deck CSVs.</desc>
+<defs>
+<marker id="f404-arch-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+<marker id="f404-arch-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bf4520"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+<path d="M230,84 H290" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#f404-arch-arrow)"/>
+<path d="M230,236 H252 Q260,236 260,228 V116 Q260,108 268,108 H290" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#f404-arch-arrow)"/>
+<path d="M450,96 H510" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#f404-arch-arrow)"/>
+<path d="M670,96 H730" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#f404-arch-arrow)"/>
+<path d="M590,132 V200" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#f404-arch-arrow)"/>
+<path d="M810,132 V200" fill="none" stroke="#bf4520" stroke-width="1.2" marker-end="url(#f404-arch-arrow-accent)"/>
+<path d="M770,272 V368 Q770,376 762,376 H670" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#f404-arch-arrow)"/>
+<path d="M590,340 V272" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#f404-arch-arrow)"/>
+<path d="M850,272 V454" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#f404-arch-arrow)"/>
+<path d="M670,500 H730" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#f404-arch-arrow)"/>
+<path d="M230,500 H510" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#f404-arch-arrow)"/>
+<path d="M230,580 H902 Q910,580 910,572 V244 Q910,236 902,236 H890" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#f404-arch-arrow)"/>
+<rect x="268" y="146" width="73" height="12" rx="2" fill="#ffffff"/>
+<text x="272" y="155" fill="#5a6580" font-size="8" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start" letter-spacing="0.04em">DESIGN OR YML</text>
+<rect x="598" y="160" width="40" height="12" rx="2" fill="#ffffff"/>
+<text x="602" y="169" fill="#5a6580" font-size="8" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start" letter-spacing="0.04em">BUILDS</text>
+<rect x="818" y="160" width="40" height="12" rx="2" fill="#ffffff"/>
+<text x="822" y="169" fill="#5a6580" font-size="8" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start" letter-spacing="0.04em">ENGINE</text>
+<rect x="598" y="298" width="58" height="12" rx="2" fill="#ffffff"/>
+<text x="602" y="307" fill="#5a6580" font-size="8" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start" letter-spacing="0.04em">SOLVES OD</text>
+<rect x="764" y="400" width="78" height="12" rx="2" fill="#ffffff"/>
+<text x="768" y="409" fill="#5a6580" font-size="8" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start" letter-spacing="0.04em">WRITE_DECK_CSV</text>
+<rect x="500" y="560" width="64" height="12" rx="2" fill="#ffffff"/>
+<text x="532.0" y="569" fill="#5a6580" font-size="8" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.04em">RUN_SWEEPS</text>
+<rect x="70" y="60" width="160" height="72" rx="6" fill="#ffffff"/>
+<rect x="70" y="60" width="160" height="72" rx="6" fill="rgba(79,93,117,0.14)" stroke="#5a6580" stroke-width="1"/>
+<rect x="78" y="68" width="46" height="12" rx="2" fill="#ffffff" stroke="#5a6580" stroke-width="0.9"/>
+<text x="101.0" y="77" fill="#5a6580" font-size="7" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.08em">CALLER</text>
+<text x="150.0" y="100.0" fill="#2d3142" font-size="12" font-weight="700" font-family="'XCharter','Charter',serif" text-anchor="middle">User's code / calls</text>
+<text x="150.0" y="114.0" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle">from f404 import …</text>
+<text x="150.0" y="126.0" fill="#4f5d75" font-size="10" font-weight="400" font-style="italic" font-family="'XCharter','Charter',serif" text-anchor="middle">dict or DesignInputs</text>
+<rect x="70" y="200" width="160" height="404" rx="6" fill="#ffffff"/>
+<rect x="70" y="200" width="160" height="404" rx="6" fill="rgba(79,93,117,0.14)" stroke="#5a6580" stroke-width="1"/>
+<rect x="78" y="208" width="40" height="12" rx="2" fill="#ffffff" stroke="#5a6580" stroke-width="0.9"/>
+<text x="98.0" y="217" fill="#5a6580" font-size="7" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.08em">ENTRY</text>
+<text x="150.0" y="406.0" fill="#2d3142" font-size="12" font-weight="700" font-family="'XCharter','Charter',serif" text-anchor="middle">f404 CLI</text>
+<text x="150.0" y="420.0" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle">cli.py</text>
+<text x="150.0" y="432.0" fill="#4f5d75" font-size="10" font-weight="400" font-style="italic" font-family="'XCharter','Charter',serif" text-anchor="middle">design · sweep · compare</text>
+<text x="150" y="446" fill="#4f5d75" font-size="10" font-weight="400" font-style="italic" font-family="'XCharter','Charter',serif" text-anchor="middle">verify, or a run.yml</text>
+<rect x="290" y="60" width="160" height="72" rx="6" fill="#ffffff"/>
+<rect x="290" y="60" width="160" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="298" y="68" width="28" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="0.9"/>
+<text x="312.0" y="77" fill="#2d3142" font-size="7" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+<text x="370.0" y="100.0" fill="#2d3142" font-size="11" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle">DesignInputs</text>
+<text x="370.0" y="114.0" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle">config.py</text>
+<text x="370.0" y="126.0" fill="#4f5d75" font-size="10" font-weight="400" font-style="italic" font-family="'XCharter','Charter',serif" text-anchor="middle">frozen Pydantic model</text>
+<rect x="510" y="60" width="160" height="72" rx="6" fill="#ffffff"/>
+<rect x="510" y="60" width="160" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="518" y="68" width="28" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="0.9"/>
+<text x="532.0" y="77" fill="#2d3142" font-size="7" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+<text x="590.0" y="100.0" fill="#2d3142" font-size="11" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle">design()</text>
+<text x="590.0" y="114.0" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle">problems.py</text>
+<text x="590.0" y="126.0" fill="#4f5d75" font-size="10" font-weight="400" font-style="italic" font-family="'XCharter','Charter',serif" text-anchor="middle">sizes at SLS dry mil</text>
+<rect x="730" y="60" width="160" height="72" rx="6" fill="#ffffff"/>
+<rect x="730" y="60" width="160" height="72" rx="6" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/>
+<rect x="738" y="68" width="28" height="12" rx="2" fill="#ffffff" stroke="#bf4520" stroke-width="0.9"/>
+<text x="752.0" y="77" fill="#bf4520" font-size="7" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+<text x="810.0" y="100.0" fill="#2d3142" font-size="11" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle">Engine</text>
+<text x="810.0" y="114.0" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle">prob · inputs · anchor</text>
+<text x="810.0" y="126.0" fill="#4f5d75" font-size="10" font-weight="400" font-style="italic" font-family="'XCharter','Charter',serif" text-anchor="middle">OD left at SLS max AB</text>
+<rect x="730" y="200" width="160" height="72" rx="6" fill="#ffffff"/>
+<rect x="730" y="200" width="160" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="738" y="208" width="28" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="0.9"/>
+<text x="752.0" y="217" fill="#2d3142" font-size="7" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+<text x="810.0" y="240.0" fill="#2d3142" font-size="11" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle">sweep / run_point</text>
+<text x="810.0" y="254.0" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle">sweep_full_envelope.py</text>
+<text x="810.0" y="266.0" fill="#4f5d75" font-size="10" font-weight="400" font-style="italic" font-family="'XCharter','Charter',serif" text-anchor="middle">restores anchor first</text>
+<rect x="510" y="200" width="160" height="72" rx="6" fill="#ffffff"/>
+<rect x="510" y="200" width="160" height="72" rx="6" fill="#ffffff" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="518" y="208" width="58" height="12" rx="2" fill="#ffffff" stroke="#4f5d75" stroke-width="0.9"/>
+<text x="547.0" y="217" fill="#4f5d75" font-size="7" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.08em">INTERNAL</text>
+<text x="590.0" y="240.0" fill="#2d3142" font-size="11" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle">MPMixedFlowTurbofan</text>
+<text x="590.0" y="254.0" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle">mp_cycle.py</text>
+<text x="590.0" y="266.0" fill="#4f5d75" font-size="10" font-weight="400" font-style="italic" font-family="'XCharter','Charter',serif" text-anchor="middle">DESIGN + OD (engine_model)</text>
+<rect x="510" y="340" width="160" height="72" rx="6" fill="#ffffff"/>
+<rect x="510" y="340" width="160" height="72" rx="6" fill="#ffffff" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="518" y="348" width="58" height="12" rx="2" fill="#ffffff" stroke="#4f5d75" stroke-width="0.9"/>
+<text x="547.0" y="357" fill="#4f5d75" font-size="7" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.08em">INTERNAL</text>
+<text x="590.0" y="380.0" fill="#2d3142" font-size="11" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle">SweepRunner</text>
+<text x="590.0" y="394.0" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle">sweep_utils.py</text>
+<text x="590.0" y="406.0" fill="#4f5d75" font-size="10" font-weight="400" font-style="italic" font-family="'XCharter','Charter',serif" text-anchor="middle">bridges, Newton cap of 20</text>
+<path d="M730,462 A80,8 0 0,1 890,462 V538 A80,8 0 0,1 730,538 Z" fill="#ffffff"/>
+<path d="M730,462 A80,8 0 0,1 890,462 V538 A80,8 0 0,1 730,538 Z" fill="rgba(46,90,168,0.08)" stroke="#2e5aa8" stroke-width="1"/>
+<ellipse cx="810.0" cy="462" rx="80" ry="8" fill="rgba(46,90,168,0.08)" stroke="#2e5aa8" stroke-width="1"/>
+<rect x="738" y="474" width="46" height="12" rx="2" fill="#ffffff" stroke="#2e5aa8" stroke-width="0.9"/>
+<text x="761.0" y="483" fill="#2e5aa8" font-size="7" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.08em">OUTPUT</text>
+<text x="810.0" y="506.0" fill="#2d3142" font-size="12" font-weight="700" font-family="'XCharter','Charter',serif" text-anchor="middle">Deck</text>
+<text x="810.0" y="520.0" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle">cycle_deck_*.csv</text>
+<text x="810.0" y="532.0" fill="#4f5d75" font-size="10" font-weight="400" font-style="italic" font-family="'XCharter','Charter',serif" text-anchor="middle">CSV only if out_dir set</text>
+<rect x="510" y="464" width="160" height="72" rx="6" fill="#ffffff"/>
+<rect x="510" y="464" width="160" height="72" rx="6" fill="#ffffff" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
+<rect x="518" y="472" width="58" height="12" rx="2" fill="#ffffff" stroke="#4f5d75" stroke-width="0.9"/>
+<text x="547.0" y="481" fill="#4f5d75" font-size="7" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.08em">INTERNAL</text>
+<text x="590.0" y="504.0" fill="#2d3142" font-size="11" font-weight="700" font-family="'Courier New',Courier,monospace" text-anchor="middle">compare_decks.py</text>
+<text x="590.0" y="518.0" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle">f404 compare</text>
+<text x="590.0" y="530.0" fill="#4f5d75" font-size="10" font-weight="400" font-style="italic" font-family="'XCharter','Charter',serif" text-anchor="middle">reads two deck CSVs</text>
+<line x1="70" y1="632" x2="890" y2="632" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="70" y="650" fill="#4f5d75" font-size="8" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start" letter-spacing="0.14em">LEGEND</text>
+<rect x="140" y="641" width="16" height="10" rx="2" fill="rgba(79,93,117,0.14)" stroke="#5a6580" stroke-width="1"/><text x="164" y="650" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start">caller / entry</text>
+<rect x="275.6" y="641" width="16" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/><text x="299.6" y="650" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start">exported by f404</text>
+<rect x="422.0" y="641" width="16" height="10" rx="2" fill="#ffffff" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/><text x="446.0" y="650" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start">internal</text>
+<rect x="525.2" y="641" width="16" height="10" rx="2" fill="rgba(191,69,32,0.08)" stroke="#bf4520" stroke-width="1"/><text x="549.2" y="650" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start">Engine handle</text>
+<ellipse cx="663.4000000000001" cy="644" rx="8" ry="2.5" fill="rgba(46,90,168,0.08)" stroke="#2e5aa8"/><path d="M655.4000000000001,644 V654 A8,2.5 0 0,0 671.4000000000001,654 V644" fill="rgba(46,90,168,0.08)" stroke="#2e5aa8"/><text x="679.4000000000001" y="650" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start">deck output</text>
+<text x="760" y="650" fill="#4f5d75" font-size="9" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start">arrow: caller → callee</text>
+</svg>
