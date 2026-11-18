@@ -27,7 +27,7 @@
 <rect x="598" y="298" width="58" height="12" rx="2" fill="#ffffff"/>
 <text x="602" y="307" fill="#5a6580" font-size="8" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start" letter-spacing="0.04em">SOLVES OD</text>
 <rect x="764" y="400" width="78" height="12" rx="2" fill="#ffffff"/>
-<text x="768" y="409" fill="#5a6580" font-size="8" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start" letter-spacing="0.04em">WRITE_DECK_CSV</text>
+<text x="768" y="409" fill="#5a6580" font-size="8" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="start" letter-spacing="0.04em">sweep(out_dir)</text>
 <rect x="500" y="560" width="64" height="12" rx="2" fill="#ffffff"/>
 <text x="532.0" y="569" fill="#5a6580" font-size="8" font-weight="400" font-family="'Courier New',Courier,monospace" text-anchor="middle" letter-spacing="0.04em">RUN_SWEEPS</text>
 <rect x="70" y="60" width="160" height="72" rx="6" fill="#ffffff"/>

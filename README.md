@@ -70,7 +70,7 @@ and sweep it from Python:
 f404 run.yml                              # dry + wet grid; decks in deck/
 f404 sweep --mode wet --alt 0,10000,2500  # a custom sweep
 f404 design                               # size the engine and print the results
-f404 compare old.csv new.csv              # % change of every deck column
+f404 compare old.csv new.csv              # % change per shared column, points converged in both
 ```
 
 ```python
@@ -91,7 +91,7 @@ pytest tests -m "not slow"    # fast tests, ~7 s
 pytest tests                  # full suite, ~3 min
 ```
 
-CI runs `f404 verify` and the fast tests on every PR. Details are in
+CI runs `f404 verify` and the fast tests on every PR to `main`. Details are in
 [`docs/testing.md`](docs/testing.md). Planned work is in the
 [GitHub issues](https://github.com/Jhawk414/F404/issues), with the suggested order
 in the latest [`AGENTS/HANDOFF_*.md`](AGENTS/). Next up are the PLA definition

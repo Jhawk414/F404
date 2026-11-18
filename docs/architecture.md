@@ -94,6 +94,7 @@ afterburning F404 turbofan.
 
 `design()` sizes the engine once. `sweep()` and `run_point()` then reuse it,
 restoring the SLS max-AB anchor before every call so earlier calls don't steer
-later ones.
+later ones. Solver-internal state still carries over between calls, which can
+move results by about 1e-5 ([#59](https://github.com/Jhawk414/F404/issues/59)).
 
 ![Engine lifecycle](f404_engine_lifecycle.svg)

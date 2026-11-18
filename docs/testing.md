@@ -22,10 +22,11 @@ CI is defined in [`.github/workflows/f404_test_workflow.yml`](../.github/workflo
 
 | Trigger | What runs |
 |---|---|
-| Pull request | `f404 verify` and the fast tests (`-m "not slow"`) on Ubuntu, Python 3.12, about a minute |
+| Pull request to `main` | `f404 verify` and the fast tests (`-m "not slow"`) on Ubuntu, Python 3.12, about a minute |
 | Push to `main`, manual dispatch, or a PR with the `full-ci` label | The full suite on Ubuntu (3.9, 3.12) and macOS (3.12) |
 
-The maintainer adds the `full-ci` label when a PR is about to merge.
+The maintainer adds the `full-ci` label when a PR is about to merge. Labelling a
+PR skips the fast job and starts the full suite.
 
 The driver and CLI are importable and covered. The remaining gaps are mostly
 uncommon input and I/O errors, solver-failure paths and the one-line `__main__`
