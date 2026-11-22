@@ -57,8 +57,10 @@ deck = sweep(eng, mode='wet', mach=[0.001, 0.4], alt=0, dts=0)                  
    `DESIGN.fan.PR` → `fan_PR`). `problems.DESIGN_INPUT_PATHS` is the public
    field → (path, units) table, and `design()` sets every field through it.
 3. **`design(inputs=DesignInputs(), *, verbose=False) -> Engine`** replaces
-   `build_problem()`. `Engine` is a frozen dataclass `(prob, inputs, anchor)`,
-   where `anchor` is the OD output vector at SLS max AB. It raises
+   `build_problem()`. `Engine` is a frozen dataclass `(prob, inputs, anchor,
+   ps_guesses)`, where `anchor` is the OD output vector at SLS max AB and
+   `ps_guesses` holds the OD static-pressure guess caches there (#59).
+   Construct it through `design()` only. It raises
    `MaxTt7TooLowError` or `om.AnalysisError` as before.
 4. **`run_point(engine, *, mode, alt, mach, dts, throttle) -> dict`** restores
    the anchor, bridges to the point with the existing sweep bridge, and returns
@@ -119,7 +121,7 @@ post-solve check.
 |---|---|
 | Keep `(prob, mp)` | Rejected: no place for the anchor or the inputs, so OD calls can't be history-independent |
 | `NamedTuple` `Engine(prob, mp)` | Rejected: `prob, mp = engine` unpacking breaks the day a field is added, and tuple equality on an ndarray field raises |
-| **Frozen dataclass `Engine(prob, inputs, anchor)` (chosen)** | Attribute access, room to grow, `eq=False`. `mp` is `prob.model`, so it is not a field |
+| **Frozen dataclass `Engine(prob, inputs, anchor, ps_guesses)` (chosen)** | Attribute access, room to grow, `eq=False`. `mp` is `prob.model`, so it is not a field. Built only by `design()`, which captures `anchor` and `ps_guesses` from the solved Problem |
 | Keep `build_problem()` beside `design()` | Rejected: two near-identical entry points, two places to validate |
 
 ### How `run_point()` reaches its point

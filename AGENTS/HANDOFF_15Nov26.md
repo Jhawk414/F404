@@ -59,7 +59,7 @@ usage: [`docs/guide/python.md`](../docs/guide/python.md).
   the defaults (`mp_cycle.py` reads them). `problems.DESIGN_INPUT_PATHS` maps
   each field to its path, for `compute_totals(wrt=...)` and the studio.
 - `design()` replaced `build_problem()` and returns `Engine(prob, inputs,
-  anchor)`. `run_point()`/`sweep()` restore the SLS max-AB anchor before every
+  anchor, ps_guesses)`; construct it only through `design()`. `run_point()`/`sweep()` restore the SLS max-AB anchor before every
   call, then bridge from home with the existing 5-step bridge
   (`SweepRunner.run_sweep(start=...)`). A spike found it reaches all 81
   in-envelope deck points tried, within about 3.6e-6 of the deck.
