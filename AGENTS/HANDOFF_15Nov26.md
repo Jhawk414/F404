@@ -17,7 +17,7 @@ Current state and next work only. Earlier session history is in
   [`docs/status.md`](../docs/status.md) holds the per-Mach counts; decks are committed under `deck/`.
 - Current local reference environment: Python 3.9.6, OpenMDAO 3.39.0,
   NumPy 2.0.2. CI also tests newer OpenMDAO releases; results can differ.
-- The full local suite passes **343 tests (294 fast)**. It covers
+- The full local suite passes **344 tests (294 fast)**. It covers
   sizing goldens, convergence regressions, CLI behavior, and validation. Fast PR CI excludes tests marked `slow`; the full
   matrix runs on `main`, manual dispatch, or the user-applied `full-ci` label.
   **Agents must not add `full-ci`.**
@@ -34,7 +34,18 @@ Architecture records:
   relative tolerance on a fixed solve path.
 - [ADR-0005](../docs/adr/0005-public-python-api.md): the public Python API.
 
-## Latest work: public Python API (#47, #17)
+## Latest work: history-free OD calls (#59)
+
+[PR #62](https://github.com/Jhawk414/F404/pull/62) closes
+[#59](https://github.com/Jhawk414/F404/issues/59). The state that leaked from a
+dry sweep into a later wet one was pyCycle's `PsResid._ps_guess_cache` (18 in
+OD), not solver objects. `restore_anchor()` now resets it, so `run_point()` and
+`sweep()` are bit-for-bit independent of earlier calls, which #46's
+`workers=1`/`workers=4` parity and #48 rely on. Single-mode decks are unchanged.
+The same cache bug exists upstream in `OpenMDAO/pyCycle`, where no issue has
+been filed yet.
+
+## Earlier work: public Python API (#47, #17)
 
 [PR #58](https://github.com/Jhawk414/F404/pull/58) closes
 [#47](https://github.com/Jhawk414/F404/issues/47) and
@@ -48,7 +59,7 @@ usage: [`docs/guide/python.md`](../docs/guide/python.md).
   the defaults (`mp_cycle.py` reads them). `problems.DESIGN_INPUT_PATHS` maps
   each field to its path, for `compute_totals(wrt=...)` and the studio.
 - `design()` replaced `build_problem()` and returns `Engine(prob, inputs,
-  anchor)`. `run_point()`/`sweep()` restore the SLS max-AB anchor before every
+  anchor, ps_guesses)`; construct it only through `design()`. `run_point()`/`sweep()` restore the SLS max-AB anchor before every
   call, then bridge from home with the existing 5-step bridge
   (`SweepRunner.run_sweep(start=...)`). A spike found it reaches all 81
   in-envelope deck points tried, within about 3.6e-6 of the deck.
@@ -75,7 +86,7 @@ usage: [`docs/guide/python.md`](../docs/guide/python.md).
 
 ## Next work
 
-**#30 ADR → #59 → #46 phases 1–3 alongside the PLA axis → #57 → #48 → #8 + #25 +
+**#30 ADR → #46 phases 1–3 alongside the PLA axis → #57 → #48 → #8 + #25 +
 #35, measuring #3 → #10.** [#38](https://github.com/Jhawk414/F404/issues/38)
 builds on #57's single bounds table and is otherwise independent.
 
@@ -83,7 +94,6 @@ builds on #57's single bounds table and is otherwise independent.
 |---|---|
 | [#30](https://github.com/Jhawk414/F404/issues/30) | Decide what PLA commands, record ADR-0006 and a provisional schedule; add the PLA axis afterward as a `run_point()`/`sweep()` keyword. Schedule parameters go in a sibling model to `DesignInputs` (ADR-0005) |
 | [#46](https://github.com/Jhawk414/F404/issues/46) | `f404.studio` on the public API: design sweeps, design→OD bridging, analytic sensitivities; uses Tt4/Tt7 `throttle`, so it doesn't wait for the PLA axis. Needs a column-prefix convention (`fan_PR` is both an input and a deck column) and may add `design(warm_start=)` (ADR-0005) |
-| [#59](https://github.com/Jhawk414/F404/issues/59) | Find the solver-internal state that survives `restore_anchor()` and reset it, so `--mode both` equals the single-mode decks; needed before #46's worker-parity criterion |
 | [#60](https://github.com/Jhawk414/F404/issues/60) | Shaft balances ignore `hp_shaft.HPX`. Fixing it applies the 250 hp extraction, moves every deck and golden, and should land with a recalibration (#48); re-add `HPX` to `DesignInputs` then |
 | [#57](https://github.com/Jhawk414/F404/issues/57) | Single-source balance bounds (drop `_OD_BOUNDS` and its drift test), DESIGN bound check and an exported error for infeasible sizing |
 | [#48](https://github.com/Jhawk414/F404/issues/48) | Gradient-assisted least-squares calibration to a targets file; studio sub-issue, tested without moving goldens |
@@ -164,12 +174,12 @@ PDF searches when available.
   0 ft, dTs 0, the mode's top power), so a first point away from home is
   bridged; the default grids start at home and get no bridge. Traversal order
   still matters inside a sweep.
-- A wet sweep after a dry sweep in one process (`--mode both`, `run.yml`)
-  differs from `--mode wet` by up to 7e-5, with one extra converged point:
-  solver-internal state survives the anchor restore
-  ([#59](https://github.com/Jhawk414/F404/issues/59)). The committed wet deck
-  is the single-mode one. Prove wet decks with `--mode wet`, and fix #59
-  before #46 relies on worker parity.
+- pyCycle's `PsResid` keeps its last Ps guess in `_ps_guess_cache`, a Python
+  attribute outside the model's vectors. `Engine.ps_guesses` records the OD
+  caches at the anchor and `restore_anchor()` resets them, so `--mode both`
+  equals the single-mode decks ([#59](https://github.com/Jhawk414/F404/issues/59)).
+  Any new snapshot/restore of OD state (studio warm starts, bridges) must
+  carry these caches too, or results depend on call history.
 - Treat an `Engine` as immutable: change the design through `design()`.
   Setting a design value on `engine.prob` leaves `inputs` and `anchor` stale.
 - `run_point()` reaches a point by a different path than the deck or

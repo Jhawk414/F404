@@ -62,7 +62,8 @@ an `Engine`:
   `eng.prob.model.od_pt` (`'OD'`).
 - `eng.inputs`: the `DesignInputs` it was sized from.
 - `eng.anchor`: the OD output vector at SLS max AB that every OD call
-  starts from (`eng.restore_anchor()` puts it back). After an OD call the OD
+  starts from. `eng.restore_anchor()` puts it back, along with the OD
+  static-pressure guess caches (`eng.ps_guesses`). After an OD call the OD
   Newton solver keeps the sweeps' 20-iteration cap; `design()` uses 50.
 
 `verbose=True` prints Newton iterations and the result tables, as
@@ -83,10 +84,8 @@ Solves one OD condition and returns its deck row as a dict.
 - `alt` ft, `mach` below 1 (0 is flown at 0.001), `dts` R off ISA.
 
 Every call restores the anchor and bridges from SLS to the point, as a sweep
-reaches its first point, so earlier calls don't steer the result. (Solver
-state outside the model's vectors can still carry over, moving results by
-about 1e-5 after long call histories;
-[#59](https://github.com/Jhawk414/F404/issues/59).) A
+reaches its first point, so earlier calls don't steer the result: the same
+call gives the same row bit for bit, whatever ran before. A
 point that fails is returned, not raised: `converged` is False, the outputs
 are NaN, and `failure` says why. When the point converged, `eng.prob` is left
 solved there, so you can read any other variable or call
@@ -116,7 +115,7 @@ point with failed points included, in the same columns as the committed decks.
 The sweep visits points in snake order (throttle, then Mach, altitude and
 dts), warm-starting each from the last and bridging large jumps, as the CLI
 does. It starts from the anchor, so two calls with the same arguments give the
-same deck, up to the solver state noted under `run_point()` (#59).
+same deck, bit for bit.
 
 ## Performance and parallel use
 

@@ -135,6 +135,19 @@ def test_run_point_reproduces_a_deck_row_whatever_ran_before(engine):
 
 
 @pytest.mark.slow
+def test_a_dry_sweep_does_not_steer_a_later_wet_sweep():
+    # pyCycle's Ps guess caches live outside the model's vectors; before
+    # restore_anchor() reset them, this grid moved the wet deck (#59).
+    grid = dict(mach=0.001, alt=0, dts=[0, 10])
+    alone = sweep(design(), mode='wet', **grid)
+    engine = design()
+    sweep(engine, mode='dry', **grid)
+
+    pd.testing.assert_frame_equal(sweep(engine, mode='wet', **grid), alone,
+                                  check_exact=True)
+
+
+@pytest.mark.slow
 def test_run_point_returns_a_failed_point_as_a_row(engine):
     # 800 R is below compressor delivery: no solution exists.
     row = run_point(engine, mode='dry', alt=0, mach=0, dts=0, throttle=800)

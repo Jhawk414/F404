@@ -57,8 +57,10 @@ deck = sweep(eng, mode='wet', mach=[0.001, 0.4], alt=0, dts=0)                  
    `DESIGN.fan.PR` → `fan_PR`). `problems.DESIGN_INPUT_PATHS` is the public
    field → (path, units) table, and `design()` sets every field through it.
 3. **`design(inputs=DesignInputs(), *, verbose=False) -> Engine`** replaces
-   `build_problem()`. `Engine` is a frozen dataclass `(prob, inputs, anchor)`,
-   where `anchor` is the OD output vector at SLS max AB. It raises
+   `build_problem()`. `Engine` is a frozen dataclass `(prob, inputs, anchor,
+   ps_guesses)`, where `anchor` is the OD output vector at SLS max AB and
+   `ps_guesses` holds the OD static-pressure guess caches there (#59).
+   Construct it through `design()` only. It raises
    `MaxTt7TooLowError` or `om.AnalysisError` as before.
 4. **`run_point(engine, *, mode, alt, mach, dts, throttle) -> dict`** restores
    the anchor, bridges to the point with the existing sweep bridge, and returns
@@ -119,7 +121,7 @@ post-solve check.
 |---|---|
 | Keep `(prob, mp)` | Rejected: no place for the anchor or the inputs, so OD calls can't be history-independent |
 | `NamedTuple` `Engine(prob, mp)` | Rejected: `prob, mp = engine` unpacking breaks the day a field is added, and tuple equality on an ndarray field raises |
-| **Frozen dataclass `Engine(prob, inputs, anchor)` (chosen)** | Attribute access, room to grow, `eq=False`. `mp` is `prob.model`, so it is not a field |
+| **Frozen dataclass `Engine(prob, inputs, anchor, ps_guesses)` (chosen)** | Attribute access, room to grow, `eq=False`. `mp` is `prob.model`, so it is not a field. Built only by `design()`, which captures `anchor` and `ps_guesses` from the solved Problem |
 | Keep `build_problem()` beside `design()` | Rejected: two near-identical entry points, two places to validate |
 
 ### How `run_point()` reaches its point
@@ -127,7 +129,7 @@ post-solve check.
 | Option | Assessment |
 |---|---|
 | Warm-start from wherever the Problem was left | Rejected: results depend on call history, so parallel studies can't match serial ones |
-| **Restore the anchor, bridge from the anchor condition (chosen)** | Removes the state-vector history; one extra bridge per call. Solver-internal state still carries over (#59) |
+| **Restore the anchor, bridge from the anchor condition (chosen)** | Removes the state-vector history; one extra bridge per call. #59 added pyCycle's static-pressure guess caches to the restore |
 | Re-run `design()` per point | Rejected: about 2.5 s more per point, for the same anchor |
 
 Bridge path, settled by a throwaway spike (below):
@@ -184,12 +186,12 @@ the model isn't calibrated that high, and no method converged reliably there.
 The API is deliberately small: one model, one dataclass, three functions.
 Restoring the anchor costs one bridge per call. In exchange, a run's result
 no longer depends on the state vectors earlier calls left, which parallel
-studies and calibration need. It is not yet bit-for-bit history-free: state
-inside the solvers survives the restore, so a wet sweep after a dry sweep in
-one process differs from a wet-only sweep by up to 7e-5 relative on the
-default grid, and one marginal point flips to converged
-([#59](https://github.com/Jhawk414/F404/issues/59)). This predates the API:
-`main`'s `run_sweeps` behaves identically. Leaving the Problem at the solved point, rather than
+studies and calibration need. The output vector alone was not enough: each
+pyCycle `PsResid` caches its last Ps guess as a Python attribute, so a wet
+sweep after a dry sweep differed from a wet-only sweep by up to 7e-5 relative
+on the default grid. The anchor now records those caches and the restore
+resets them, which makes the result history-free bit for bit
+([#59](https://github.com/Jhawk414/F404/issues/59)). Leaving the Problem at the solved point, rather than
 restoring it on exit, keeps `compute_totals` available. The cost is a contract
 users must respect: `engine.prob` reflects the last call, and an Engine's
 inputs must not be changed in place.
