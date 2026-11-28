@@ -226,8 +226,9 @@ f404 compare deck/cycle_deck_wet.csv /tmp/run1/cycle_deck_wet.csv
 f404 compare old.csv new.csv --cols Fn,TSFC,BPR --changed-only
 ```
 
-- **Matching.** Rows match on the inputs: (mode, alt, dTs, MN, T4_cmd,
-  T7_cmd).
+- **Matching.** Rows match on the inputs: `(mode, alt, dTs, MN, T4_cmd, T7_cmd)`
+  for throttle decks, and `(mode, alt, dTs, MN, PLA, T4_cmd, T7_cmd)` when both
+  decks carry `PLA` (comparing a PLA deck with a throttle deck is an error).
   - alt, dTs, MN and the commands match at 1e-6, so fractional grids stay
     distinct.
   - Full-envelope decks (both modes) compare too.

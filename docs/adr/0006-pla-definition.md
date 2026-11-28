@@ -64,7 +64,7 @@ In the current uncalibrated cycle model, however, dry BPR sits at `0.75` at MIL 
    - `run_point(engine, *, mode=None, alt, mach, dts, throttle=None, pla=None, verbose=False) -> dict` and `sweep(engine, *, mode=None, mach=..., alt=..., dts=..., throttle=None, pla=None, out_dir=None, verbose=False) -> DataFrame`:
      - `throttle` and `pla` are strictly mutually exclusive.
      - `throttle` retains its existing temperature semantics and requires `mode` (`'dry'` or `'wet'`).
-     - `pla` spans dry and wet in a single descending sweep starting from the SLS max-AB anchor (`engine.home_pla()`), resolving per-point `mode` (`'wet'` / `'dry'`) and recording a `PLA` column in the returned deck (`PLA_INPUT_COLUMNS`).
+     - `pla` spans dry and wet in a single descending sweep starting from the SLS max-AB anchor (`engine.home('pla')`), resolving per-point `mode` (`'wet'` / `'dry'`) and recording a `PLA` column in the returned deck (`PLA_INPUT_COLUMNS`).
 
 4. **CLI and YAML:**
    - `f404 sweep --pla MIN,MAX,STEP` is mutually exclusive with both `--throttle` and `--mode` (exits 2). It runs one unified descending PLA sweep and writes `cycle_deck_pla.csv` + `run_pla.resolved.yml`.
@@ -154,15 +154,15 @@ SLS wet walk (`MN = 0.001`, `alt = 0`, `dTs = 0`) and off-SLS hot/fast check (`1
 ### Recorded for later
 
 - **Dry $A_8$ schedule ([#8](https://github.com/Jhawk414/F404/issues/8)):** Add dry nozzle opening parameters to `PlaSchedule` (or a sibling schedule model) and apply an explicit multiplier `f_open(PLA) >= 1.0` on `a8_sched.A8_dsn` with no new Newton state, keeping `87°` MIL as the minimum-$A_8$ anchor.
-- **Idle and part-power calibration ([#25](https://github.com/Jhawk414/F404/issues/25), [#48](https://github.com/Jhawk414/F404/issues/48)):** Calibrate idle to observed $N_2$ / thrust (`18.1°` ground idle `65% N2` from MCAS Iwakuni; `31°` flight idle from Johnson/Ray) rather than a `Tt4` floor, and lower the `idle_pla` bound once ground idle converges.
+- **Idle and part-power calibration ([#25](https://github.com/Jhawk414/F404/issues/25), [#48](https://github.com/Jhawk414/F404/issues/48)):** Calibrate idle to observed $N_2$ / thrust (`18.1°` ground idle `65% N2` from MCAS Iwakuni; `31°` flight idle from Johnson/Ray) rather than a `Tt4` floor, and lower the `idle_pla` bound once ground idle converges. Because `PlaSchedule` lives outside the OpenMDAO model, `compute_totals` cannot differentiate directly with respect to `idle_Tt4` or `min_ab_Tt7`; `#48` will either use finite differences over schedule parameters or move the schedule into the model.
 - **Flag naming:** Consider renaming `--throttle` to `--temp` in a follow-up issue so temperature-commanded and PLA-commanded sweeps are unmistakably distinct.
 
 ## Action Items
 
 1. [x] Run Spike 001 (dry part-power envelope) and Spike 002 (AB light-off / `Tt6` ceiling)
 2. [x] Record ADR-0006 (`docs/adr/0006-pla-definition.md`)
-3. [ ] Add `PlaSchedule`, `pla_axis`, and `SweepConfig`/`RunConfig` updates in `config.py`
-4. [ ] Attach `PlaSchedule` to `Engine` / `design()` and support PLA sweeps in `SweepRunner`, `sweep()`, and `run_point()`
-5. [ ] Wire `--pla` into `cli.py` and exclude `PLA` from compared outputs in `compare_decks.py`
-6. [ ] Add proportionate tests, verify with `f404 verify`, `pytest`, and a PLA proof sweep
-7. [ ] Update `README.md`, CLI/Python guides, `docs/architecture.md`, and `AGENTS/` handoff
+3. [x] Add `PlaSchedule`, `pla_axis`, and `SweepConfig`/`RunConfig` updates in `config.py`
+4. [x] Attach `PlaSchedule` to `Engine` / `design()` and support PLA sweeps in `SweepRunner`, `sweep()`, and `run_point()`
+5. [x] Wire `--pla` into `cli.py` and key `compare_decks.py` on `PLA` when present
+6. [x] Add proportionate tests, verify with `f404 verify`, `pytest`, and a PLA proof sweep
+7. [x] Update `README.md`, CLI/Python guides, `docs/architecture.md`, and `AGENTS/` handoff

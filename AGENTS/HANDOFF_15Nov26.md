@@ -53,7 +53,7 @@ Architecture records:
   calibrate idle with dry A8 opening.
 - `design(inputs, *, schedules=PlaSchedule())` attaches `schedules` to `Engine`.
   `run_point(..., pla=...)`, `sweep(..., pla=...)`, and `f404 sweep --pla` run
-  one descending pass from `Engine.home_pla()` (`130°` SLS max AB), writing
+  one descending pass from `Engine.home('pla')` (`130°` SLS max AB), writing
   `cycle_deck_pla.csv` + `run_pla.resolved.yml` with `PLA_INPUT_COLUMNS`.
   `pla` is mutually exclusive with `throttle` and `mode`. Existing `--throttle`
   decks, `f404 verify`, and goldens are unchanged.

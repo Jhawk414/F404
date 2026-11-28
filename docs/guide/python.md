@@ -136,7 +136,7 @@ for PLA sweeps).
   omitted), `mode` must be `'dry'` or `'wet'` and `throttle` defaults to four
   levels 200 R apart down from the engine's `mil_Tt4` or `max_Tt7`.
 - With `pla`, `mode` must be omitted: the sweep runs one continuous descending
-  pass across wet and dry from the SLS max-AB anchor (`engine.home_pla()`).
+  pass across wet and dry from the SLS max-AB anchor (`engine.home('pla')`).
 - `mach`, `alt` and `dts` default to the committed grid.
 - `out_dir` writes `cycle_deck_<mode>.csv` (or `cycle_deck_pla.csv` for PLA)
   there; by default nothing is written.
