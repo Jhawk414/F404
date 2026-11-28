@@ -21,6 +21,7 @@ from f404.problems import (
     DESIGN_INPUT_PATHS,
     DesignInputs,
     MaxTt7TooLowError,
+    PlaSchedule,
     _apply_design_inputs,
     design,
 )
@@ -304,6 +305,15 @@ def test_every_design_input_moves_the_solved_engine(problem):
 def test_design_validates_its_inputs_before_building_anything(inputs):
     with pytest.raises(ValueError, match='fan_eff'):
         design(inputs)
+
+
+@pytest.mark.parametrize('schedules, match', [
+    (PlaSchedule(idle_Tt4=3100.0), 'idle_Tt4'),
+    (PlaSchedule(min_ab_Tt7=3700.0), 'min_ab_Tt7'),
+])
+def test_design_validates_schedule_temperatures_before_solving(schedules, match):
+    with pytest.raises(ValueError, match=match):
+        design(schedules=schedules)
 
 
 @pytest.mark.slow

@@ -238,3 +238,12 @@ def test_a_blank_result_is_reported_not_read_as_unchanged():
     report = format_report(table, compare_decks(deck(), deck())[1], 2, 2,
                            changed_only=True)
     assert '| Fn (invalid) |' in report
+
+
+def test_pla_column_is_treated_as_input_not_compared_output():
+    base = deck(PLA=[87.0, 130.0])
+    new = deck(PLA=[87.0, 130.0], Fn=[11000., 9000.])
+    table, _ = compare_decks(base, new)
+    assert 'PLA' not in set(table['column'])
+    with pytest.raises(ValueError, match="not compared"):
+        compare_decks(base, new, columns=['PLA'])

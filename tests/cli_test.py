@@ -716,3 +716,36 @@ def test_real_single_mode_runs_preserve_other_decks_and_snapshots(tmp_path, caps
     assert (out / 'cycle_deck_dry.csv').read_bytes() == dry
     assert (out / 'run_dry.resolved.yml').read_bytes() == dry_config
     assert (out / 'run_both.resolved.yml').read_bytes() == combined_config
+
+
+def test_cli_pla_flag_routes_and_writes_resolved_snapshot(recorded, tmp_path):
+    out = tmp_path / 'pla_out'
+    assert cli.main(['sweep', '--pla', '31,130,33', '--mach', '0', '--alt', '0',
+                     '--dts', '0', '--out', str(out)]) == 0
+    assert recorded[0][1]['pla'] == [130.0, 97.0, 64.0, 31.0]
+    snapshot = cli.load_config(out / 'run_pla.resolved.yml')
+    assert snapshot.sweep.pla == [130.0, 97.0, 64.0, 31.0]
+    assert snapshot.sweep.mode is None and snapshot.sweep.throttle is None
+    assert snapshot.schedules == cli.PlaSchedule()
+
+
+@pytest.mark.parametrize('argv, match', [
+    (['sweep', '--pla', '87', '--throttle', '3100'], 'mutually exclusive'),
+    (['sweep', '--pla', '87', '--mode', 'dry'], 'cannot be combined with --mode'),
+    (['sweep', '--pla', '18.1'], 'flight idle'),
+])
+def test_cli_pla_rejects_conflicts_and_out_of_range(recorded, capsys, argv, match):
+    fails(capsys, argv, match)
+    assert recorded == []
+
+
+def test_yaml_pla_and_custom_schedules_round_trip(recorded, tmp_path):
+    path = tmp_path / 'pla.yml'
+    path.write_text(yaml.safe_dump({
+        'schedules': {'min_ab_pla': 90.0, 'min_ab_Tt7': 2000.0},
+        'sweep': {'mach': 0, 'alt': 0, 'dts': 0, 'pla': [130, 90, 87, 31], 'out': str(tmp_path / 'out')},
+    }))
+    assert cli.main([str(path)]) == 0
+    assert recorded[0][1]['pla'] == [130.0, 90.0, 87.0, 31.0]
+    assert recorded[0][1]['schedules'].min_ab_pla == 90.0
+    assert cli.load_config(tmp_path / 'out' / 'run_pla.resolved.yml').schedules.min_ab_Tt7 == 2000.0
