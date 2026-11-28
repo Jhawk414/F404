@@ -84,6 +84,30 @@ def test_unknown_mode_is_rejected_before_any_work(call):
         call()
 
 
+@pytest.mark.parametrize('call, match', [
+    (lambda: sweep(None, pla=[87], throttle=[3100]), 'mutually exclusive'),
+    (lambda: sweep(None, mode='dry', pla=[87]), 'mode cannot be combined'),
+    (lambda: run_point(None, alt=0, mach=0, dts=0), 'exactly one of throttle or pla'),
+    (lambda: run_point(None, mode='dry', alt=0, mach=0, dts=0, throttle=3100, pla=87),
+     'exactly one of throttle or pla'),
+    (lambda: run_sweeps('dry', pla=[87]), 'mode cannot be combined'),
+    (lambda: run_sweeps(pla=[87], dry_powers=[3100]), 'cannot be combined with pla'),
+    (lambda: run_sweeps(pla=[87], wet_powers=[3600]), 'cannot be combined with pla'),
+])
+def test_pla_argument_conflicts_fail_fast(call, match):
+    with pytest.raises(ValueError, match=match):
+        call()
+
+
+def test_run_sweeps_rejects_bad_args_before_creating_out_dir(tmp_path):
+    target = tmp_path / 'should_not_exist'
+    with pytest.raises(ValueError):
+        run_sweeps('dry', pla=[87], out_dir=target)
+    with pytest.raises(ValueError):
+        run_sweeps('hot', out_dir=target)
+    assert not target.exists()
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize('mode, power', [('dry', 3100.), ('wet', 3608.)])
 def test_sweep_writes_a_deck_for_the_requested_grid(engine, tmp_path, mode, power):
@@ -179,3 +203,21 @@ def test_both_modes_sweep_one_problem_and_survive_a_failed_point(tmp_path):
     assert failed[['Fn', 'W', 'T4', 'V9']].isna().all()
     assert failed['failure'] in ('AnalysisError', 'RuntimeError', 'target') \
         or failed['failure'].startswith('bound:')
+
+
+@pytest.mark.slow
+def test_pla_sweep_spans_wet_and_dry_in_one_pass(engine, tmp_path):
+    df = sweep(engine, mach=[0.001], alt=[0.0], dts=[0.0],
+               pla=[130.0, 92.5, 87.0, 60.0, 31.0], out_dir=tmp_path)
+
+    assert (tmp_path / 'cycle_deck_pla.csv').is_file()
+    assert 'PLA' in df.columns
+    assert list(df['converged']) == [True] * 5
+    assert list(df['mode']) == ['wet', 'wet', 'dry', 'dry', 'dry']
+    # Thrust descends monotonically from max AB to flight idle
+    assert list(df['Fn']) == sorted(df['Fn'], reverse=True)
+    # Landmarks match temperature-driven run_point within the solver-path floor (ADR-0005)
+    mil = run_point(engine, mode='dry', alt=0, mach=0, dts=0, throttle=engine.inputs.mil_Tt4)
+    pla_mil = run_point(engine, alt=0, mach=0, dts=0, pla=87.0)
+    assert pla_mil['Fn'] == pytest.approx(mil['Fn'], rel=1e-5)
+    assert pla_mil['PLA'] == 87.0 and pla_mil['mode'] == 'dry'

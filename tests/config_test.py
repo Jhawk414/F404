@@ -10,6 +10,7 @@ from f404.config import (
     DRY_DSN_FN,
     EXAMPLE_YAML,
     DesignInputs,
+    PlaSchedule,
     RangeError,
     RunConfig,
     SweepConfig,
@@ -20,6 +21,7 @@ from f404.config import (
     load_config,
     mach_axis,
     parse_range,
+    pla_axis,
     throttle_axis,
 )
 
@@ -303,3 +305,80 @@ def test_huge_yaml_integer_is_a_validation_error_not_an_overflow(tmp_path):
     path.write_text(yaml.safe_dump({'sweep': raw_sweep(alt=10 ** 400)}))
     with pytest.raises(ValueError, match='finite representable'):
         load_config(path)
+
+
+# ── PlaSchedule and PLA axis ─────────────────────────────────────────────────
+
+def test_pla_schedule_resolves_dry_detent_and_wet_regimes():
+    sched, inputs = PlaSchedule(), DesignInputs()
+
+    assert sched.resolve(31.0, inputs) == ('dry', 2500.0, 0.0)
+    assert sched.resolve(59.0, inputs) == ('dry', pytest.approx(2800.0), 0.0)
+    assert sched.resolve(87.0, inputs) == ('dry', 3100.0, 0.0)
+    # AB gate detent holds dry MIL until min_ab_pla
+    assert sched.resolve(90.0, inputs) == ('dry', 3100.0, 0.0)
+    assert sched.resolve(92.5, inputs) == ('wet', 3100.0, 1900.0)
+    assert sched.resolve(130.0, inputs) == ('wet', 3100.0, pytest.approx(inputs.max_Tt7))
+
+
+def test_pla_schedule_supports_collapsed_detent_and_rejects_out_of_range():
+    sched = PlaSchedule(min_ab_pla=87.0)
+    inputs = DesignInputs()
+    assert sched.resolve(87.0, inputs) == ('dry', 3100.0, 0.0)
+    mode, tt4, tt7 = sched.resolve(88.0, inputs)
+    assert (mode, tt4) == ('wet', 3100.0)
+    assert tt7 > sched.min_ab_Tt7
+
+    for bad in (18.1, 30.9, 130.1):
+        with pytest.raises(ValueError):
+            sched.resolve(bad, inputs)
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'idle_pla': 87.0, 'mil_pla': 87.0},
+    {'mil_pla': 95.0, 'min_ab_pla': 92.5},
+    {'min_ab_pla': 130.0, 'max_ab_pla': 130.0},
+])
+def test_pla_schedule_enforces_landmark_ordering(kwargs):
+    with pytest.raises(ValidationError, match='PLA landmarks'):
+        PlaSchedule(**kwargs)
+
+
+def test_pla_axis_and_sweep_config_mutual_exclusion():
+    assert pla_axis('31,130,33') == [130.0, 97.0, 64.0, 31.0]
+    with pytest.raises(RangeError, match='descending'):
+        axis([31.0, 87.0, 130.0], 'pla')
+    with pytest.raises(RangeError, match='positive'):
+        pla_axis('0')
+
+    # Valid PLA sweep omits mode and throttle
+    cfg = RunConfig.model_validate({
+        'sweep': {'mach': 0, 'alt': 0, 'dts': 0, 'pla': [130, 87, 31], 'out': 'deck'}
+    })
+    assert cfg.sweep.pla == [130.0, 87.0, 31.0]
+    assert cfg.sweep.mode is None and cfg.sweep.throttle is None
+
+    # Mutually exclusive with throttle and mode
+    with pytest.raises(ValidationError, match='mutually exclusive'):
+        SweepConfig.model_validate(raw_sweep(pla=[130, 87]))
+    with pytest.raises(ValidationError, match='mode cannot be combined with pla'):
+        SweepConfig.model_validate({
+            'mode': 'dry', 'mach': 0, 'alt': 0, 'dts': 0, 'pla': [87, 31], 'out': 'deck',
+        })
+    # Below flight idle rejected against schedule in RunConfig
+    with pytest.raises(ValidationError, match='flight idle'):
+        RunConfig.model_validate({
+            'sweep': {'mach': 0, 'alt': 0, 'dts': 0, 'pla': [87, 18.1], 'out': 'deck'}
+        })
+    # Temperature-only YAML does not validate unused default PLA schedule temperatures
+    temp_only = RunConfig.model_validate({
+        'design': {'max_Tt7': 1800.0},
+        'sweep': raw_sweep(),
+    })
+    assert temp_only.design.max_Tt7 == 1800.0
+    # PLA YAML still rejects incompatible schedule temperatures
+    with pytest.raises(ValidationError, match='min_ab_Tt7'):
+        RunConfig.model_validate({
+            'design': {'max_Tt7': 1800.0},
+            'sweep': {'mach': 0, 'alt': 0, 'dts': 0, 'pla': [130, 87], 'out': 'deck'},
+        })

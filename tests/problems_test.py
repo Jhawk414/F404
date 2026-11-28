@@ -21,6 +21,7 @@ from f404.problems import (
     DESIGN_INPUT_PATHS,
     DesignInputs,
     MaxTt7TooLowError,
+    PlaSchedule,
     _apply_design_inputs,
     design,
 )
@@ -304,6 +305,25 @@ def test_every_design_input_moves_the_solved_engine(problem):
 def test_design_validates_its_inputs_before_building_anything(inputs):
     with pytest.raises(ValueError, match='fan_eff'):
         design(inputs)
+
+
+@pytest.mark.parametrize('schedules, match', [
+    (PlaSchedule(idle_Tt4=3100.0), 'idle_Tt4'),
+    (PlaSchedule(min_ab_Tt7=3700.0), 'min_ab_Tt7'),
+])
+def test_pla_sweep_validates_schedule_temperatures_before_solving(schedules, match):
+    from f404.problems import Engine
+    from f404.sweep_full_envelope import sweep
+    stub = Engine(prob=None, inputs=DesignInputs(), anchor=None, ps_guesses=(),
+                  schedules=schedules)
+    with pytest.raises(ValueError, match=match):
+        sweep(stub, pla=[87.0])
+
+
+@pytest.mark.slow
+def test_design_allows_valid_temperature_only_engine_below_default_min_ab_tt7():
+    eng = design(DesignInputs(max_Tt7=1800.0))
+    assert eng.inputs.max_Tt7 == 1800.0
 
 
 @pytest.mark.slow

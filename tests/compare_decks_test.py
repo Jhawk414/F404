@@ -238,3 +238,27 @@ def test_a_blank_result_is_reported_not_read_as_unchanged():
     report = format_report(table, compare_decks(deck(), deck())[1], 2, 2,
                            changed_only=True)
     assert '| Fn (invalid) |' in report
+
+
+def test_pla_decks_key_on_pla_including_detent_and_recalibrated_schedules():
+    # 87 deg (MIL) and 90 deg (AB gate detent) share ('dry', 3100, 0) commands
+    # and stay distinct via PLA; recalibrating T4_cmd at 60 deg still matches
+    # the row and reports the T4_cmd shift as a compared column.
+    base = pd.concat([
+        deck(alt=[0., 0.], dTs=[0., 0.], T4_cmd=[3100., 3100.], PLA=[87.0, 90.0]),
+        deck(alt=[0., 0.], dTs=[0., 0.], T4_cmd=[2810.7, 2500.], PLA=[60.0, 31.0]).iloc[:1],
+    ], ignore_index=True)
+    new = base.assign(T4_cmd=[3100., 3100., 2850.0], Fn=[11000., 11000., 8500.])
+    table, points = compare_decks(base, new)
+    assert not any(points.values())
+    assert 'PLA' not in set(table['column'])
+    assert row(table, 'T4_cmd')['max_abs'] > 0
+    with pytest.raises(ValueError, match="not compared"):
+        compare_decks(base, new, columns=['PLA'])
+    with pytest.raises(ValueError, match="PLA deck with a throttle deck"):
+        compare_decks(base, deck())
+
+    # Closely spaced PLA values stay distinct rather than colliding under rounding
+    fine = deck(alt=[0., 0.], dTs=[0., 0.], PLA=[87.0000002, 87.0])
+    _, fine_pts = compare_decks(fine, fine)
+    assert not any(fine_pts.values())

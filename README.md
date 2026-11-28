@@ -68,17 +68,18 @@ and sweep it from Python:
 
 ```bash
 f404 run.yml                              # dry + wet grid; decks in deck/
-f404 sweep --mode wet --alt 0,10000,2500  # a custom sweep
+f404 sweep --pla 31,130,33                # unified dry-to-max-AB PLA sweep
+f404 sweep --mode wet --alt 0,10000,2500  # a custom temperature-driven sweep
 f404 design                               # size the engine and print the results
 f404 compare old.csv new.csv              # % change per shared column, points converged in both
 ```
 
 ```python
-from f404 import DesignInputs, design, run_point, sweep
+from f404 import DesignInputs, PlaSchedule, design, run_point, sweep
 
 eng = design(DesignInputs(hpc_PR=7.0))
-row = run_point(eng, mode='dry', alt=5000, mach=0.8, dts=-30, throttle=2700)
-deck = sweep(eng, mode='wet', mach=[0.001, 0.4], alt=0, dts=0)
+row = run_point(eng, alt=5000, mach=0.8, dts=-30, pla=87)
+deck = sweep(eng, mach=[0.001, 0.4], alt=0, dts=0, pla=[130, 92.5, 87, 31])
 ```
 
 Flags, range rules and YAML keys are in the [CLI guide](docs/guide/cli.md). The
@@ -94,9 +95,9 @@ pytest tests                  # full suite, ~3 min
 CI runs `f404 verify` and the fast tests on every PR to `main`. Details are in
 [`docs/testing.md`](docs/testing.md). Planned work is in the
 [GitHub issues](https://github.com/Jhawk414/F404/issues), with the suggested order
-in the latest [`AGENTS/HANDOFF_*.md`](AGENTS/). Next up are the PLA definition
-([#30](https://github.com/Jhawk414/F404/issues/30)) and the `f404.studio` tool
-([#46](https://github.com/Jhawk414/F404/issues/46)).
+in the latest [`AGENTS/HANDOFF_*.md`](AGENTS/). Next up are `f404.studio`
+([#46](https://github.com/Jhawk414/F404/issues/46)) and single-source bounds
+([#57](https://github.com/Jhawk414/F404/issues/57)).
 
 ## Acknowledgments
 

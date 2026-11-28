@@ -8,7 +8,7 @@ import platform
 import sys
 from importlib.resources import files
 
-from f404.config import DesignInputs
+from f404.config import DesignInputs, PlaSchedule
 from f404.problems import _solve
 from f404.sweep_utils import DECK_COLUMNS, _scalar
 
@@ -24,7 +24,7 @@ def _read(prob, pt):
 def measure():
     """Solve the engine and return ``{point: {quantity: value}}``."""
     mil = {}
-    prob = _solve(DesignInputs(), verbose=False,
+    prob = _solve(DesignInputs(), verbose=False, schedules=PlaSchedule(),
                   on_mil=lambda p, od: mil.update(_read(p, od))).prob
     return {'DESIGN': _read(prob, 'DESIGN'), 'SLS dry mil': mil,
             'SLS max AB': _read(prob, prob.model.od_pt)}

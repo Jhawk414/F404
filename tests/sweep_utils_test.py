@@ -64,8 +64,8 @@ class StubProblem:
 
 
 def runner(values, afterburn=True, mil_Tt4=3100.):
-    return SweepRunner(StubProblem(values), od_pt=OD, afterburn=afterburn,
-                       mil_Tt4=mil_Tt4)
+    command = (lambda p: ('wet', mil_Tt4, p)) if afterburn else (lambda p: ('dry', p, 0.))
+    return SweepRunner(StubProblem(values), od_pt=OD, command=command)
 
 
 # ── build_snake_sweep ─────────────────────────────────────────────────────────
@@ -295,13 +295,13 @@ def test_bound_tolerance_is_a_fraction_of_the_bound_width():
 def test_dry_target_met_when_burner_exit_hits_the_commanded_tt4():
     state = {f'{OD}.burner.Fl_O:tot:T': 2900.}
 
-    assert runner(state, afterburn=False)._target_met(2900.) is True
+    assert runner(state, afterburn=False)._target_met(('dry', 2900., 0.)) is True
 
 
 def test_dry_target_missed_when_burner_exit_drifts_past_tolerance():
     state = {f'{OD}.burner.Fl_O:tot:T': 2900. - _TARGET_TOL_DEGR - 1.}
 
-    assert runner(state, afterburn=False)._target_met(2900.) is False
+    assert runner(state, afterburn=False)._target_met(('dry', 2900., 0.)) is False
 
 
 def test_wet_target_requires_both_core_and_augmentor_temperatures():
@@ -313,13 +313,18 @@ def test_wet_target_requires_both_core_and_augmentor_temperatures():
     core_drifted = dict(on_target, **{f'{OD}.burner.Fl_O:tot:T': 3050.})
     ab_drifted = dict(on_target, **{f'{OD}.afterburner.Fl_O:tot:T': 3500.})
 
-    assert runner(on_target)._target_met(3600.) is True
-    assert runner(core_drifted)._target_met(3600.) is False
-    assert runner(ab_drifted)._target_met(3600.) is False
+    assert runner(on_target)._target_met(('wet', 3100., 3600.)) is True
+    assert runner(core_drifted)._target_met(('wet', 3100., 3600.)) is False
+    assert runner(ab_drifted)._target_met(('wet', 3100., 3600.)) is False
 
 
 def test_target_not_met_when_temperature_is_unreadable():
-    assert runner({}, afterburn=False)._target_met(3100.) is False
+    assert runner({}, afterburn=False)._target_met(('dry', 3100., 0.)) is False
+
+
+def test_target_not_met_when_core_temperature_is_nan():
+    state = {f'{OD}.burner.Fl_O:tot:T': float('nan')}
+    assert runner(state, afterburn=False)._target_met(('dry', 3100., 0.)) is False
 
 
 # ── Bridges ───────────────────────────────────────────────────────────────────
@@ -338,7 +343,7 @@ def test_a_bridge_that_does_not_converge_is_rolled_back():
     prob = design().prob
     mp = prob.model
     prob.set_solver_print(level=-1)
-    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp))
     od_outputs = prob.model._get_subsystem(mp.od_pt)._outputs
     real_run_model = prob.run_model
     solutions, warm_starts, n_bridges = [], [], 0
@@ -403,7 +408,7 @@ def test_od_bounds_table_matches_the_bounds_the_model_declares(problem):
 
 def dry_point(mp):
     """SweepRunner kwargs that drive the OD point dry."""
-    return dict(od_pt=mp.od_pt)
+    return dict(od_pt=mp.od_pt, command=lambda p: ('dry', p, 0.), power_label='Tt4')
 
 
 @pytest.mark.slow
@@ -420,7 +425,7 @@ def test_a_short_dry_sweep_converges_and_returns_a_deck_frame():
     prob.set_solver_print(level=-1)
     points = build_snake_sweep([0.], [0., 10., 20.], [3100.])
 
-    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp))
     deck = runner.run_sweep(points)
 
     assert deck['converged'].all(), "a nominal SLS sweep should fully converge"
@@ -459,7 +464,7 @@ def test_a_sweep_point_that_cannot_converge_is_recorded_as_failed():
     # would have to remove heat — FAR_core pins at its 1e-4 floor.
     points = build_snake_sweep([0.], [0.], [800.])
 
-    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp))
     deck = runner.run_sweep(points)
 
     row = deck.iloc[0]
@@ -483,8 +488,7 @@ def test_a_failed_point_does_not_abandon_the_rest_of_the_sweep():
     points = (build_snake_sweep([0.], [0.], [800.])
               + build_snake_sweep([0.], [0., 10.], [3100.]))
 
-    deck = SweepRunner(prob, **dry_point(mp),
-                       afterburn=False).run_sweep(points)
+    deck = SweepRunner(prob, **dry_point(mp)).run_sweep(points)
 
     assert list(deck['converged']) == [False, True, True]
     assert list(deck['T4_cmd']) == [800., 3100., 3100.]
@@ -503,7 +507,7 @@ def test_an_unexpected_error_aborts_the_sweep_rather_than_failing_a_point():
     prob = design().prob
     mp = prob.model
     prob.set_solver_print(level=-1)
-    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp))
 
     def exploding_run_model():
         raise KeyError("OD.balance.typo")
@@ -522,7 +526,7 @@ def test_a_drifted_bounds_table_aborts_the_sweep():
     prob = design().prob
     mp = prob.model
     prob.set_solver_print(level=-1)
-    runner = SweepRunner(prob, **dry_point(mp), afterburn=False)
+    runner = SweepRunner(prob, **dry_point(mp))
 
     with pytest.raises(SweepConfigurationError, match='balance.nonexistent'):
         with_drift = dict(_OD_BOUNDS, **{'balance.nonexistent': (0., 1.)})
