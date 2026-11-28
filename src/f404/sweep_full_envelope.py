@@ -56,8 +56,15 @@ DEFAULT_WET_POWERS = default_throttle(MAX_Tt7)   # Tt7, degR
 
 # MN 0.25 bridges only the jump back to static at each new power level.
 BRIDGE_THRESHOLD = {'alt': 2000, 'dTs': 30, 'power': 100, 'MN': 0.25}
-PLA_BRIDGE_THRESHOLD = {'alt': 2000, 'dTs': 30, 'power': 15, 'MN': 0.25}
 MAX_BRIDGE_STEPS = 5
+
+
+def _pla_bridge_threshold(schedules, inputs):
+    """Bridge threshold for PLA sweeps, keeping Tt4 and Tt7 jumps within
+    ``BRIDGE_THRESHOLD['power']`` (100 R) at the schedule's steepest slope."""
+    dry_slope = (inputs.mil_Tt4 - schedules.idle_Tt4) / (schedules.mil_pla - schedules.idle_pla)
+    wet_slope = (inputs.max_Tt7 - schedules.min_ab_Tt7) / (schedules.max_ab_pla - schedules.min_ab_pla)
+    return {**BRIDGE_THRESHOLD, 'power': BRIDGE_THRESHOLD['power'] / max(dry_slope, wet_slope)}
 
 def write_deck_csv(df, path):
     """Write a cycle-deck DataFrame to CSV at full float64 precision.
@@ -123,12 +130,15 @@ def sweep(engine, *, mode=None, mach=DEFAULT_MACHS, alt=DEFAULT_ALTS, dts=DEFAUL
         pla_vals = axis(pla, 'pla')
         for angle in pla_vals:
             engine.schedules.resolve(angle, engine.inputs)
-        home = engine.home_pla()
+        home = engine.home('pla')
         points = build_snake_sweep(
             axis(alt, 'alt'), axis(dts, 'dts'), pla_vals, axis(mach, 'mach'))
         label, deck_name = 'PLA', 'cycle_deck_pla.csv'
-        threshold = PLA_BRIDGE_THRESHOLD
-        runner_kw = {'pla_schedule': engine.schedules, 'inputs': engine.inputs}
+        threshold = _pla_bridge_threshold(engine.schedules, engine.inputs)
+        runner_kw = {
+            'command': lambda p: engine.schedules.resolve(p, engine.inputs),
+            'power_label': 'PLA', 'power_unit': 'deg', 'pla_column': True,
+        }
     else:
         if mode not in ('dry', 'wet'):
             raise ValueError(f"mode must be 'dry' or 'wet', got {mode!r}")
@@ -196,14 +206,20 @@ def run_sweeps(mode=None, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
     ``'wet'`` or ``'both'``; ``'both'`` also writes ``cycle_deck_full_envelope.csv``.
     Returns ``{name: DataFrame}`` for the sweeps that ran.
     """
+    if pla is not None:
+        if mode is not None:
+            raise ValueError("mode cannot be combined with pla; pla selects dry/wet automatically")
+        if dry_powers is not None or wet_powers is not None:
+            raise ValueError("dry_powers/wet_powers cannot be combined with pla")
+    elif mode not in ('dry', 'wet', 'both'):
+        raise ValueError(f"mode must be 'dry', 'wet' or 'both', got {mode!r}")
+
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     st_total = time.time()
+    engine = design(inputs, schedules=schedules, verbose=True)
     if pla is not None:
-        if mode is not None:
-            raise ValueError("mode cannot be combined with pla; pla selects dry/wet automatically")
-        engine = design(inputs, schedules=schedules, verbose=True)
         df = sweep(engine, mach=machs, alt=alts, dts=dTs_vals,
                    pla=pla, out_dir=out_dir, verbose=True)
         print(f"\nSweep complete in {time.time() - st_total:.1f}s")
@@ -211,10 +227,6 @@ def run_sweeps(mode=None, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
               f"→ {out_dir / 'cycle_deck_pla.csv'}")
         return {'pla': df}
 
-    if mode not in ('dry', 'wet', 'both'):
-        raise ValueError(f"mode must be 'dry', 'wet' or 'both', got {mode!r}")
-
-    engine = design(inputs, schedules=schedules, verbose=True)
     results = {}
     for m, powers in (('dry', dry_powers), ('wet', wet_powers)):
         if mode in (m, 'both'):

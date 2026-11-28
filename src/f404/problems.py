@@ -144,7 +144,7 @@ class Engine:
     inputs: DesignInputs
     anchor: np.ndarray
     ps_guesses: tuple = field(repr=False)
-    schedules: PlaSchedule = PlaSchedule()
+    schedules: PlaSchedule
 
     def restore_anchor(self):
         """Put the OD point back to SLS max AB, where ``design()`` left it.
@@ -159,13 +159,12 @@ class Engine:
 
     def home(self, mode):
         """The anchor's flight condition, as a sweep point at ``mode``'s top
-        power: ``mil_Tt4`` dry, ``max_Tt7`` wet."""
-        power = self.inputs.mil_Tt4 if mode == 'dry' else self.inputs.max_Tt7
+        power: ``mil_Tt4`` dry, ``max_Tt7`` wet, or ``max_ab_pla`` for PLA."""
+        if mode == 'pla':
+            power = self.schedules.max_ab_pla
+        else:
+            power = self.inputs.mil_Tt4 if mode == 'dry' else self.inputs.max_Tt7
         return {'MN': DSN_MN, 'alt': DSN_ALT, 'dTs': 0., 'power': power}
-
-    def home_pla(self):
-        """The anchor's flight condition at max AB PLA."""
-        return {'MN': DSN_MN, 'alt': DSN_ALT, 'dTs': 0., 'power': self.schedules.max_ab_pla}
 
 
 def _od_outputs(prob):
@@ -217,10 +216,10 @@ def design(inputs=DesignInputs(), *, schedules=PlaSchedule(), verbose=False):
     validated_inputs = DesignInputs.model_validate(inputs)
     validated_schedules = PlaSchedule.model_validate(schedules)
     validated_schedules.validate_against(validated_inputs)
-    return _solve(validated_inputs, verbose, schedules=validated_schedules)
+    return _solve(validated_inputs, verbose, validated_schedules)
 
 
-def _solve(inputs, verbose, on_mil=None, schedules=PlaSchedule()):
+def _solve(inputs, verbose, schedules, on_mil=None):
     """``design()``, plus ``on_mil(prob, od_pt)`` called once OD has converged
     at SLS mil, to read that point before max AB overwrites it (``verify``)."""
     prob = om.Problem(reports=False)

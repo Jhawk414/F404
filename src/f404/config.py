@@ -1,7 +1,7 @@
 """Validated user input: design-point inputs and the YAML run configuration."""
 import math
 from pathlib import Path
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal, NamedTuple, Optional
 
 import yaml
 from pydantic import (
@@ -77,6 +77,13 @@ class DesignInputs(StrictModel):
     bld3_cool3_frac_W: LossFraction = 0.11     # HPC exit bleed to the HPT
 
 
+class PowerCommand(NamedTuple):
+    """Resolved off-design power command returned by ``PlaSchedule.resolve()``."""
+    mode: Literal['dry', 'wet']
+    Tt4_cmd: float
+    Tt7_cmd: float
+
+
 class PlaSchedule(StrictModel):
     """Provisional PLA-to-temperature schedule (ADR-0006).
 
@@ -114,24 +121,24 @@ class PlaSchedule(StrictModel):
                 f"min_ab_Tt7 ({self.min_ab_Tt7:g} R) must be below max_Tt7 ({inputs.max_Tt7:g} R)"
             )
 
-    def resolve(self, pla: float, inputs: DesignInputs):
-        """Map one PLA angle (deg) to ``(mode, Tt4_cmd, Tt7_cmd)``."""
-        if isinstance(pla, bool) or not isinstance(pla, (int, float)) or not math.isfinite(pla):
-            raise ValueError(f"pla must be a finite number, got {pla!r}")
-        pla = float(pla)
+    def resolve(self, pla: float, inputs: DesignInputs) -> PowerCommand:
+        """Map one PLA angle (deg) to ``PowerCommand(mode, Tt4_cmd, Tt7_cmd)``.
+
+        Assumes ``validate_against(inputs)`` has already run at the boundary
+        (``design()`` / ``RunConfig``) and ``pla`` is a finite float.
+        """
         if pla < self.idle_pla or pla > self.max_ab_pla:
             raise ValueError(
                 f"pla ({pla:g} deg) must lie in [{self.idle_pla:g}, {self.max_ab_pla:g}] deg "
                 "(values below flight idle are intentionally excluded until #25)"
             )
-        self.validate_against(inputs)
         if pla <= self.mil_pla:
             frac = (pla - self.idle_pla) / (self.mil_pla - self.idle_pla)
-            return 'dry', self.idle_Tt4 + frac * (inputs.mil_Tt4 - self.idle_Tt4), 0.0
+            return PowerCommand('dry', self.idle_Tt4 + frac * (inputs.mil_Tt4 - self.idle_Tt4), 0.0)
         if pla < self.min_ab_pla:
-            return 'dry', float(inputs.mil_Tt4), 0.0
+            return PowerCommand('dry', float(inputs.mil_Tt4), 0.0)
         frac = (pla - self.min_ab_pla) / (self.max_ab_pla - self.min_ab_pla)
-        return 'wet', float(inputs.mil_Tt4), self.min_ab_Tt7 + frac * (inputs.max_Tt7 - self.min_ab_Tt7)
+        return PowerCommand('wet', float(inputs.mil_Tt4), self.min_ab_Tt7 + frac * (inputs.max_Tt7 - self.min_ab_Tt7))
 
 
 class RangeError(ValueError):

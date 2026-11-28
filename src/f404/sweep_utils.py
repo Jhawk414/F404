@@ -263,15 +263,20 @@ class SweepRunner:
     """
 
     def __init__(self, prob, od_pt, afterburn=True, mil_Tt4=3100., verbose=True,
-                 pla_schedule=None, inputs=None):
-        if pla_schedule is not None and inputs is None:
-            raise ValueError("inputs is required when pla_schedule is set")
+                 command=None, power_label=None, power_unit='R', pla_column=False):
         self.prob = prob
         self.od_pt = od_pt
         self.afterburn = afterburn
         self.mil_Tt4 = mil_Tt4
-        self.pla_schedule = pla_schedule
-        self.inputs = inputs
+        if command is None:
+            self._command = ((lambda p: ('wet', mil_Tt4, p)) if afterburn
+                             else (lambda p: ('dry', p, 0.)))
+            self._power_label = power_label or ("Tt7" if afterburn else "Tt4")
+        else:
+            self._command = command
+            self._power_label = power_label or "power"
+        self._power_unit = power_unit
+        self._pla_column = pla_column
         self._print = print if verbose else (lambda *args, **kwargs: None)
         # Snapshot of the most recently converged OD state — used to restore a
         # clean warm-start before retrying a failed point with safe linesearch.
@@ -316,14 +321,6 @@ class SweepRunner:
         od_group = self.prob.model._get_subsystem(self.od_pt)
         od_group._outputs.asarray()[:] = snap
 
-    def _resolve_power(self, power):
-        """Resolve a sweep point's ``power`` into ``(mode, Tt4_cmd, Tt7_cmd)``."""
-        if self.pla_schedule is not None:
-            return self.pla_schedule.resolve(power, self.inputs)
-        if self.afterburn:
-            return 'wet', self.mil_Tt4, power
-        return 'dry', power, 0.
-
     def _set_od_conditions(self, cond):
         """Set a sweep point's flight conditions and power level on the OD point.
 
@@ -333,7 +330,8 @@ class SweepRunner:
         self.prob.set_val(f'{pt}.fc.alt', cond['alt'], units='ft')
         self.prob.set_val(f'{pt}.fc.dTs', cond['dTs'], units='degR')
         self.prob.set_val(f'{pt}.fc.MN', cond['MN'])
-        mode, tt4, tt7 = self._resolve_power(cond['power'])
+        cmd = self._command(cond['power'])
+        mode, tt4, tt7 = cmd[0], cmd[1], cmd[2]
         self.prob.set_val(f'{pt}.balance.rhs:FAR_core', tt4, units='degR')
         self.prob.set_val(f'{pt}.aug_ctrl.Tt7_cmd', tt7, units='degR')
         return mode, tt4, tt7
@@ -375,15 +373,14 @@ class SweepRunner:
                 return key
         return None
 
-    def _target_met(self, power):
+    def _target_met(self, target):
         """Verify the FAR balances actually drove T4 (and T7, if wet) to target.
 
-        Belt-and-suspenders against false-converged states where Newton
-        reports success but the burner/afterburner exit temps are far from
-        the requested target — e.g. stalled-LP-spool basins.
+        ``target`` is either a resolved ``(mode, Tt4_cmd, Tt7_cmd)`` tuple or a
+        raw sweep ``power`` value (resolved through ``self._command``).
         """
         pt = self.od_pt
-        mode, tt4, tt7 = self._resolve_power(power)
+        mode, tt4, tt7 = target if isinstance(target, tuple) else self._command(target)
         try:
             t4 = _scalar(self.prob.get_val(f'{pt}.burner.Fl_O:tot:T',
                                            units='degR'))
@@ -491,9 +488,7 @@ class SweepRunner:
         self._od_newton().options['maxiter'] = SWEEP_MAXITER
         results = []
         prev_pt = start
-        is_pla = self.pla_schedule is not None
-        power_label, power_unit = (("PLA", "deg") if is_pla
-                                   else ("Tt7" if self.afterburn else "Tt4", "R"))
+        power_label, power_unit = self._power_label, self._power_unit
         n_total = len(sweep_points)
 
         if self._last_good_state is None:
@@ -533,7 +528,7 @@ class SweepRunner:
             mode, tt4, tt7 = self._set_od_conditions(pt_cond)
 
             self._set_linesearch_mode('fast')
-            failure = self._run_point(power=pt_cond['power'])
+            failure = self._run_point(power=(mode, tt4, tt7))
             mode_used = 'fast'
 
             if failure:
@@ -543,7 +538,7 @@ class SweepRunner:
                     self._restore_state(self._last_good_state)
                 self._set_od_conditions(pt_cond)
                 self._set_linesearch_mode('safe')
-                failure = self._run_point(power=pt_cond['power'])
+                failure = self._run_point(power=(mode, tt4, tt7))
                 self._set_linesearch_mode('fast')  # restore default for next point
                 mode_used = 'safe'
 
@@ -551,7 +546,7 @@ class SweepRunner:
                    'converged': failure is None, 'alt': pt_cond['alt'],
                    'dTs': pt_cond['dTs'], 'MN': pt_cond['MN'],
                    'T4_cmd': tt4, 'T7_cmd': tt7, FAILURE_COLUMN: failure}
-            if is_pla:
+            if self._pla_column:
                 row['PLA'] = pt_cond['power']
             results.append(row)
             if failure is None:
@@ -571,7 +566,7 @@ class SweepRunner:
 
             prev_pt = pt_cond
 
-        input_cols = PLA_INPUT_COLUMNS if is_pla else INPUT_COLUMNS
+        input_cols = PLA_INPUT_COLUMNS if self._pla_column else INPUT_COLUMNS
         deck = pd.DataFrame(results,
                             columns=input_cols + list(DECK_COLUMNS) + [FAILURE_COLUMN])
         log.info("Sweep complete: %d / %d points converged",

@@ -91,10 +91,21 @@ def test_unknown_mode_is_rejected_before_any_work(call):
     (lambda: run_point(None, mode='dry', alt=0, mach=0, dts=0, throttle=3100, pla=87),
      'exactly one of throttle or pla'),
     (lambda: run_sweeps('dry', pla=[87]), 'mode cannot be combined'),
+    (lambda: run_sweeps(pla=[87], dry_powers=[3100]), 'cannot be combined with pla'),
+    (lambda: run_sweeps(pla=[87], wet_powers=[3600]), 'cannot be combined with pla'),
 ])
 def test_pla_argument_conflicts_fail_fast(call, match):
     with pytest.raises(ValueError, match=match):
         call()
+
+
+def test_run_sweeps_rejects_bad_args_before_creating_out_dir(tmp_path):
+    target = tmp_path / 'should_not_exist'
+    with pytest.raises(ValueError):
+        run_sweeps('dry', pla=[87], out_dir=target)
+    with pytest.raises(ValueError):
+        run_sweeps('hot', out_dir=target)
+    assert not target.exists()
 
 
 @pytest.mark.slow

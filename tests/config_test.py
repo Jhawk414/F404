@@ -329,7 +329,7 @@ def test_pla_schedule_supports_collapsed_detent_and_rejects_out_of_range():
     assert (mode, tt4) == ('wet', 3100.0)
     assert tt7 > sched.min_ab_Tt7
 
-    for bad in (18.1, 30.9, 130.1, float('nan'), True):
+    for bad in (18.1, 30.9, 130.1):
         with pytest.raises(ValueError):
             sched.resolve(bad, inputs)
 
