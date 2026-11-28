@@ -152,7 +152,11 @@ def sweep(engine, *, mode=None, mach=DEFAULT_MACHS, alt=DEFAULT_ALTS, dts=DEFAUL
             axis(mach, 'mach'))
         label, deck_name = mode.capitalize(), f'cycle_deck_{mode}.csv'
         threshold = BRIDGE_THRESHOLD
-        runner_kw = {'afterburn': (mode == 'wet'), 'mil_Tt4': engine.inputs.mil_Tt4}
+        mil_tt4 = engine.inputs.mil_Tt4
+        runner_kw = {
+            'command': (lambda p: ('wet', mil_tt4, p)) if mode == 'wet' else (lambda p: ('dry', p, 0.)),
+            'power_label': 'Tt7' if mode == 'wet' else 'Tt4',
+        }
 
     if verbose:
         print(f"\n{label} sweep matrix: {len(points)} points")

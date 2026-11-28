@@ -252,29 +252,24 @@ class SweepRunner:
         Problem with DESIGN already converged via prob.run_model().
     od_pt : str
         Name of the OD point to drive, e.g. ``mp.od_pt``.
-    afterburn : bool
-        True = wet mode: 'power' in sweep points is T7 (degR); Tt4 is fixed at mil_Tt4.
-        False = dry mode: 'power' in sweep points is Tt4 (degR); afterburner dry.
-    mil_Tt4 : float
-        Core burner exit temp (degR) held fixed during a wet sweep (mil power).
-        Ignored in dry mode.
+    command : callable
+        Maps a sweep point's ``power`` value to ``(mode, Tt4_cmd, Tt7_cmd)``.
+    power_label : str
+        Label printed in progress lines (e.g. ``'Tt4'``, ``'Tt7'``, ``'PLA'``).
+    power_unit : str
+        Unit printed after ``power_label`` (e.g. ``'R'`` or ``'deg'``).
+    pla_column : bool
+        If True, record ``PLA`` in each row using ``PLA_INPUT_COLUMNS``.
     verbose : bool
         Print a progress line per sweep and bridge point.
     """
 
-    def __init__(self, prob, od_pt, afterburn=True, mil_Tt4=3100., verbose=True,
-                 command=None, power_label=None, power_unit='R', pla_column=False):
+    def __init__(self, prob, od_pt, command, *, power_label='power',
+                 power_unit='R', pla_column=False, verbose=True):
         self.prob = prob
         self.od_pt = od_pt
-        self.afterburn = afterburn
-        self.mil_Tt4 = mil_Tt4
-        if command is None:
-            self._command = ((lambda p: ('wet', mil_Tt4, p)) if afterburn
-                             else (lambda p: ('dry', p, 0.)))
-            self._power_label = power_label or ("Tt7" if afterburn else "Tt4")
-        else:
-            self._command = command
-            self._power_label = power_label or "power"
+        self._command = command
+        self._power_label = power_label
         self._power_unit = power_unit
         self._pla_column = pla_column
         self._print = print if verbose else (lambda *args, **kwargs: None)
@@ -330,8 +325,7 @@ class SweepRunner:
         self.prob.set_val(f'{pt}.fc.alt', cond['alt'], units='ft')
         self.prob.set_val(f'{pt}.fc.dTs', cond['dTs'], units='degR')
         self.prob.set_val(f'{pt}.fc.MN', cond['MN'])
-        cmd = self._command(cond['power'])
-        mode, tt4, tt7 = cmd[0], cmd[1], cmd[2]
+        mode, tt4, tt7 = self._command(cond['power'])
         self.prob.set_val(f'{pt}.balance.rhs:FAR_core', tt4, units='degR')
         self.prob.set_val(f'{pt}.aug_ctrl.Tt7_cmd', tt7, units='degR')
         return mode, tt4, tt7
@@ -376,11 +370,10 @@ class SweepRunner:
     def _target_met(self, target):
         """Verify the FAR balances actually drove T4 (and T7, if wet) to target.
 
-        ``target`` is either a resolved ``(mode, Tt4_cmd, Tt7_cmd)`` tuple or a
-        raw sweep ``power`` value (resolved through ``self._command``).
+        ``target`` is the resolved ``(mode, Tt4_cmd, Tt7_cmd)`` tuple.
         """
         pt = self.od_pt
-        mode, tt4, tt7 = target if isinstance(target, tuple) else self._command(target)
+        mode, tt4, tt7 = target
         try:
             t4 = _scalar(self.prob.get_val(f'{pt}.burner.Fl_O:tot:T',
                                            units='degR'))
@@ -413,7 +406,7 @@ class SweepRunner:
             return False
         return not self._state_at_bounds()
 
-    def _run_point(self, power=None):
+    def _run_point(self, target=None):
         """Run the model. Return None if Newton actually converged, else why not.
 
         Three independent checks must pass:
@@ -421,9 +414,7 @@ class SweepRunner:
           2. No BalanceComp state is clipped at its lower/upper bound.
           3. The burner/AB exit temps match the requested power target.
 
-        `power` may be None — in that case the target check is skipped (used
-        when re-verifying state after a bridge restore, where power doesn't
-        correspond to the most recently set conditions).
+        ``target`` may be None — in that case the target check is skipped.
 
         RuntimeError is caught alongside AnalysisError because a sufficiently
         degenerate point doesn't fail in Newton at all — it fails underneath
@@ -450,7 +441,7 @@ class SweepRunner:
         saturated = self._state_at_bounds()
         if saturated:
             return f'bound:{saturated}'
-        if power is not None and not self._target_met(power):
+        if target is not None and not self._target_met(target):
             return 'target'
         return None
 
@@ -528,7 +519,7 @@ class SweepRunner:
             mode, tt4, tt7 = self._set_od_conditions(pt_cond)
 
             self._set_linesearch_mode('fast')
-            failure = self._run_point(power=(mode, tt4, tt7))
+            failure = self._run_point(target=(mode, tt4, tt7))
             mode_used = 'fast'
 
             if failure:
@@ -538,7 +529,7 @@ class SweepRunner:
                     self._restore_state(self._last_good_state)
                 self._set_od_conditions(pt_cond)
                 self._set_linesearch_mode('safe')
-                failure = self._run_point(power=(mode, tt4, tt7))
+                failure = self._run_point(target=(mode, tt4, tt7))
                 self._set_linesearch_mode('fast')  # restore default for next point
                 mode_used = 'safe'
 
