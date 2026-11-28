@@ -18,8 +18,8 @@ from rich.text import Text
 from f404 import sweep_full_envelope as sfe
 from f404.compare_decks import compare_decks, format_report, read_deck
 from f404.config import (
-    EXAMPLE_YAML, DesignInputs, RangeError, SweepConfig, alt_axis, dts_axis,
-    load_config, mach_axis, throttle_axis,
+    EXAMPLE_YAML, DesignInputs, PlaSchedule, RangeError, RunConfig, SweepConfig,
+    alt_axis, dts_axis, load_config, mach_axis, pla_axis, throttle_axis,
 )
 from f404 import verify
 from f404.problems import design
@@ -27,7 +27,7 @@ from f404.problems import design
 
 # ── argparse wiring ───────────────────────────────────────────────────────────
 
-_RANGE_FLAGS = ('--mach', '--alt', '--dts', '--throttle')
+_RANGE_FLAGS = ('--mach', '--alt', '--dts', '--throttle', '--pla')
 
 def _axis_arg(builder):
     """Adapt an axis builder to argparse's ``type=``.
@@ -129,9 +129,9 @@ def build_parser():
                     "mode. Failed points are rows too, with converged False.",
     )
     sweep.add_argument(
-        '--mode', choices=['dry', 'wet', 'both'], default='both',
+        '--mode', choices=['dry', 'wet', 'both'], default=None,
         help="dry (mil power and below), wet (afterburning) or both "
-             "(default: both)")
+             "(default: both; cannot be combined with --pla)")
     sweep.add_argument(
         '--mach', type=_axis_arg(mach_axis), metavar='MIN,MAX,STEP',
         help="flight Mach, below 1; 0 is flown at 0.001 (static); a single "
@@ -148,8 +148,13 @@ def build_parser():
         '--throttle', type=_axis_arg(throttle_axis), metavar='MIN,MAX,STEP',
         help="Tt4 in dry mode, Tt7 in wet mode, degR; swept high to low; "
              "a single value holds it constant (default: 2500,3100,200 dry "
-             "/ 3007.68,3607.68,200 wet). Requires --mode dry or wet, since the "
-             "two are different temperatures")
+             "/ 3007.68,3607.68,200 wet). Requires --mode dry or wet; "
+             "mutually exclusive with --pla")
+    sweep.add_argument(
+        '--pla', type=_axis_arg(pla_axis), metavar='MIN,MAX,STEP',
+        help="power lever angle, deg (31..130, GE engine-level); swept high to "
+             "low across dry and wet in one pass. Mutually exclusive with "
+             "--throttle and --mode")
     sweep.add_argument(
         '--out', type=Path, default=Path('.'), metavar='DIR',
         help="directory for the decks, created if missing (default: .)")
@@ -210,22 +215,36 @@ def build_parser():
 
 
 def _run_sweep_command(args, parser):
-    if args.throttle is not None and args.mode == 'both':
+    mach = args.mach if args.mach is not None else sfe.DEFAULT_MACHS
+    alt = args.alt if args.alt is not None else sfe.DEFAULT_ALTS
+    dts = args.dts if args.dts is not None else sfe.DEFAULT_DTS
+
+    if args.pla is not None:
+        if args.throttle is not None:
+            parser.error("--pla and --throttle are mutually exclusive")
+        if args.mode is not None:
+            parser.error(
+                "--pla selects dry/wet automatically and cannot be combined with --mode")
+        try:
+            run_cfg = RunConfig(sweep=SweepConfig(
+                mach=mach, alt=alt, dts=dts, pla=args.pla, out=args.out,
+            ))
+        except ValidationError as exc:
+            parser.error(_validation_errors(exc))
+        return _run_sweep(run_cfg.sweep, parser, run_cfg.design, run_cfg.schedules)
+
+    mode = args.mode or 'both'
+    if args.throttle is not None and mode == 'both':
         parser.error(
             "--throttle is Tt4 in dry mode and Tt7 in wet mode, so one range "
             "can't serve --mode both. Run --mode dry and --mode wet separately.")
     throttle = {'dry': sfe.DEFAULT_DRY_POWERS, 'wet': sfe.DEFAULT_WET_POWERS}
     if args.throttle is not None:
-        throttle[args.mode] = args.throttle
+        throttle[mode] = args.throttle
 
     try:
         config = SweepConfig(
-            mode=args.mode,
-            mach=args.mach if args.mach is not None else sfe.DEFAULT_MACHS,
-            alt=args.alt if args.alt is not None else sfe.DEFAULT_ALTS,
-            dts=args.dts if args.dts is not None else sfe.DEFAULT_DTS,
-            throttle=throttle,
-            out=args.out,
+            mode=mode, mach=mach, alt=alt, dts=dts, throttle=throttle, out=args.out,
         )
     except ValidationError as exc:
         parser.error(_validation_errors(exc, prefix='sweep'))
@@ -242,22 +261,36 @@ def _validation_errors(exc, prefix=''):
     return '\n'.join(lines)
 
 
-def _run_sweep(config, parser, inputs=DesignInputs()):
+def _run_sweep(config, parser, inputs=DesignInputs(), schedules=PlaSchedule()):
     try:
         config.out.mkdir(parents=True, exist_ok=True)
         design_inputs = inputs.model_dump(mode='json')
-        resolved = config.model_dump(mode='json')
+        resolved = config.model_dump(mode='json', exclude_none=True)
         resolved['out'] = str(config.out.resolve())
-        modes = ('dry', 'wet', 'both') if config.mode == 'both' else (config.mode,)
-        for mode in modes:
-            resolved['mode'] = mode
-            (config.out / f'run_{mode}.resolved.yml').write_text(
-                yaml.safe_dump({'design': design_inputs, 'sweep': resolved}, sort_keys=False),
-                encoding='utf-8')
+        if config.pla is not None:
+            payload = {
+                'design': design_inputs,
+                'schedules': schedules.model_dump(mode='json'),
+                'sweep': resolved,
+            }
+            (config.out / 'run_pla.resolved.yml').write_text(
+                yaml.safe_dump(payload, sort_keys=False), encoding='utf-8')
+        else:
+            modes = ('dry', 'wet', 'both') if config.mode == 'both' else (config.mode,)
+            for mode in modes:
+                resolved['mode'] = mode
+                (config.out / f'run_{mode}.resolved.yml').write_text(
+                    yaml.safe_dump({'design': design_inputs, 'sweep': resolved}, sort_keys=False),
+                    encoding='utf-8')
     except OSError as exc:
         parser.error(f"cannot write sweep configuration in {config.out}: {exc}")
 
     sfe.configure_runtime()
+    if config.pla is not None:
+        return _solve_or_exit(parser, 'f404', lambda: sfe.run_sweeps(
+            alts=config.alt, dTs_vals=config.dts, machs=config.mach,
+            out_dir=config.out, inputs=inputs, pla=config.pla, schedules=schedules,
+        ))
     return _solve_or_exit(parser, 'f404', lambda: sfe.run_sweeps(
         config.mode, alts=config.alt, dTs_vals=config.dts,
         dry_powers=config.throttle.dry, wet_powers=config.throttle.wet,
@@ -363,7 +396,7 @@ def main(argv=None):
             parser.error(f"invalid run config {argv[0]}:\n{_validation_errors(exc)}")
         except ValueError as exc:
             parser.error(str(exc))
-        return _run_sweep(config.sweep, parser, config.design)
+        return _run_sweep(config.sweep, parser, config.design, config.schedules)
 
     args = parser.parse_args(_join_negative_ranges(argv))
     if args.example_yaml:

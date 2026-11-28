@@ -122,7 +122,7 @@ def compare_decks(base, new, columns=None):
     """
     if columns is not None:
         columns = list(columns)
-        inputs = [c for c in columns if c in _KEY + ['converged', 'failure']]
+        inputs = [c for c in columns if c in _KEY + ['converged', 'failure', 'PLA']]
         if inputs:
             raise ValueError(f"{inputs} are matched on or summarized, not compared; "
                              f"pass output columns")
@@ -146,7 +146,7 @@ def compare_decks(base, new, columns=None):
         if columns is not None:
             if col not in columns:
                 continue
-        elif (col not in n.columns or col in ('converged', 'failure')
+        elif (col not in n.columns or col in ('converged', 'failure', 'PLA')
                 or not pd.api.types.is_numeric_dtype(b[col])):
             continue
         bv, nv = b[col].to_numpy(float), n[col].to_numpy(float)
