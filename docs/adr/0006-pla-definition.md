@@ -60,7 +60,7 @@ In the current uncalibrated cycle model, however, dry BPR sits at `0.75` at MIL 
 
 3. **Public Python API (`f404`):**
    - Export `PlaSchedule` from `f404`.
-   - `design(inputs=DesignInputs(), *, schedules=PlaSchedule(), verbose=False) -> Engine`: attaches `schedules` to `Engine` and validates `idle_Tt4 < inputs.mil_Tt4` and `min_ab_Tt7 < inputs.max_Tt7` before solving.
+   - `design(inputs=DesignInputs(), *, schedules=PlaSchedule(), verbose=False) -> Engine`: attaches `schedules` to `Engine`; schedule temperature bounds (`idle_Tt4 < inputs.mil_Tt4`, `min_ab_Tt7 < inputs.max_Tt7`) are validated when PLA is actually used (`sweep(..., pla=...)`, `run_point(..., pla=...)`, and PLA `RunConfig`) so temperature-only designs keep `MaxTt7TooLowError` intact.
    - `run_point(engine, *, mode=None, alt, mach, dts, throttle=None, pla=None, verbose=False) -> dict` and `sweep(engine, *, mode=None, mach=..., alt=..., dts=..., throttle=None, pla=None, out_dir=None, verbose=False) -> DataFrame`:
      - `throttle` and `pla` are strictly mutually exclusive.
      - `throttle` retains its existing temperature semantics and requires `mode` (`'dry'` or `'wet'`).

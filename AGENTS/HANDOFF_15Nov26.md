@@ -17,7 +17,7 @@ Current state and next work only. Earlier session history is in
   [`docs/status.md`](../docs/status.md) holds the per-Mach counts; decks are committed under `deck/`.
 - Current local reference environment: Python 3.9.6, OpenMDAO 3.39.0,
   NumPy 2.0.2. CI also tests newer OpenMDAO releases; results can differ.
-- The full local suite passes **364 tests (313 fast)**. It covers
+- The full local suite passes **369 tests (317 fast)**. It covers
   sizing goldens, convergence regressions, PLA scheduling, CLI behavior, and validation. Fast PR CI excludes tests marked `slow`; the full
   matrix runs on `main`, manual dispatch, or the user-applied `full-ci` label.
   **Agents must not add `full-ci`.**

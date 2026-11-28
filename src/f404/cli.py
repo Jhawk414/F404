@@ -182,7 +182,8 @@ def build_parser():
         'compare',
         help="compare two cycle decks column by column",
         description="Match the rows of two decks on (mode, alt, dTs, MN, "
-                    "T4_cmd, T7_cmd), list the points that converge in only "
+                    "T4_cmd, T7_cmd) — or (alt, dTs, MN, PLA) for PLA decks — "
+                    "list the points that converge in only "
                     "one of them, and report the min, max and largest % change "
                     "of every shared column over the points converged in both, "
                     "NEW against BASE. Columns whose base is ~0 are compared in "

@@ -240,9 +240,11 @@ f404 compare old.csv new.csv --cols Fn,TSFC,BPR --changed-only
 - **Convergence.** The report lists points converged only in base
   (regressions) and only in new (gains), and counts points failed in both.
 - **Errors (exit 2).** Two rows on one key; two commands within 0.5 R of one
-  solved T4/T7 of a deck without commands; and `--cols` naming a column either
-  deck lacks, one that isn't numeric, or an input or summary column (`mode`,
-  `alt`, `dTs`, `MN`, `PLA`, `T4_cmd`, `T7_cmd`, `converged`, `failure`).
+  solved T4/T7 of a deck without commands; comparing a PLA deck with a throttle
+  deck; and `--cols` naming a column either deck lacks, one that isn't numeric,
+  or a matched/summary column (`mode`, `alt`, `dTs`, `MN`, `converged`,
+  `failure`, plus `T4_cmd`/`T7_cmd` on throttle decks or `PLA` on PLA decks —
+  on PLA decks `T4_cmd` and `T7_cmd` are comparable outputs).
 - **Near-zero base values.** Points whose base value is ~0 (dry `FAR_ab`, a
   zero loss) are compared in absolute terms, on a separate `(abs)` row.
 - **Missing values.** Blank or non-finite values are reported on an
