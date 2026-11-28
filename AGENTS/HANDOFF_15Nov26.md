@@ -17,8 +17,8 @@ Current state and next work only. Earlier session history is in
   [`docs/status.md`](../docs/status.md) holds the per-Mach counts; decks are committed under `deck/`.
 - Current local reference environment: Python 3.9.6, OpenMDAO 3.39.0,
   NumPy 2.0.2. CI also tests newer OpenMDAO releases; results can differ.
-- The full local suite passes **344 tests (294 fast)**. It covers
-  sizing goldens, convergence regressions, CLI behavior, and validation. Fast PR CI excludes tests marked `slow`; the full
+- The full local suite passes **364 tests (313 fast)**. It covers
+  sizing goldens, convergence regressions, PLA scheduling, CLI behavior, and validation. Fast PR CI excludes tests marked `slow`; the full
   matrix runs on `main`, manual dispatch, or the user-applied `full-ci` label.
   **Agents must not add `full-ci`.**
 
@@ -33,8 +33,32 @@ Architecture records:
 - [ADR-0004](../docs/adr/0004-verify-install-check.md): `f404 verify`, 1e-6
   relative tolerance on a fixed solve path.
 - [ADR-0005](../docs/adr/0005-public-python-api.md): the public Python API.
+- [ADR-0006](../docs/adr/0006-pla-definition.md): GE engine-level PLA
+  definition, provisional `PlaSchedule`, and unified PLA sweep axis.
 
-## Latest work: history-free OD calls (#59)
+## Latest work: PLA definition and sweep axis (#30)
+
+[PR #63](https://github.com/Jhawk414/F404/pull/63) closes
+[#30](https://github.com/Jhawk414/F404/issues/30). Design:
+[ADR-0006](../docs/adr/0006-pla-definition.md).
+
+- `PlaSchedule` (`config.py`, exported from `f404`) is a frozen `StrictModel`
+  sibling to `DesignInputs` (ADR-0005). Standardized on GE engine-level PLA
+  (`31°` flight idle → `87°` MIL → `92.5°` AB light-off gate → `130°` max AB;
+  Ennix `TM-4538`'s `35°`/`102°` is the F-18 cockpit convention).
+- Provisional defaults anchored by two spikes: `idle_Tt4 = 2500 R` (SLS dry
+  fails below `2400 R` as BPR clips `1.0`) and `min_ab_Tt7 = 1900 R`
+  (`FAR_ab ≈ 0.006`, 16/16 converged across hot/fast corners). Angles below
+  `31°` (including `18.1°` ground idle) are intentionally rejected until #25/#8
+  calibrate idle with dry A8 opening.
+- `design(inputs, *, schedules=PlaSchedule())` attaches `schedules` to `Engine`.
+  `run_point(..., pla=...)`, `sweep(..., pla=...)`, and `f404 sweep --pla` run
+  one descending pass from `Engine.home_pla()` (`130°` SLS max AB), writing
+  `cycle_deck_pla.csv` + `run_pla.resolved.yml` with `PLA_INPUT_COLUMNS`.
+  `pla` is mutually exclusive with `throttle` and `mode`. Existing `--throttle`
+  decks, `f404 verify`, and goldens are unchanged.
+
+## Earlier work: history-free OD calls (#59)
 
 [PR #62](https://github.com/Jhawk414/F404/pull/62) closes
 [#59](https://github.com/Jhawk414/F404/issues/59). The state that leaked from a
@@ -89,14 +113,13 @@ usage: [`docs/guide/python.md`](../docs/guide/python.md).
 
 ## Next work
 
-**#30 ADR → #46 phases 1–3 alongside the PLA axis → #57 → #48 → #8 + #25 +
-#35, measuring #3 → #10.** [#38](https://github.com/Jhawk414/F404/issues/38)
-builds on #57's single bounds table and is otherwise independent.
+**#46 phases 1–3 → #57 → #48 → #8 + #25 + #35, measuring #3 → #10.**
+[#38](https://github.com/Jhawk414/F404/issues/38) builds on #57's single bounds
+table and is otherwise independent.
 
 | Issue | Remaining scope |
 |---|---|
-| [#30](https://github.com/Jhawk414/F404/issues/30) | Decide what PLA commands, record ADR-0006 and a provisional schedule; add the PLA axis afterward as a `run_point()`/`sweep()` keyword. Schedule parameters go in a sibling model to `DesignInputs` (ADR-0005) |
-| [#46](https://github.com/Jhawk414/F404/issues/46) | `f404.studio` on the public API: design sweeps, design→OD bridging, analytic sensitivities; uses Tt4/Tt7 `throttle`, so it doesn't wait for the PLA axis. Needs a column-prefix convention (`fan_PR` is both an input and a deck column) and may add `design(warm_start=)` (ADR-0005) |
+| [#46](https://github.com/Jhawk414/F404/issues/46) | `f404.studio` on the public API: design sweeps, design→OD bridging, analytic sensitivities; uses Tt4/Tt7 `throttle`, so it doesn't wait for calibration. Needs a column-prefix convention (`fan_PR` is both an input and a deck column) and may add `design(warm_start=)` (ADR-0005) |
 | [#60](https://github.com/Jhawk414/F404/issues/60) | Shaft balances ignore `hp_shaft.HPX`. Fixing it applies the 250 hp extraction, moves every deck and golden, and should land with a recalibration (#48); re-add `HPX` to `DesignInputs` then |
 | [#57](https://github.com/Jhawk414/F404/issues/57) | Single-source balance bounds (drop `_OD_BOUNDS` and its drift test), DESIGN bound check and an exported error for infeasible sizing |
 | [#48](https://github.com/Jhawk414/F404/issues/48) | Gradient-assisted least-squares calibration to a targets file; studio sub-issue, tested without moving goldens |
@@ -108,14 +131,12 @@ builds on #57's single bounds table and is otherwise independent.
 
 ### PLA and calibration constraints
 
-- PLA is currently absent: dry sweeps command Tt4 and wet sweeps Tt7.
-  Landmarks from the literature: 31° flight idle, **87° MIL**, 130° max AB.
+- Provisional PLA (`PlaSchedule`, ADR-0006) maps GE engine-level PLA
+  (`31°` flight idle, `87°` MIL, `92.5°` AB gate, `130°` max AB) to `(Tt4, Tt7)`
+  and preserves temperature-based `--throttle`. Ground idle (`18.1°`) is
+  intentionally rejected until #25/#8 calibrate idle.
 - Below MIL, the real engine schedules N2 and A8. Above MIL it schedules AB
-  fuel, with A8 trimmed to a scheduled LPT-exit temperature (T5.6). PLA is
-  therefore not a single existing model variable. #30 must settle the
-  provisional dry command, light-off, and schedule source.
-- Preserve temperature-based `--throttle`; PLA is a separate axis spanning
-  dry/wet operation. Ray's measured thrust-vs-PLA data is a schedule candidate.
+  fuel, with A8 trimmed to a scheduled LPT-exit temperature (T5.6).
 - Tune dry A8 and idle together. Opening A8 at fixed Tt4 raises BPR, already
   near its 1.0 bound at part power; the real engine commands N2 below MIL.
 - Keep DESIGN/MIL as the minimum-A8 anchor. Prefer an explicit dry schedule
@@ -125,9 +146,10 @@ builds on #57's single bounds table and is otherwise independent.
   (~0.75 MIL, ~0.95 at 2500 R) is above published ~0.34; MIL TSFC ~0.621 is
   optimistic against published ~0.78–0.81. Compare operating conditions and
   station definitions before treating a literature value as a target.
-- A minimum wet FAR_ab around 0.005 is a proposed follow-up, not implemented.
-- PR #21's deck-interpolation GUI is deliberately parked pending PLA. Do not
-  review/rebase it as part of the above tasks.
+- A minimum wet FAR_ab around 0.005–0.006 is reflected provisionally in
+  `PlaSchedule.min_ab_Tt7 = 1900 R`, not enforced as a hard solver floor.
+- PR #21's deck-interpolation GUI is deliberately parked pending PLA/calibration.
+  Do not review/rebase it as part of the above tasks.
 
 ## Data and references
 

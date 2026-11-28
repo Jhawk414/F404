@@ -150,16 +150,20 @@ Every requested point is a row, failed ones included
 
 | Flag | Meaning | Default |
 |---|---|---|
-| `--mode {dry,wet,both}` | afterburner mode | `both` |
+| `--mode {dry,wet,both}` | afterburner mode (cannot be combined with `--pla`) | `both` |
 | `--mach MIN,MAX,STEP` | flight Mach, below 1 | `0.001, 0.2, 0.4, 0.6, 0.8, 0.95` |
 | `--alt MIN,MAX,STEP` | altitude, ft | `0,5000,2500` |
 | `--dts MIN,MAX,STEP` | ISA temperature offset, R | `-50,50,10` |
-| `--throttle MIN,MAX,STEP` | Tt4 (dry) or Tt7 (wet), R | `2500,3100,200` dry, `3007.68,3607.68,200` wet |
+| `--throttle MIN,MAX,STEP` | Tt4 (dry) or Tt7 (wet), R; mutually exclusive with `--pla` | `2500,3100,200` dry, `3007.68,3607.68,200` wet |
+| `--pla MIN,MAX,STEP` | GE engine-level PLA, deg (`31..130`); spans dry and wet in one pass; mutually exclusive with `--throttle` and `--mode` | — |
 | `--out DIR` | deck directory, created if missing | `.` |
 
 ```bash
 # Wet sweep: T7 from max AB (3607.68 R) down in 200 R steps (Tt4 held at mil, 3100 R)
 f404 sweep --mode wet --alt 0,10000,2500 --dts 0,20,10 --out /tmp/run1
+
+# Unified PLA sweep across wet and dry (writes cycle_deck_pla.csv + run_pla.resolved.yml)
+f404 sweep --pla 31,130,33 --mach 0 --alt 0 --dts 0 --out /tmp/pla1
 ```
 
 The wet default steps down from the calibrated max AB, `MAX_Tt7`. Decks from
@@ -236,7 +240,7 @@ f404 compare old.csv new.csv --cols Fn,TSFC,BPR --changed-only
 - **Errors (exit 2).** Two rows on one key; two commands within 0.5 R of one
   solved T4/T7 of a deck without commands; and `--cols` naming a column either
   deck lacks, one that isn't numeric, or an input or summary column (`mode`,
-  `alt`, `dTs`, `MN`, `T4_cmd`, `T7_cmd`, `converged`, `failure`).
+  `alt`, `dTs`, `MN`, `PLA`, `T4_cmd`, `T7_cmd`, `converged`, `failure`).
 - **Near-zero base values.** Points whose base value is ~0 (dry `FAR_ab`, a
   zero loss) are compared in absolute terms, on a separate `(abs)` row.
 - **Missing values.** Blank or non-finite values are reported on an

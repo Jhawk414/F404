@@ -43,8 +43,9 @@ with figures, in `md/`.
 ![F404 architecture and public API](f404_architecture.svg)
 
 `printer.py` prints the console tables for `verbose=True` and is left off the
-diagram. The package exports `DesignInputs`, `Engine`, `design`, `run_point`
-and `sweep` ([ADR-0005](adr/0005-public-python-api.md)).
+diagram. The package exports `DesignInputs`, `PlaSchedule`, `Engine`, `design`,
+`run_point` and `sweep` ([ADR-0005](adr/0005-public-python-api.md),
+[ADR-0006](adr/0006-pla-definition.md)).
 
 ## DESIGN and OD
 
