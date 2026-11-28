@@ -42,8 +42,11 @@ dry sweep into a later wet one was pyCycle's `PsResid._ps_guess_cache` (18 in
 OD), not solver objects. `restore_anchor()` now resets it, so `run_point()` and
 `sweep()` are bit-for-bit independent of earlier calls, which #46's
 `workers=1`/`workers=4` parity and #48 rely on. Single-mode decks are unchanged.
-The same cache bug exists upstream in `OpenMDAO/pyCycle`, where no issue has
-been filed yet.
+The same cache bug was reported upstream in
+[`OpenMDAO/pyCycle#125`](https://github.com/OpenMDAO/pyCycle/issues/125), with
+a fix in
+[`OpenMDAO/pyCycle#126`](https://github.com/OpenMDAO/pyCycle/pull/126) (ready for
+review).
 
 ## Earlier work: public Python API (#47, #17)
 
