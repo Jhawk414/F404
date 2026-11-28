@@ -13,8 +13,14 @@ import pandas as pd
 # kinds of point, and then gets one row of each.
 NEAR_ZERO = 1e-9
 _KEY = ['mode', 'alt', 'dTs', 'MN', 'T4_cmd', 'T7_cmd']
-_PLA_KEY = ['mode', 'alt', 'dTs', 'MN', 'PLA', 'T4_cmd', 'T7_cmd']
+_PLA_KEY = ['alt', 'dTs', 'MN', 'PLA']
 # A solved T4/T7 from a deck without commands stands in for the other deck's
+
+
+def match_key(df):
+    """Columns that identify a row in ``df``: PLA decks match on PLA so
+    schedule recalibrations report T4_cmd/T7_cmd shifts as output changes."""
+    return _PLA_KEY if 'PLA' in df else _KEY
 # command within this many degR.
 _LEGACY_TOL_DEGR = 0.5
 # Point lists in the report; 'failed in both' is only counted.
@@ -71,7 +77,7 @@ def _keyed(df, label, other, key=_KEY):
     on one key is an error, not a silent pairing.
     """
     out = _with_inputs(df, other)
-    out = out.assign(**{c: out[c].round(6) for c in key[1:]})
+    out = out.assign(**{c: out[c].round(6) for c in key if c != 'mode'})
     dup = out.duplicated(key, keep=False)
     if dup.any():
         keys = sorted({_point(k) for k in out.loc[dup, key].itertuples(index=False)})
@@ -124,11 +130,11 @@ def compare_decks(base, new, columns=None):
     base_has_pla, new_has_pla = 'PLA' in base, 'PLA' in new
     if base_has_pla != new_has_pla:
         raise ValueError("cannot compare a PLA deck with a throttle deck")
-    key = _PLA_KEY if base_has_pla else _KEY
+    key = match_key(base)
 
     if columns is not None:
         columns = list(columns)
-        inputs = [c for c in columns if c in key + ['converged', 'failure']]
+        inputs = [c for c in columns if c in key + ['mode', 'converged', 'failure']]
         if inputs:
             raise ValueError(f"{inputs} are matched on or summarized, not compared; "
                              f"pass output columns")
