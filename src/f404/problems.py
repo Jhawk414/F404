@@ -205,8 +205,6 @@ def design(inputs=DesignInputs(), *, schedules=PlaSchedule(), verbose=False):
     ------
     pydantic.ValidationError
         ``inputs`` or ``schedules`` is invalid or has an unknown field.
-    ValueError
-        ``schedules`` temperatures are inconsistent with ``inputs``.
     MaxTt7TooLowError
         ``inputs.max_Tt7`` is at or below the SLS-mil augmentor inlet
         temperature (~1500 R), checked after the dry solve.
@@ -215,7 +213,6 @@ def design(inputs=DesignInputs(), *, schedules=PlaSchedule(), verbose=False):
     """
     validated_inputs = DesignInputs.model_validate(inputs)
     validated_schedules = PlaSchedule.model_validate(schedules)
-    validated_schedules.validate_against(validated_inputs)
     return _solve(validated_inputs, verbose, validated_schedules)
 
 

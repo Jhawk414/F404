@@ -370,3 +370,15 @@ def test_pla_axis_and_sweep_config_mutual_exclusion():
         RunConfig.model_validate({
             'sweep': {'mach': 0, 'alt': 0, 'dts': 0, 'pla': [87, 18.1], 'out': 'deck'}
         })
+    # Temperature-only YAML does not validate unused default PLA schedule temperatures
+    temp_only = RunConfig.model_validate({
+        'design': {'max_Tt7': 1800.0},
+        'sweep': raw_sweep(),
+    })
+    assert temp_only.design.max_Tt7 == 1800.0
+    # PLA YAML still rejects incompatible schedule temperatures
+    with pytest.raises(ValidationError, match='min_ab_Tt7'):
+        RunConfig.model_validate({
+            'design': {'max_Tt7': 1800.0},
+            'sweep': {'mach': 0, 'alt': 0, 'dts': 0, 'pla': [130, 87], 'out': 'deck'},
+        })

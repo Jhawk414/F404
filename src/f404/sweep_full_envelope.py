@@ -128,6 +128,7 @@ def sweep(engine, *, mode=None, mach=DEFAULT_MACHS, alt=DEFAULT_ALTS, dts=DEFAUL
         if mode is not None:
             raise ValueError("mode cannot be combined with pla; pla selects dry/wet automatically")
         pla_vals = axis(pla, 'pla')
+        engine.schedules.validate_against(engine.inputs)
         for angle in pla_vals:
             engine.schedules.resolve(angle, engine.inputs)
         home = engine.home('pla')

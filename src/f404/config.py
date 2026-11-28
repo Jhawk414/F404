@@ -377,8 +377,8 @@ class RunConfig(StrictModel):
 
     @model_validator(mode='after')
     def _check_schedules(self):
-        self.schedules.validate_against(self.design)
         if self.sweep.pla is not None:
+            self.schedules.validate_against(self.design)
             for angle in self.sweep.pla:
                 self.schedules.resolve(angle, self.design)
         return self
