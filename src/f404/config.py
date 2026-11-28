@@ -1,10 +1,12 @@
 """Validated user input: design-point inputs and the YAML run configuration."""
 import math
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Optional
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, PositiveFloat, field_validator
+from pydantic import (
+    BaseModel, ConfigDict, Field, PositiveFloat, field_validator, model_validator,
+)
 
 from f404.sweep_utils import STATIC_MN
 
@@ -18,6 +20,14 @@ MAX_Tt7    = 3607.68 # degR — afterburner exit at max AB. With the augmentor
                      # (ADR-0001), so this sits below the F404's ~3800 R.
                      # Combustion efficiency (#35) will move it again. See
                      # docs/adr/0002-single-od-topology.md.
+
+# ── Provisional PLA schedule landmarks (GE engine-level PLA, ADR-0006) ───────
+IDLE_PLA   = 31.0    # deg  — flight idle (Johnson TM-4240, Ray TP-3001)
+MIL_PLA    = 87.0    # deg  — intermediate / MIL (max dry)
+MIN_AB_PLA = 92.5    # deg  — afterburner light-off gate (Conners TM-4140)
+MAX_AB_PLA = 130.0   # deg  — maximum afterburner
+IDLE_Tt4   = 2500.0  # degR — provisional dry Tt4 at flight idle (ADR-0006)
+MIN_AB_Tt7 = 1900.0  # degR — provisional wet Tt7 at min AB (FAR_ab ~ 0.006)
 
 
 class StrictModel(BaseModel):
@@ -65,6 +75,63 @@ class DesignInputs(StrictModel):
 
     hpc_cool1_frac_W: LossFraction = 0.050708  # HPC bleed to the LPT, of HPC inflow
     bld3_cool3_frac_W: LossFraction = 0.11     # HPC exit bleed to the HPT
+
+
+class PlaSchedule(StrictModel):
+    """Provisional PLA-to-temperature schedule (ADR-0006).
+
+    Sibling to ``DesignInputs`` (ADR-0005): changes off-design throttle mapping
+    without re-sizing the engine. Standardizes on GE engine-level PLA (deg):
+    ``idle_pla`` (31 deg flight idle) -> ``mil_pla`` (87 deg MIL) ->
+    ``min_ab_pla`` (92.5 deg AB gate) -> ``max_ab_pla`` (130 deg max AB).
+    Ground idle (18.1 deg) is intentionally excluded until #25/#8 calibrate
+    idle with dry A8 opening.
+    """
+    idle_pla: PositiveFloat = IDLE_PLA
+    mil_pla: PositiveFloat = MIL_PLA
+    min_ab_pla: PositiveFloat = MIN_AB_PLA
+    max_ab_pla: PositiveFloat = MAX_AB_PLA
+    idle_Tt4: PositiveFloat = IDLE_Tt4
+    min_ab_Tt7: PositiveFloat = MIN_AB_Tt7
+
+    @model_validator(mode='after')
+    def _check_pla_order(self):
+        if not (self.idle_pla < self.mil_pla <= self.min_ab_pla < self.max_ab_pla):
+            raise ValueError(
+                "PLA landmarks must satisfy idle_pla < mil_pla <= min_ab_pla < max_ab_pla, "
+                f"got ({self.idle_pla:g}, {self.mil_pla:g}, {self.min_ab_pla:g}, {self.max_ab_pla:g})"
+            )
+        return self
+
+    def validate_against(self, inputs: DesignInputs):
+        """Check schedule temperatures against a sized engine's ``DesignInputs``."""
+        if self.idle_Tt4 >= inputs.mil_Tt4:
+            raise ValueError(
+                f"idle_Tt4 ({self.idle_Tt4:g} R) must be below mil_Tt4 ({inputs.mil_Tt4:g} R)"
+            )
+        if self.min_ab_Tt7 >= inputs.max_Tt7:
+            raise ValueError(
+                f"min_ab_Tt7 ({self.min_ab_Tt7:g} R) must be below max_Tt7 ({inputs.max_Tt7:g} R)"
+            )
+
+    def resolve(self, pla: float, inputs: DesignInputs):
+        """Map one PLA angle (deg) to ``(mode, Tt4_cmd, Tt7_cmd)``."""
+        if isinstance(pla, bool) or not isinstance(pla, (int, float)) or not math.isfinite(pla):
+            raise ValueError(f"pla must be a finite number, got {pla!r}")
+        pla = float(pla)
+        if pla < self.idle_pla or pla > self.max_ab_pla:
+            raise ValueError(
+                f"pla ({pla:g} deg) must lie in [{self.idle_pla:g}, {self.max_ab_pla:g}] deg "
+                "(values below flight idle are intentionally excluded until #25)"
+            )
+        self.validate_against(inputs)
+        if pla <= self.mil_pla:
+            frac = (pla - self.idle_pla) / (self.mil_pla - self.idle_pla)
+            return 'dry', self.idle_Tt4 + frac * (inputs.mil_Tt4 - self.idle_Tt4), 0.0
+        if pla < self.min_ab_pla:
+            return 'dry', float(inputs.mil_Tt4), 0.0
+        frac = (pla - self.min_ab_pla) / (self.max_ab_pla - self.min_ab_pla)
+        return 'wet', float(inputs.mil_Tt4), self.min_ab_Tt7 + frac * (inputs.max_Tt7 - self.min_ab_Tt7)
 
 
 class RangeError(ValueError):
@@ -162,6 +229,11 @@ def throttle_axis(text):
     return axis(text, 'throttle')
 
 
+def pla_axis(text):
+    """Power lever angle axis in positive, descending order (deg)."""
+    return axis(text, 'pla')
+
+
 def _numeric_axis(value, name):
     if isinstance(value, bool):
         raise RangeError(f"{name} must be a number, range string, or list of numbers")
@@ -199,7 +271,7 @@ def axis(value, name):
             values = sorted((v for v in values if v >= 0)) + sorted(
                 (v for v in values if v < 0), reverse=True
             )
-        elif name == 'throttle':
+        elif name in ('throttle', 'pla'):
             values.reverse()
     else:
         values = _numeric_axis(value, name)
@@ -228,6 +300,13 @@ def axis(value, name):
             raise RangeError(
                 "throttle values must be in descending traversal order." + _ORDER_HINT
             )
+    elif name == 'pla':
+        if any(v <= 0 for v in values):
+            raise RangeError("pla angles must be positive deg")
+        if any(a <= b for a, b in zip(values, values[1:])):
+            raise RangeError(
+                "pla values must be in descending traversal order." + _ORDER_HINT
+            )
     return values
 
 
@@ -244,17 +323,23 @@ class ThrottleConfig(StrictModel):
 
 class SweepConfig(StrictModel):
 
-    mode: Literal['dry', 'wet', 'both']
+    mode: Optional[Literal['dry', 'wet', 'both']] = None
     mach: list[float]
     alt: list[float]
     dts: list[float]
-    throttle: ThrottleConfig
+    throttle: Optional[ThrottleConfig] = None
+    pla: Optional[list[float]] = None
     out: Path
 
     @field_validator('mach', 'alt', 'dts', mode='before')
     @classmethod
     def normalize_axis(cls, value, info):
         return axis(value, info.field_name)
+
+    @field_validator('pla', mode='before')
+    @classmethod
+    def normalize_pla(cls, value):
+        return None if value is None else axis(value, 'pla')
 
     @field_validator('out', mode='before')
     @classmethod
@@ -263,10 +348,33 @@ class SweepConfig(StrictModel):
             return Path(value).expanduser()
         raise ValueError("out must be a non-empty path string or Path")
 
+    @model_validator(mode='after')
+    def _check_power_axis(self):
+        if self.pla is not None:
+            if self.throttle is not None:
+                raise ValueError("throttle and pla are mutually exclusive; specify one")
+            if self.mode is not None:
+                raise ValueError("mode cannot be combined with pla; pla selects dry/wet automatically")
+        else:
+            if self.throttle is None:
+                raise ValueError("either throttle or pla is required")
+            if self.mode is None:
+                raise ValueError("mode is required when using throttle")
+        return self
+
 
 class RunConfig(StrictModel):
     design: DesignInputs = DesignInputs()
+    schedules: PlaSchedule = PlaSchedule()
     sweep: SweepConfig
+
+    @model_validator(mode='after')
+    def _check_schedules(self):
+        self.schedules.validate_against(self.design)
+        if self.sweep.pla is not None:
+            for angle in self.sweep.pla:
+                self.schedules.resolve(angle, self.design)
+        return self
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
