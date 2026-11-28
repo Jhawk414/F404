@@ -14,7 +14,9 @@ import numpy as np
 import openmdao.api as om
 from pycycle.thermo.static_ps_resid import PsResid
 
-from f404.config import DRY_DSN_FN, MAX_Tt7, MIL_Tt4, DesignInputs  # noqa: F401 (targets re-exported)
+from f404.config import (  # noqa: F401 (targets re-exported)
+    DRY_DSN_FN, MAX_Tt7, MIL_Tt4, DesignInputs, PlaSchedule,
+)
 from f404.mp_cycle import MPMixedFlowTurbofan
 from f404.printer import page_viewer
 from f404.sweep_utils import STATIC_MN, _scalar
@@ -142,6 +144,7 @@ class Engine:
     inputs: DesignInputs
     anchor: np.ndarray
     ps_guesses: tuple = field(repr=False)
+    schedules: PlaSchedule = PlaSchedule()
 
     def restore_anchor(self):
         """Put the OD point back to SLS max AB, where ``design()`` left it.
@@ -160,6 +163,10 @@ class Engine:
         power = self.inputs.mil_Tt4 if mode == 'dry' else self.inputs.max_Tt7
         return {'MN': DSN_MN, 'alt': DSN_ALT, 'dTs': 0., 'power': power}
 
+    def home_pla(self):
+        """The anchor's flight condition at max AB PLA."""
+        return {'MN': DSN_MN, 'alt': DSN_ALT, 'dTs': 0., 'power': self.schedules.max_ab_pla}
+
 
 def _od_outputs(prob):
     """The OD point's full output vector: every implicit Newton state, as a view."""
@@ -177,7 +184,7 @@ def _ps_resids(prob):
     return list(od.system_iter(recurse=True, typ=PsResid))
 
 
-def design(inputs=DesignInputs(), *, verbose=False):
+def design(inputs=DesignInputs(), *, schedules=PlaSchedule(), verbose=False):
     """Size the engine and solve OD at SLS dry mil, then SLS max AB.
 
     Parameters
@@ -185,6 +192,8 @@ def design(inputs=DesignInputs(), *, verbose=False):
     inputs : DesignInputs or mapping
         Design inputs; a mapping is validated as ``DesignInputs`` first.
         The defaults are the calibrated F404.
+    schedules : PlaSchedule or mapping
+        Off-design PLA schedule attached to the returned ``Engine``.
     verbose : bool
         Print Newton iterations and the DESIGN/OD result tables.
 
@@ -196,17 +205,22 @@ def design(inputs=DesignInputs(), *, verbose=False):
     Raises
     ------
     pydantic.ValidationError
-        ``inputs`` is a mapping with an invalid or unknown field.
+        ``inputs`` or ``schedules`` is invalid or has an unknown field.
+    ValueError
+        ``schedules`` temperatures are inconsistent with ``inputs``.
     MaxTt7TooLowError
         ``inputs.max_Tt7`` is at or below the SLS-mil augmentor inlet
         temperature (~1500 R), checked after the dry solve.
     openmdao.api.AnalysisError
         DESIGN or OD did not converge.
     """
-    return _solve(DesignInputs.model_validate(inputs), verbose)
+    validated_inputs = DesignInputs.model_validate(inputs)
+    validated_schedules = PlaSchedule.model_validate(schedules)
+    validated_schedules.validate_against(validated_inputs)
+    return _solve(validated_inputs, verbose, schedules=validated_schedules)
 
 
-def _solve(inputs, verbose, on_mil=None):
+def _solve(inputs, verbose, on_mil=None, schedules=PlaSchedule()):
     """``design()``, plus ``on_mil(prob, od_pt)`` called once OD has converged
     at SLS mil, to read that point before max AB overwrites it (``verify``)."""
     prob = om.Problem(reports=False)
@@ -243,4 +257,5 @@ def _solve(inputs, verbose, on_mil=None):
     if verbose:
         page_viewer(prob, od)
     return Engine(prob, inputs, _od_outputs(prob).copy(),
-                  tuple(np.copy(c._ps_guess_cache) for c in _ps_resids(prob)))
+                  tuple(np.copy(c._ps_guess_cache) for c in _ps_resids(prob)),
+                  schedules)

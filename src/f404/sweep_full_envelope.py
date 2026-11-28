@@ -28,7 +28,7 @@ from pathlib import Path
 import pandas as pd
 from openmdao.utils.om_warnings import SolverWarning
 
-from f404.config import DesignInputs, axis
+from f404.config import DesignInputs, PlaSchedule, axis
 from f404.problems import MAX_Tt7, MIL_Tt4, design
 from f404.sweep_utils import build_snake_sweep, STATIC_MN, SweepRunner
 
@@ -56,6 +56,7 @@ DEFAULT_WET_POWERS = default_throttle(MAX_Tt7)   # Tt7, degR
 
 # MN 0.25 bridges only the jump back to static at each new power level.
 BRIDGE_THRESHOLD = {'alt': 2000, 'dTs': 30, 'power': 100, 'MN': 0.25}
+PLA_BRIDGE_THRESHOLD = {'alt': 2000, 'dTs': 30, 'power': 15, 'MN': 0.25}
 MAX_BRIDGE_STEPS = 5
 
 def write_deck_csv(df, path):
@@ -81,97 +82,139 @@ def configure_runtime():
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
 
-def sweep(engine, *, mode, mach=DEFAULT_MACHS, alt=DEFAULT_ALTS, dts=DEFAULT_DTS,
-          throttle=None, out_dir=None, verbose=False):
-    """Sweep one mode of a sized engine and return its deck.
+def sweep(engine, *, mode=None, mach=DEFAULT_MACHS, alt=DEFAULT_ALTS, dts=DEFAULT_DTS,
+          throttle=None, pla=None, out_dir=None, verbose=False):
+    """Sweep a sized engine over flight conditions and throttle or PLA.
 
     Parameters
     ----------
     engine : Engine
         From ``design()``. Restored to its SLS max-AB anchor first, so earlier
-        calls don't steer the result. Afterwards ``engine.prob`` is solved at the last point only if that point converged.
-    mode : {'dry', 'wet'}
-    mach, alt, dts, throttle : list of float, float, or range string
+        calls don't steer the result. Afterwards ``engine.prob`` is solved at
+        the last point only if that point converged.
+    mode : {'dry', 'wet'}, optional
+        Required when sweeping temperature ``throttle``; must be None when
+        sweeping ``pla`` (PLA selects dry/wet per point via ``engine.schedules``).
+    mach, alt, dts, throttle, pla : list of float, float, or range string
         The axes, validated as for the CLI and YAML (``config.axis``):
-        Mach ascending, alt ascending, dts hot then cold, throttle descending.
-        ``throttle`` is Tt4 dry and Tt7 wet, degR; by default four levels
-        200 R apart down from the engine's ``mil_Tt4`` or ``max_Tt7``.
+        Mach ascending, alt ascending, dts hot then cold, throttle/pla descending.
+        ``throttle`` and ``pla`` are mutually exclusive. ``throttle`` is Tt4 dry
+        and Tt7 wet, degR; by default four levels 200 R apart down from the
+        engine's ``mil_Tt4`` or ``max_Tt7``. ``pla`` is GE engine-level PLA in
+        deg (ADR-0006), spanning dry and wet in one descending pass.
     out_dir : path-like, optional
-        Write ``cycle_deck_<mode>.csv`` here; nothing is written if None.
+        Write ``cycle_deck_<mode>.csv`` (or ``cycle_deck_pla.csv`` for PLA)
+        here; nothing is written if None.
     verbose : bool
         Print a line per point.
 
     Returns
     -------
     pandas.DataFrame
-        One row per point, failed ones included: ``INPUT_COLUMNS``, then
-        ``DECK_COLUMNS`` (blank where the point failed), then ``failure``.
+        One row per point, failed ones included: ``INPUT_COLUMNS`` (or
+        ``PLA_INPUT_COLUMNS`` for PLA), then ``DECK_COLUMNS`` (blank where the
+        point failed), then ``failure``.
     """
-    if mode not in ('dry', 'wet'):
-        raise ValueError(f"mode must be 'dry' or 'wet', got {mode!r}")
-    # The anchor's condition at this mode's top power. The default grids
-    # start here, so their first point needs no bridge.
-    home = engine.home(mode)
-    points = build_snake_sweep(
-        axis(alt, 'alt'), axis(dts, 'dts'),
-        axis(default_throttle(home['power']) if throttle is None else throttle,
-             'throttle'),
-        axis(mach, 'mach'))
+    if pla is not None:
+        if throttle is not None:
+            raise ValueError("throttle and pla are mutually exclusive")
+        if mode is not None:
+            raise ValueError("mode cannot be combined with pla; pla selects dry/wet automatically")
+        pla_vals = axis(pla, 'pla')
+        for angle in pla_vals:
+            engine.schedules.resolve(angle, engine.inputs)
+        home = engine.home_pla()
+        points = build_snake_sweep(
+            axis(alt, 'alt'), axis(dts, 'dts'), pla_vals, axis(mach, 'mach'))
+        label, deck_name = 'PLA', 'cycle_deck_pla.csv'
+        threshold = PLA_BRIDGE_THRESHOLD
+        runner_kw = {'pla_schedule': engine.schedules, 'inputs': engine.inputs}
+    else:
+        if mode not in ('dry', 'wet'):
+            raise ValueError(f"mode must be 'dry' or 'wet', got {mode!r}")
+        # The anchor's condition at this mode's top power. The default grids
+        # start here, so their first point needs no bridge.
+        home = engine.home(mode)
+        points = build_snake_sweep(
+            axis(alt, 'alt'), axis(dts, 'dts'),
+            axis(default_throttle(home['power']) if throttle is None else throttle,
+                 'throttle'),
+            axis(mach, 'mach'))
+        label, deck_name = mode.capitalize(), f'cycle_deck_{mode}.csv'
+        threshold = BRIDGE_THRESHOLD
+        runner_kw = {'afterburn': (mode == 'wet'), 'mil_Tt4': engine.inputs.mil_Tt4}
+
     if verbose:
-        print(f"\n{mode.capitalize()} sweep matrix: {len(points)} points")
+        print(f"\n{label} sweep matrix: {len(points)} points")
 
     engine.restore_anchor()
     prob = engine.prob
     prob.set_solver_print(level=-1)
-    runner = SweepRunner(prob, od_pt=prob.model.od_pt, afterburn=(mode == 'wet'),
-                         mil_Tt4=engine.inputs.mil_Tt4, verbose=verbose)
-    df = runner.run_sweep(points, bridge_threshold=BRIDGE_THRESHOLD,
+    runner = SweepRunner(prob, od_pt=prob.model.od_pt, verbose=verbose, **runner_kw)
+    df = runner.run_sweep(points, bridge_threshold=threshold,
                           max_bridge_steps=MAX_BRIDGE_STEPS, start=home)
     if out_dir is not None:
-        write_deck_csv(df, Path(out_dir) / f'cycle_deck_{mode}.csv')
+        write_deck_csv(df, Path(out_dir) / deck_name)
     return df
 
 
-def run_point(engine, *, mode, alt, mach, dts, throttle, verbose=False):
+def run_point(engine, *, mode=None, alt, mach, dts, throttle=None, pla=None, verbose=False):
     """Solve one OD condition of a sized engine and return its deck row.
 
     The point is reached from the engine's SLS max-AB anchor through bridge
     points, as a sweep reaches its first point, so the result doesn't depend
-    on earlier calls. Arguments are as for ``sweep()``, one value each;
-    ``mach`` 0 is flown at 0.001.
+    on earlier calls. Pass either ``throttle`` (with ``mode='dry'`` or
+    ``'wet'``) or ``pla`` (mode inferred from ``engine.schedules``); ``mach`` 0
+    is flown at 0.001.
 
     Returns
     -------
     dict
-        ``INPUT_COLUMNS`` + ``DECK_COLUMNS`` + ``failure``. A point that
-        fails is returned with ``converged`` False and NaN outputs, not
-        raised. When it converged, ``engine.prob`` is left solved at it,
-        so it can be read or differentiated; when it failed, it is not.
+        ``INPUT_COLUMNS`` (or ``PLA_INPUT_COLUMNS``) + ``DECK_COLUMNS`` +
+        ``failure``. A point that fails is returned with ``converged`` False
+        and NaN outputs, not raised. When it converged, ``engine.prob`` is left
+        solved at it, so it can be read or differentiated; when it failed, it
+        is not.
     """
+    if (throttle is None) == (pla is None):
+        raise ValueError("pass exactly one of throttle or pla")
     df = sweep(engine, mode=mode, mach=[mach], alt=[alt], dts=[dts],
-               throttle=[throttle], verbose=verbose)
+               throttle=None if throttle is None else [throttle],
+               pla=None if pla is None else [pla], verbose=verbose)
     return df.to_dict('records')[0]
 
 
-def run_sweeps(mode, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
+def run_sweeps(mode=None, alts=DEFAULT_ALTS, dTs_vals=DEFAULT_DTS,
                dry_powers=None, wet_powers=None,
-               machs=DEFAULT_MACHS, out_dir='.', inputs=DesignInputs()):
-    """Size the engine from ``inputs``, run the dry sweep, the wet sweep, or
-    both, and write the decks: the driver behind ``f404 sweep`` and YAML runs.
+               machs=DEFAULT_MACHS, out_dir='.', inputs=DesignInputs(),
+               pla=None, schedules=PlaSchedule()):
+    """Size the engine from ``inputs``, run dry/wet or PLA sweeps, and write
+    the decks: the driver behind ``f404 sweep`` and YAML runs.
 
-    ``mode`` is 'dry', 'wet' or 'both'; 'both' also writes the combined
-    ``cycle_deck_full_envelope.csv``. Throttles left as None run down from
-    the sized engine's ``mil_Tt4`` and ``max_Tt7``, as in ``sweep()``. Returns ``{mode: DataFrame}`` for the
-    modes that ran.
+    With ``pla`` set (mutually exclusive with ``mode``), runs one unified PLA
+    sweep and writes ``cycle_deck_pla.csv``. Otherwise ``mode`` is ``'dry'``,
+    ``'wet'`` or ``'both'``; ``'both'`` also writes ``cycle_deck_full_envelope.csv``.
+    Returns ``{name: DataFrame}`` for the sweeps that ran.
     """
-    if mode not in ('dry', 'wet', 'both'):
-        raise ValueError(f"mode must be 'dry', 'wet' or 'both', got {mode!r}")
-
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     st_total = time.time()
-    engine = design(inputs, verbose=True)
+    if pla is not None:
+        if mode is not None:
+            raise ValueError("mode cannot be combined with pla; pla selects dry/wet automatically")
+        engine = design(inputs, schedules=schedules, verbose=True)
+        df = sweep(engine, mach=machs, alt=alts, dts=dTs_vals,
+                   pla=pla, out_dir=out_dir, verbose=True)
+        print(f"\nSweep complete in {time.time() - st_total:.1f}s")
+        print(f"  PLA: {df['converged'].sum()} / {len(df)} converged "
+              f"→ {out_dir / 'cycle_deck_pla.csv'}")
+        return {'pla': df}
+
+    if mode not in ('dry', 'wet', 'both'):
+        raise ValueError(f"mode must be 'dry', 'wet' or 'both', got {mode!r}")
+
+    engine = design(inputs, schedules=schedules, verbose=True)
     results = {}
     for m, powers in (('dry', dry_powers), ('wet', wet_powers)):
         if mode in (m, 'both'):
