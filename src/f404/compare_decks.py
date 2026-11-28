@@ -15,17 +15,17 @@ NEAR_ZERO = 1e-9
 _KEY = ['mode', 'alt', 'dTs', 'MN', 'T4_cmd', 'T7_cmd']
 _PLA_KEY = ['alt', 'dTs', 'MN', 'PLA']
 # A solved T4/T7 from a deck without commands stands in for the other deck's
+# command within this many degR.
+_LEGACY_TOL_DEGR = 0.5
+# Point lists in the report; 'failed in both' is only counted.
+POINT_LISTS = ['only in base', 'only in new', 'converged only in base',
+               'converged only in new', 'failed in both']
 
 
 def match_key(df):
     """Columns that identify a row in ``df``: PLA decks match on PLA so
     schedule recalibrations report T4_cmd/T7_cmd shifts as output changes."""
     return _PLA_KEY if 'PLA' in df else _KEY
-# command within this many degR.
-_LEGACY_TOL_DEGR = 0.5
-# Point lists in the report; 'failed in both' is only counted.
-POINT_LISTS = ['only in base', 'only in new', 'converged only in base',
-               'converged only in new', 'failed in both']
 
 
 def read_deck(path):
@@ -77,7 +77,7 @@ def _keyed(df, label, other, key=_KEY):
     on one key is an error, not a silent pairing.
     """
     out = _with_inputs(df, other)
-    out = out.assign(**{c: out[c].round(6) for c in key if c != 'mode'})
+    out = out.assign(**{c: out[c].round(6) for c in key if c not in ('mode', 'PLA')})
     dup = out.duplicated(key, keep=False)
     if dup.any():
         keys = sorted({_point(k) for k in out.loc[dup, key].itertuples(index=False)})

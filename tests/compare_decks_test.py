@@ -257,3 +257,8 @@ def test_pla_decks_key_on_pla_including_detent_and_recalibrated_schedules():
         compare_decks(base, new, columns=['PLA'])
     with pytest.raises(ValueError, match="PLA deck with a throttle deck"):
         compare_decks(base, deck())
+
+    # Closely spaced PLA values stay distinct rather than colliding under rounding
+    fine = deck(alt=[0., 0.], dTs=[0., 0.], PLA=[87.0000002, 87.0])
+    _, fine_pts = compare_decks(fine, fine)
+    assert not any(fine_pts.values())

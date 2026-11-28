@@ -322,6 +322,11 @@ def test_target_not_met_when_temperature_is_unreadable():
     assert runner({}, afterburn=False)._target_met(('dry', 3100., 0.)) is False
 
 
+def test_target_not_met_when_core_temperature_is_nan():
+    state = {f'{OD}.burner.Fl_O:tot:T': float('nan')}
+    assert runner(state, afterburn=False)._target_met(('dry', 3100., 0.)) is False
+
+
 # ── Bridges ───────────────────────────────────────────────────────────────────
 
 @pytest.mark.slow

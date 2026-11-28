@@ -379,7 +379,7 @@ class SweepRunner:
                                            units='degR'))
         except Exception:
             return False
-        if abs(t4 - tt4) > _TARGET_TOL_DEGR:
+        if not (abs(t4 - tt4) <= _TARGET_TOL_DEGR):
             return False
         if mode == 'wet':
             try:
