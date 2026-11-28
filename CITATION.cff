@@ -5,8 +5,8 @@ authors:
   - family-names: "Medlin"
     given-names: "Ryan"
     orcid: "https://orcid.org/0009-0002-7901-1601"
-version: 0.3.0
-date-released: 2026-11-15
+version: 0.4.0
+date-released: 2026-11-28
 doi: 10.5281/zenodo.24072855
 repository-code: "https://github.com/Jhawk414/F404"
 license: Apache-2.0
