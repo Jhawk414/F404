@@ -16,7 +16,7 @@ from rich.table import Table
 from rich.text import Text
 
 from f404 import sweep_full_envelope as sfe
-from f404.compare_decks import compare_decks, format_report, read_deck
+from f404.compare_decks import _KEY, _PLA_KEY, compare_decks, format_report, read_deck
 from f404.config import (
     EXAMPLE_YAML, DesignInputs, PlaSchedule, RangeError, RunConfig, SweepConfig,
     alt_axis, dts_axis, load_config, mach_axis, pla_axis, throttle_axis,
@@ -355,7 +355,8 @@ def _run_compare_command(args, parser):
     except ValueError as exc:
         parser.error(str(exc))
     print(format_report(table, points, len(base), len(new),
-                        changed_only=args.changed_only))
+                        changed_only=args.changed_only,
+                        key=_PLA_KEY if 'PLA' in base else _KEY))
     invalid = table.loc[table['kind'] == 'invalid', 'column'].tolist()
     if invalid:
         print(f"f404 compare: non-finite values in {invalid}", file=sys.stderr)

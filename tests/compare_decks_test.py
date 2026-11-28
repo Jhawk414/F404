@@ -240,10 +240,16 @@ def test_a_blank_result_is_reported_not_read_as_unchanged():
     assert '| Fn (invalid) |' in report
 
 
-def test_pla_column_is_treated_as_input_not_compared_output():
-    base = deck(PLA=[87.0, 130.0])
-    new = deck(PLA=[87.0, 130.0], Fn=[11000., 9000.])
-    table, _ = compare_decks(base, new)
+def test_pla_decks_key_on_pla_including_detent_and_reject_mixed_decks():
+    # 87 deg (MIL) and 90 deg (AB gate detent) share ('dry', 3100, 0) commands
+    # and must stay distinct via PLA.
+    base = deck(alt=[0., 0.], dTs=[0., 0.], T4_cmd=[3100., 3100.], PLA=[87.0, 90.0])
+    new = deck(alt=[0., 0.], dTs=[0., 0.], T4_cmd=[3100., 3100.], PLA=[87.0, 90.0],
+               Fn=[11000., 9000.])
+    table, points = compare_decks(base, new)
+    assert not any(points.values())
     assert 'PLA' not in set(table['column'])
     with pytest.raises(ValueError, match="not compared"):
         compare_decks(base, new, columns=['PLA'])
+    with pytest.raises(ValueError, match="PLA deck with a throttle deck"):
+        compare_decks(base, deck())

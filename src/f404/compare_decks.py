@@ -13,6 +13,7 @@ import pandas as pd
 # kinds of point, and then gets one row of each.
 NEAR_ZERO = 1e-9
 _KEY = ['mode', 'alt', 'dTs', 'MN', 'T4_cmd', 'T7_cmd']
+_PLA_KEY = ['mode', 'alt', 'dTs', 'MN', 'PLA', 'T4_cmd', 'T7_cmd']
 # A solved T4/T7 from a deck without commands stands in for the other deck's
 # command within this many degR.
 _LEGACY_TOL_DEGR = 0.5
@@ -63,19 +64,19 @@ def _snap(solved, commands):
     return np.where(near.any(axis=1), commands[near.argmax(axis=1)], solved)
 
 
-def _keyed(df, label, other):
-    """Index a deck by ``_KEY``, matched at 1e-6, so a fractional grid stays distinct.
+def _keyed(df, label, other, key=_KEY):
+    """Index a deck by ``key``, matched at 1e-6, so a fractional grid stays distinct.
 
     ``other`` is the deck it is compared with, for ``_with_inputs``. Two rows
     on one key is an error, not a silent pairing.
     """
     out = _with_inputs(df, other)
-    out = out.assign(**{c: out[c].round(6) for c in _KEY[1:]})
-    dup = out.duplicated(_KEY, keep=False)
+    out = out.assign(**{c: out[c].round(6) for c in key[1:]})
+    dup = out.duplicated(key, keep=False)
     if dup.any():
-        keys = sorted({_point(k) for k in out.loc[dup, _KEY].itertuples(index=False)})
-        raise ValueError(f"{label} deck has more than one row at {tuple(_KEY)} {keys}")
-    return out.set_index(_KEY).sort_index()
+        keys = sorted({_point(k) for k in out.loc[dup, key].itertuples(index=False)})
+        raise ValueError(f"{label} deck has more than one row at {tuple(key)} {keys}")
+    return out.set_index(key).sort_index()
 
 
 def _summary(column, kind, diff, keys):
@@ -120,9 +121,14 @@ def compare_decks(base, new, columns=None):
         'invalid' row: ``max_abs`` is the number of such points and ``worst``
         the first. Then the keys of each of ``POINT_LISTS``.
     """
+    base_has_pla, new_has_pla = 'PLA' in base, 'PLA' in new
+    if base_has_pla != new_has_pla:
+        raise ValueError("cannot compare a PLA deck with a throttle deck")
+    key = _PLA_KEY if base_has_pla else _KEY
+
     if columns is not None:
         columns = list(columns)
-        inputs = [c for c in columns if c in _KEY + ['converged', 'failure', 'PLA']]
+        inputs = [c for c in columns if c in key + ['converged', 'failure']]
         if inputs:
             raise ValueError(f"{inputs} are matched on or summarized, not compared; "
                              f"pass output columns")
@@ -131,7 +137,7 @@ def compare_decks(base, new, columns=None):
                        if c not in df or not pd.api.types.is_numeric_dtype(df[c])]
             if missing:
                 raise ValueError(f"{label} deck has no numeric column {missing}")
-    b, n = _keyed(base, 'BASE', new), _keyed(new, 'NEW', base)
+    b, n = _keyed(base, 'BASE', new, key), _keyed(new, 'NEW', base, key)
     common = b.index.intersection(n.index)
     b_ok = b.loc[common, 'converged'].to_numpy(bool)
     n_ok = n.loc[common, 'converged'].to_numpy(bool)
@@ -169,21 +175,21 @@ def compare_decks(base, new, columns=None):
     return table, points
 
 
-def format_report(table, points, n_base, n_new, changed_only=False):
+def format_report(table, points, n_base, n_new, changed_only=False, key=_KEY):
     """Render a comparison as a markdown report."""
-    key = ', '.join(_KEY)
+    key_str = ', '.join(key)
     n_matched = n_base - len(points['only in base'])
     n_both = n_matched - sum(len(points[k]) for k in POINT_LISTS[2:])
     lines = [f'base {n_base} rows, new {n_new} rows, matched {n_matched}, '
              f'converged in both {n_both}']
     for name in POINT_LISTS[:-1]:
         if points[name]:
-            lines.append(f'{name} ({key}): {points[name]}')
+            lines.append(f'{name} ({key_str}): {points[name]}')
     if points['failed in both']:
         lines.append(f"failed in both: {len(points['failed in both'])}")
     if changed_only:
         table = table[table['max_abs'] > 0]
-    lines += ['', f'| column | min | max | max abs | worst ({key}) |',
+    lines += ['', f'| column | min | max | max abs | worst ({key_str}) |',
               '|---|---|---|---|---|']
     for r in table.itertuples():
         if r.kind == 'invalid':
